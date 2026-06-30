@@ -110,10 +110,10 @@ body.splash-open { overflow: hidden; }
 .brand { display: flex; align-items: center; gap: 0.6rem; }
 .brand-logo { width: 38px; height: 38px; border-radius: 50%; box-shadow: 0 0 14px rgba(155,77,255,0.6); }
 .brand-name { font-weight: 900; font-size: 1.15rem; }
-.nav-links { display: flex; gap: 0.85rem; }
+.nav-links { display: flex; gap: 0.65rem; }
 .nav-links a {
-  color: var(--muted); font-weight: 600; font-size: 0.88rem;
-  text-transform: uppercase; letter-spacing: 0.03em; transition: color 0.2s; white-space: nowrap;
+  color: var(--muted); font-weight: 600; font-size: 0.82rem;
+  text-transform: uppercase; letter-spacing: 0.02em; transition: color 0.2s; white-space: nowrap;
 }
 .nav-links a:hover { color: var(--cyan); }
 .nav-links a.active { color: var(--cyan); }
@@ -472,6 +472,18 @@ body.splash-open { overflow: hidden; }
 .term-filters input[type="number"] { width: 70px; background: rgba(0,0,0,0.45); border: 1px solid var(--border); border-radius: 8px; padding: 0.3rem 0.5rem; color: var(--ink); font-family: "Rajdhani", sans-serif; }
 .flt-search { flex: 1 1 220px; min-width: 0; background: rgba(0,0,0,0.45); border: 1px solid var(--border); border-radius: 999px; padding: 0.45rem 1rem; color: var(--ink); font-family: "Rajdhani", sans-serif; font-size: 0.9rem; }
 .flt-search:focus, .term-filters input:focus { outline: none; border-color: var(--cyan); }
+
+/* Arcade game */
+.game-wrap { max-width: 940px; margin: 0 auto; }
+.game-stage { position: relative; border: 1px solid var(--border); border-radius: 16px; overflow: hidden; background: #05030c; box-shadow: 0 0 40px rgba(155,77,255,0.25); }
+.game-stage canvas { display: block; width: 100%; height: auto; touch-action: manipulation; }
+.game-overlay { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.8rem; text-align: center; background: rgba(5,3,12,0.72); backdrop-filter: blur(4px); padding: 1rem; }
+.game-overlay h2 { font-family: "Orbitron", sans-serif; font-size: clamp(1.6rem,5vw,2.6rem); font-weight: 900; }
+.game-overlay p { color: var(--muted); max-width: 420px; }
+.game-hud { display: flex; justify-content: center; gap: 2.2rem; margin-top: 1rem; }
+.game-hud div { display: flex; flex-direction: column; align-items: center; }
+.game-hud span { color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; }
+.game-hud b { font-family: "Orbitron", sans-serif; font-size: 1.4rem; background: var(--grad); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
 
 /* Wallet page */
 .wallet-wrap { max-width: 760px; margin: 0 auto; }

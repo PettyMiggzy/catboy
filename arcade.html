@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CATBOY Arcade — Catboy Runner</title>
+  <meta name="description" content="Play Catboy Runner — sprint from the BNB shadows across to Solana, dodge the rugs, and stack $CATBOY. Free arcade game." />
+  <meta property="og:title" content="CATBOY Arcade — Catboy Runner" />
+  <meta property="og:description" content="Dodge the rugs, stack $CATBOY. Play the Catboy Runner arcade game." />
+  <meta property="og:image" content="assets/art/arcade.jpg" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <link rel="icon" type="image/png" href="assets/solana.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <noscript><style>.reveal { opacity: 1 !important; transform: none !important; filter: none !important; }</style></noscript>
+</head>
+<body>
+  <div class="bg-grid" aria-hidden="true"></div>
+  <div class="bg-glow" aria-hidden="true"></div>
+  <div class="scroll-progress" id="progress" aria-hidden="true"></div>
+
+  <header class="nav">
+    <a href="index.html" class="brand">
+      <img src="assets/catboy.png" alt="Catboy logo" class="brand-logo" />
+      <span class="brand-name">CATBOY</span>
+    </a>
+    <nav class="nav-links">
+      <a href="index.html#lore">Lore</a>
+      <a href="saga.html">Saga</a>
+      <a href="trench.html">Terminal</a>
+      <a href="nft.html">NFTs</a>
+      <a href="launch.html">Launch</a>
+      <a href="casino.html">Casino</a>
+      <a href="arcade.html" class="active">Arcade</a>
+      <a href="meme.html">Meme</a>
+      <a href="wallet.html">Wallet</a>
+      <a href="merch.html">Merch</a>
+      <a href="index.html#faq">FAQ</a>
+    </nav>
+    <a href="index.html#waitlist" class="btn btn-primary nav-cta">Join Allowlist</a>
+  </header>
+
+  <section class="page-hero">
+    <div class="page-hero-inner">
+      <a href="index.html" class="back-link">&lsaquo; Back to Home</a>
+      <span class="eyebrow" style="display:block;margin-top:1rem;">Arcade</span>
+      <h1>Catboy <span class="grad">Runner</span></h1>
+      <p>Sprint from the BNB shadows across to Solana. Dodge the <b class="flame">rugs</b>, leap the gaps, and stack <b>$CATBOY</b>. One cat, nine lives — how far can you run?</p>
+    </div>
+  </section>
+
+  <section class="section" style="padding-top:1rem;">
+    <div class="game-wrap">
+      <div class="game-stage">
+        <canvas id="game" width="900" height="506"></canvas>
+        <div id="overlay" class="game-overlay">
+          <h2 id="ovTitle" class="grad">CATBOY RUNNER</h2>
+          <p id="ovMsg">Tap / Space / ↑ to jump · dodge the rugs · grab $CATBOY</p>
+          <button id="startBtn" class="btn btn-primary" type="button">Start</button>
+          <p id="ovBest" class="muted-note"></p>
+        </div>
+      </div>
+      <div class="game-hud">
+        <div><span>Score</span><b id="hudScore">0</b></div>
+        <div><span>$CATBOY</span><b id="hudCoins">0</b></div>
+        <div><span>Best</span><b id="hudBest">0</b></div>
+      </div>
+      <p class="muted-note" style="text-align:center;">Controls: <b>Space</b> / <b>↑</b> / <b>tap</b> to jump (double-jump available). Just for fun — no wagering.</p>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="footer-brand"><img src="assets/catboy.png" alt="Catboy" class="footer-logo" /><span>CATBOY</span></div>
+    <p class="footer-disclaimer">Catboy Runner is a free arcade game for entertainment only — no wagering, no rewards, no financial value. Just for fun.</p>
+    <p class="footer-copy">© <span id="year"></span> CATBOY · The Legend Evolves on Solana</p>
+  </footer>
+
+  <script src="script.js"></script>
+  <script>
+  (function () {
+    const cv = document.getElementById("game");
+    const ctx = cv.getContext("2d");
+    const $ = (id) => document.getElementById(id);
+    let W = cv.width, H = cv.height;
+
+    // ---- responsive canvas (keep internal resolution, scale via CSS) ----
+    function fit() {
+      const maxW = Math.min(cv.parentElement.clientWidth, 900);
+      cv.style.width = maxW + "px";
+      cv.style.height = (maxW * H / W) + "px";
+    }
+    addEventListener("resize", fit);
+
+    // ---- assets ----
+    const bg = new Image(); bg.src = "assets/game/city-bg.png";
+    const rawCat = new Image(); rawCat.src = "assets/game/catboy-run-key.png";
+    let catSprite = null; // chroma-keyed canvas
+
+    function chromaKey(img) {
+      const c = document.createElement("canvas"); c.width = img.naturalWidth; c.height = img.naturalHeight;
+      const x = c.getContext("2d"); x.drawImage(img, 0, 0);
+      const d = x.getImageData(0, 0, c.width, c.height); const p = d.data;
+      for (let i = 0; i < p.length; i += 4) {
+        const r = p[i], g = p[i + 1], b = p[i + 2];
+        // magenta-ish (high R, low G, high B) -> transparent
+        if (r > 150 && g < 110 && b > 150) p[i + 3] = 0;
+      }
+      x.putImageData(d, 0, 0);
+      return c;
+    }
+    rawCat.onload = () => { try { catSprite = chromaKey(rawCat); } catch { catSprite = rawCat; } };
+
+    // ---- game state ----
+    const GROUND = H - 70;
+    const player = { x: 120, y: GROUND, w: 86, h: 86, vy: 0, jumps: 0, onGround: true };
+    let obstacles = [], coins = [], bgX = 0, speed = 6, score = 0, coinCount = 0, frame = 0, running = false, over = false, tHue = 0;
+    let best = +(localStorage.getItem("catboy_runner_best") || 0);
+    $("hudBest").textContent = best; $("ovBest").textContent = best ? "Best: " + best : "";
+
+    const GRAV = 0.9, JUMP = -15;
+
+    function reset() {
+      obstacles = []; coins = []; speed = 6; score = 0; coinCount = 0; frame = 0; over = false;
+      player.y = GROUND; player.vy = 0; player.jumps = 0; player.onGround = true;
+      $("hudScore").textContent = 0; $("hudCoins").textContent = 0;
+    }
+    function start() { reset(); running = true; $("overlay").style.display = "none"; loop(); }
+    function jump() {
+      if (!running) return;
+      if (player.jumps < 2) { player.vy = JUMP; player.jumps++; player.onGround = false; }
+    }
+    function gameOver() {
+      running = false; over = true;
+      if (score > best) { best = score; localStorage.setItem("catboy_runner_best", best); }
+      $("hudBest").textContent = best;
+      $("ovTitle").textContent = "RUGGED!";
+      $("ovMsg").innerHTML = "You ran <b>" + score + "</b> &middot; stacked <b>" + coinCount + "</b> $CATBOY";
+      $("ovBest").textContent = "Best: " + best;
+      $("startBtn").textContent = "Run Again";
+      $("overlay").style.display = "flex";
+    }
+
+    function spawn() {
+      // obstacles get more frequent with speed
+      if (frame % Math.max(48, 110 - Math.floor(speed * 4)) === 0) {
+        const h = 34 + Math.random() * 46;
+        const labels = ["RUG", "JEET", "FUD", "DUMP"];
+        obstacles.push({ x: W + 20, y: GROUND - h, w: 40 + Math.random() * 26, h, label: labels[(Math.random() * labels.length) | 0] });
+      }
+      if (frame % 70 === 0) {
+        const y = GROUND - (40 + Math.random() * 160);
+        coins.push({ x: W + 20, y, r: 13 });
+      }
+    }
+
+    function rectHit(a, b) { return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y; }
+
+    function update() {
+      frame++; score += 1; speed += 0.0016;
+      if (frame % 5 === 0) $("hudScore").textContent = score;
+      // player physics
+      player.vy += GRAV; player.y += player.vy;
+      if (player.y >= GROUND) { player.y = GROUND; player.vy = 0; player.jumps = 0; player.onGround = true; }
+      // move world
+      bgX = (bgX - speed * 0.4) % W;
+      obstacles.forEach((o) => o.x -= speed);
+      coins.forEach((c) => c.x -= speed);
+      obstacles = obstacles.filter((o) => o.x + o.w > -10);
+      coins = coins.filter((c) => !c.got && c.x + c.r > -10);
+      spawn();
+      // collisions
+      const pb = { x: player.x + 16, y: player.y - player.h + 8, w: player.w - 34, h: player.h - 12 };
+      for (const o of obstacles) if (rectHit(pb, o)) return gameOver();
+      for (const c of coins) {
+        if (!c.got && Math.hypot((player.x + player.w / 2) - c.x, (player.y - player.h / 2) - c.y) < c.r + 34) {
+          c.got = true; coinCount++; score += 25; $("hudCoins").textContent = coinCount;
+        }
+      }
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, W, H);
+      // parallax background (drawn twice for seamless scroll)
+      if (bg.complete) { ctx.globalAlpha = 0.85; ctx.drawImage(bg, bgX, 0, W, H); ctx.drawImage(bg, bgX + W, 0, W, H); ctx.globalAlpha = 1; }
+      // dark vignette
+      ctx.fillStyle = "rgba(5,3,12,0.35)"; ctx.fillRect(0, 0, W, H);
+      // ground
+      ctx.strokeStyle = "#19e0ff"; ctx.lineWidth = 2; ctx.shadowColor = "#19e0ff"; ctx.shadowBlur = 12;
+      ctx.beginPath(); ctx.moveTo(0, GROUND + 2); ctx.lineTo(W, GROUND + 2); ctx.stroke(); ctx.shadowBlur = 0;
+      // coins
+      tHue = (tHue + 2) % 360;
+      coins.forEach((c) => {
+        if (c.got) return;
+        ctx.save(); ctx.translate(c.x, c.y);
+        ctx.shadowColor = "#9b4dff"; ctx.shadowBlur = 14;
+        const g = ctx.createLinearGradient(-c.r, -c.r, c.r, c.r); g.addColorStop(0, "#19e0ff"); g.addColorStop(1, "#d24dff");
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, c.r, 0, 7); ctx.fill();
+        ctx.shadowBlur = 0; ctx.fillStyle = "#07030f"; ctx.font = "900 14px Orbitron, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.fillText("C", 0, 1); ctx.restore();
+      });
+      // obstacles (neon "rug" barriers)
+      obstacles.forEach((o) => {
+        ctx.save();
+        ctx.shadowColor = "#ff4d6d"; ctx.shadowBlur = 12;
+        ctx.fillStyle = "rgba(255,77,109,0.18)"; ctx.strokeStyle = "#ff4d6d"; ctx.lineWidth = 2;
+        ctx.fillRect(o.x, o.y, o.w, o.h); ctx.strokeRect(o.x, o.y, o.w, o.h);
+        ctx.shadowBlur = 0; ctx.fillStyle = "#ff8aa0"; ctx.font = "700 9px Orbitron, sans-serif"; ctx.textAlign = "center";
+        ctx.fillText(o.label, o.x + o.w / 2, o.y - 4); ctx.restore();
+      });
+      // player
+      const bob = player.onGround ? Math.sin(frame * 0.3) * 3 : 0;
+      const sprite = catSprite || (rawCat.complete ? rawCat : null);
+      if (sprite) ctx.drawImage(sprite, player.x, player.y - player.h + bob, player.w, player.h);
+      else { ctx.fillStyle = "#9b4dff"; ctx.fillRect(player.x + 20, player.y - player.h, 46, player.h); }
+    }
+
+    function loop() { if (!running) return; update(); if (!running) { draw(); return; } draw(); requestAnimationFrame(loop); }
+
+    // ---- input ----
+    function press(e) { e.preventDefault(); if (!running && !over) return; if (!running && over) return; jump(); }
+    addEventListener("keydown", (e) => { if (e.code === "Space" || e.code === "ArrowUp") { e.preventDefault(); jump(); } });
+    cv.addEventListener("pointerdown", (e) => { e.preventDefault(); jump(); });
+    $("startBtn").addEventListener("click", start);
+
+    fit();
+    // draw a static first frame once assets are in
+    const warm = setInterval(() => { if (bg.complete) { draw(); clearInterval(warm); } }, 120);
+  })();
+  </script>
+</body>
+</html>
