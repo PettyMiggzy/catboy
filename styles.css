@@ -496,6 +496,8 @@ body.splash-open { overflow: hidden; }
 .game-tab { font-family: "Orbitron", sans-serif; font-size: 0.78rem; padding: 0.6rem 1.2rem; border-radius: 999px; border: 1px solid var(--border); background: rgba(0,0,0,0.4); color: var(--muted); cursor: pointer; transition: 0.2s; }
 .game-tab.active { background: var(--grad); color: #07030f; border-color: transparent; }
 .game-wrap { max-width: 940px; margin: 0 auto; }
+.game-3d { min-height: 320px; }
+.game-3d canvas { display: block; width: 100%; height: 100%; }
 .game-stage { position: relative; border: 1px solid var(--border); border-radius: 16px; overflow: hidden; background: #05030c; box-shadow: 0 0 40px rgba(155,77,255,0.25); }
 .game-stage canvas { display: block; width: 100%; height: auto; touch-action: manipulation; }
 .game-overlay { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.8rem; text-align: center; background: rgba(5,3,12,0.72); backdrop-filter: blur(4px); padding: 1rem; }
