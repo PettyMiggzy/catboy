@@ -38,6 +38,7 @@ export default async function handler(req, res) {
     progress = Math.max(0, Math.min(100, progress));
     return res.status(200).json({ exists: true, complete, progress: +progress.toFixed(2) });
   } catch (e) {
-    return res.status(500).json({ error: "crash", detail: String((e && e.stack) || (e && e.message) || e).slice(0, 400) });
+    console.error("curve failed:", e);
+    return res.status(200).json({ exists: false, progress: null });
   }
 }
