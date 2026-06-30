@@ -19,10 +19,13 @@
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
   <noscript>
-    <style>.section, .cta { opacity: 1 !important; transform: none !important; }</style>
+    <style>.reveal { opacity: 1 !important; transform: none !important; filter: none !important; }</style>
   </noscript>
 </head>
 <body>
+  <!-- Scroll progress -->
+  <div class="scroll-progress" id="progress" aria-hidden="true"></div>
+
   <!-- INTRO SPLASH -->
   <div id="splash" class="splash">
     <video id="splashVideo" class="splash-video" muted playsinline autoplay preload="auto">
@@ -43,10 +46,10 @@
     </a>
     <nav class="nav-links">
       <a href="#lore">Lore</a>
-      <a href="#nft">NFTs</a>
+      <a href="nft.html">NFTs</a>
       <a href="#roadmap">Roadmap</a>
       <a href="#tokenomics">Token</a>
-      <a href="#merch">Merch</a>
+      <a href="merch.html">Merch</a>
       <a href="#faq">FAQ</a>
     </nav>
     <a href="#waitlist" class="btn btn-primary nav-cta">Join Allowlist</a>
@@ -71,7 +74,7 @@
         </div>
         <div class="hero-stats">
           <div class="stat">
-            <span class="stat-num">$50M</span>
+            <span class="stat-num" data-count="50" data-prefix="$" data-suffix="M">$50M</span>
             <span class="stat-label">Peak Market Cap on BNB</span>
           </div>
           <div class="stat">
@@ -176,15 +179,9 @@
       <div class="nft-card"><img src="assets/catboy.png" alt="Catboy NFT" /><span class="nft-tag">Catboy #003</span></div>
       <div class="nft-card"><img src="assets/catboy.png" alt="Catboy NFT" /><span class="nft-tag">Catboy #004</span></div>
     </div>
-    <div class="nft-info">
-      <div class="info-pill"><span>Supply</span><b>TBA</b></div>
-      <div class="info-pill"><span>Chain</span><b>Solana</b></div>
-      <div class="info-pill"><span>Mint Price</span><b>TBA</b></div>
-      <div class="info-pill"><span>Pay With</span><b>Card / SOL</b></div>
-    </div>
     <div class="nft-mint">
-      <a href="#" class="btn btn-primary" data-mint>Mint Coming Soon</a>
-      <p class="muted-note">Join the allowlist below to lock in early-access minting.</p>
+      <a href="nft.html" class="btn btn-primary">Explore the Collection</a>
+      <p class="muted-note">Full collection, traits &amp; mint details on the NFT page.</p>
     </div>
   </section>
 
@@ -322,7 +319,7 @@
       <div class="merch-card"><div class="merch-img"><img src="assets/catboy.png" alt="Catboy sticker pack" /></div><h3>Sticker Pack</h3><span class="merch-soon">Coming Soon</span></div>
     </div>
     <div class="nft-mint">
-      <a href="#" class="btn btn-primary" data-merch>Visit Store</a>
+      <a href="merch.html" class="btn btn-primary">Enter the Store</a>
     </div>
   </section>
 

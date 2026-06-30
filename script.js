@@ -10,9 +10,17 @@ const CONFIG = {
   mintUrl: "",
   // Merch — paste your Fourthwall / Shopify store URL when it's live.
   merchUrl: "",
-  // Waitlist/allowlist — paste a Formspree (or Getform) endpoint to collect signups.
-  // Example: "https://formspree.io/f/xxxxxxx". Leave empty to show "opening soon".
-  waitlistEndpoint: "https://formspree.io/f/xrewazwa",
+  // Allowlist storage. Supabase is the primary backend — fill these in from
+  // your Supabase project (Settings → API). The anon key is safe to expose in
+  // the browser as long as Row Level Security is enabled (see README).
+  supabase: {
+    url: "",       // e.g. "https://abcd1234.supabase.co"
+    anonKey: "",   // the public "anon" key
+    table: "allowlist",
+  },
+  // Optional fallback form service (e.g. Formspree/Getform). Used only if
+  // Supabase isn't configured. Leave empty to show "opening soon".
+  waitlistEndpoint: "",
 };
 
 // ----- Intro splash -----
@@ -51,26 +59,29 @@ const CONFIG = {
 })();
 
 // ----- Footer year -----
-document.getElementById("year").textContent = new Date().getFullYear();
+const yearEl = document.getElementById("year");
+if (yearEl) yearEl.textContent = new Date().getFullYear();
 
-// ----- Contract address -----
+// ----- Contract address (only on pages that have the box) -----
 const caEl = document.getElementById("ca");
 const copyBtn = document.getElementById("copyCa");
-if (CONFIG.contractAddress) {
-  caEl.textContent = CONFIG.contractAddress;
-  copyBtn.addEventListener("click", async () => {
-    try {
-      await navigator.clipboard.writeText(CONFIG.contractAddress);
-      copyBtn.textContent = "Copied!";
-      setTimeout(() => (copyBtn.textContent = "Copy"), 1500);
-    } catch {
-      copyBtn.textContent = "Error";
-    }
-  });
-} else {
-  copyBtn.disabled = true;
-  copyBtn.style.opacity = "0.5";
-  copyBtn.style.cursor = "not-allowed";
+if (caEl && copyBtn) {
+  if (CONFIG.contractAddress) {
+    caEl.textContent = CONFIG.contractAddress;
+    copyBtn.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(CONFIG.contractAddress);
+        copyBtn.textContent = "Copied!";
+        setTimeout(() => (copyBtn.textContent = "Copy"), 1500);
+      } catch {
+        copyBtn.textContent = "Error";
+      }
+    });
+  } else {
+    copyBtn.disabled = true;
+    copyBtn.style.opacity = "0.5";
+    copyBtn.style.cursor = "not-allowed";
+  }
 }
 
 // ----- Social links -----
@@ -124,14 +135,48 @@ wireLinkButton("[data-merch]", CONFIG.merchUrl, "Store Opening Soon");
     status.style.color = ok ? "var(--cyan)" : "var(--magenta)";
   };
 
+  const sb = CONFIG.supabase || {};
+  const supabaseReady = sb.url && sb.anonKey;
+
+  // POST a signup to Supabase's REST (PostgREST) API.
+  async function submitToSupabase(email, wallet) {
+    const res = await fetch(`${sb.url}/rest/v1/${sb.table || "allowlist"}`, {
+      method: "POST",
+      headers: {
+        apikey: sb.anonKey,
+        Authorization: `Bearer ${sb.anonKey}`,
+        "Content-Type": "application/json",
+        Prefer: "return=minimal",
+      },
+      body: JSON.stringify({ email, wallet: wallet || null }),
+    });
+    // 23505 = unique_violation (already signed up) — treat as success.
+    if (res.ok) return { ok: true };
+    if (res.status === 409) return { ok: true, dup: true };
+    let detail = "";
+    try { detail = (await res.json()).message || ""; } catch {}
+    if (detail.includes("duplicate")) return { ok: true, dup: true };
+    return { ok: false };
+  }
+
+  async function submitToFormspree(form) {
+    const res = await fetch(CONFIG.waitlistEndpoint, {
+      method: "POST",
+      headers: { Accept: "application/json" },
+      body: new FormData(form),
+    });
+    return { ok: res.ok };
+  }
+
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const email = form.elements.email.value.trim();
+    const wallet = form.elements.wallet.value.trim();
     if (!email) {
       setStatus("Please enter your email.", false);
       return;
     }
-    if (!CONFIG.waitlistEndpoint) {
+    if (!supabaseReady && !CONFIG.waitlistEndpoint) {
       setStatus("Allowlist opens soon — follow our socials to be first. 😺", true);
       form.reset();
       return;
@@ -140,13 +185,16 @@ wireLinkButton("[data-merch]", CONFIG.merchUrl, "Store Opening Soon");
     const prev = submitBtn.textContent;
     submitBtn.textContent = "Joining…";
     try {
-      const res = await fetch(CONFIG.waitlistEndpoint, {
-        method: "POST",
-        headers: { Accept: "application/json" },
-        body: new FormData(form),
-      });
-      if (res.ok) {
-        setStatus("You're on the list! Welcome to the legend. 🐾", true);
+      const result = supabaseReady
+        ? await submitToSupabase(email, wallet)
+        : await submitToFormspree(form);
+      if (result.ok) {
+        setStatus(
+          result.dup
+            ? "You're already on the list! 🐾"
+            : "You're on the list! Welcome to the legend. 🐾",
+          true
+        );
         form.reset();
       } else {
         setStatus("Something went wrong — try again in a moment.", false);
@@ -160,23 +208,93 @@ wireLinkButton("[data-merch]", CONFIG.merchUrl, "Store Opening Soon");
   });
 })();
 
-// ----- Scroll reveal (with safety fallbacks so content can never stay hidden) -----
-const revealEls = document.querySelectorAll(".section, .cta");
-if ("IntersectionObserver" in window) {
-  const observer = new IntersectionObserver(
-    (entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          entry.target.classList.add("in");
-          observer.unobserve(entry.target);
-        }
-      });
-    },
-    { threshold: 0.08, rootMargin: "0px 0px -10% 0px" }
-  );
-  revealEls.forEach((el) => observer.observe(el));
-  // Safety net: anything still hidden after 2.5s gets revealed regardless.
-  setTimeout(() => revealEls.forEach((el) => el.classList.add("in")), 2500);
-} else {
-  revealEls.forEach((el) => el.classList.add("in"));
-}
+// ----- Scroll-progress bar -----
+(function () {
+  const bar = document.getElementById("progress");
+  if (!bar) return;
+  let ticking = false;
+  const update = () => {
+    const h = document.documentElement.scrollHeight - window.innerHeight;
+    bar.style.width = (h > 0 ? (window.scrollY / h) * 100 : 0) + "%";
+    ticking = false;
+  };
+  addEventListener("scroll", () => { if (!ticking) { ticking = true; requestAnimationFrame(update); } }, { passive: true });
+  update();
+})();
+
+// ----- Subtle parallax on background glow + hero art -----
+(function () {
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduce) return;
+  const glow = document.querySelector(".bg-glow");
+  const art = document.querySelector(".hero-img");
+  let ticking = false;
+  const update = () => {
+    const y = window.scrollY;
+    if (glow) glow.style.transform = `translateY(${y * 0.15}px)`;
+    if (art) art.style.transform = `translateY(${y * -0.05}px)`;
+    ticking = false;
+  };
+  addEventListener("scroll", () => { if (!ticking) { ticking = true; requestAnimationFrame(update); } }, { passive: true });
+})();
+
+// ----- Count-up for numeric stats -----
+(function () {
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const els = document.querySelectorAll("[data-count]");
+  const run = (el) => {
+    const target = parseFloat(el.dataset.count);
+    const prefix = el.dataset.prefix || "";
+    const suffix = el.dataset.suffix || "";
+    if (reduce) { el.textContent = prefix + target + suffix; return; }
+    const dur = 1400;
+    let start = null;
+    const step = (t) => {
+      if (start === null) start = t;
+      const p = Math.min((t - start) / dur, 1);
+      const eased = 1 - Math.pow(1 - p, 3);
+      el.textContent = prefix + Math.round(target * eased) + suffix;
+      if (p < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  };
+  if ("IntersectionObserver" in window) {
+    const io = new IntersectionObserver((es) => es.forEach((e) => {
+      if (e.isIntersecting) { run(e.target); io.unobserve(e.target); }
+    }), { threshold: 0.5 });
+    els.forEach((el) => io.observe(el));
+  } else {
+    els.forEach(run);
+  }
+})();
+
+// ----- Scroll reveal engine: staggered, directional, with safety net -----
+(function () {
+  if (!("IntersectionObserver" in window)) return; // no JS-added .reveal => content stays visible
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach((e) => {
+      if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
+    });
+  }, { threshold: 0.12, rootMargin: "0px 0px -8% 0px" });
+
+  const mark = (el, variant, delay) => {
+    el.classList.add("reveal");
+    if (variant) el.classList.add(variant);
+    if (delay) el.style.setProperty("--rd", delay + "ms");
+    io.observe(el);
+  };
+
+  // Single elements (headings, blocks) reveal as one unit.
+  document.querySelectorAll(
+    ".section-head, .lore-grid, .contract, .nft-info, .nft-mint, .waitlist-form, .cta-card, .ticker, .page-hero-inner"
+  ).forEach((el) => mark(el));
+
+  // Grids reveal their children in a staggered cascade.
+  const groups = ".timeline, .token-grid, .steps, .nft-gallery, .roadmap, .merch-grid, .faq, .util-grid, .product-grid";
+  document.querySelectorAll(groups).forEach((container) => {
+    Array.from(container.children).forEach((child, i) => mark(child, null, i * 90));
+  });
+
+  // Safety net: reveal anything still hidden after 4s no matter what.
+  setTimeout(() => document.querySelectorAll(".reveal").forEach((el) => el.classList.add("in")), 4000);
+})();

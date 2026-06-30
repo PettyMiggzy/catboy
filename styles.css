@@ -116,6 +116,7 @@ body.splash-open { overflow: hidden; }
   text-transform: uppercase; letter-spacing: 0.05em; transition: color 0.2s;
 }
 .nav-links a:hover { color: var(--cyan); }
+.nav-links a.active { color: var(--cyan); }
 
 /* ---------- Hero ---------- */
 .hero { padding: clamp(2.5rem, 7vw, 5.5rem) clamp(1rem, 4vw, 2.5rem) 0; }
@@ -257,9 +258,27 @@ body.splash-open { overflow: hidden; }
 .footer-disclaimer { color: var(--muted); font-size: 0.82rem; max-width: 640px; margin: 0 auto 1rem; }
 .footer-copy { color: var(--muted); font-size: 0.85rem; letter-spacing: 0.05em; }
 
-/* ---------- Reveal animation ---------- */
-.section, .cta { opacity: 0; transform: translateY(24px); transition: opacity 0.7s ease, transform 0.7s ease; }
-.section.in, .cta.in { opacity: 1; transform: none; }
+/* ---------- Scroll-progress bar ---------- */
+.scroll-progress {
+  position: fixed; top: 0; left: 0; height: 3px; width: 0;
+  background: var(--grad); z-index: 100;
+  box-shadow: 0 0 12px rgba(25,224,255,0.7); transition: width 0.05s linear;
+}
+
+/* ---------- Scroll reveal engine (staggered, directional) ---------- */
+@media (prefers-reduced-motion: no-preference) {
+  .reveal {
+    opacity: 0; transform: translateY(38px);
+    transition: opacity 0.75s cubic-bezier(0.22,0.61,0.36,1),
+                transform 0.75s cubic-bezier(0.22,0.61,0.36,1);
+    transition-delay: var(--rd, 0ms); will-change: opacity, transform;
+  }
+  .reveal.r-left  { transform: translateX(-46px); }
+  .reveal.r-right { transform: translateX(46px); }
+  .reveal.r-zoom  { transform: scale(0.88); }
+  .reveal.r-blur  { filter: blur(10px); transition: opacity 0.75s ease, transform 0.75s ease, filter 0.75s ease; }
+  .reveal.in { opacity: 1; transform: none; filter: none; }
+}
 
 /* ---------- Section intro / shared ---------- */
 .section-intro { max-width: 640px; margin: 1rem auto 0; color: var(--muted); font-size: 1.08rem; }
@@ -350,6 +369,54 @@ body.splash-open { overflow: hidden; }
 .waitlist-form .btn { flex: 0 0 auto; }
 .form-status { text-align: center; margin-top: 1rem; font-weight: 600; min-height: 1.4rem; }
 
+/* ---------- Sub-page hero ---------- */
+.page-hero {
+  position: relative; text-align: center;
+  padding: clamp(3rem, 8vw, 6rem) clamp(1rem, 4vw, 2.5rem) 1rem;
+  max-width: var(--max); margin: 0 auto;
+}
+.page-hero-inner { max-width: 760px; margin: 0 auto; }
+.page-hero h1 { font-size: clamp(2.4rem, 6vw, 4rem); font-weight: 900; line-height: 1.05; margin: 0.8rem 0; }
+.page-hero p { color: var(--muted); font-size: 1.15rem; }
+.back-link {
+  display: inline-flex; align-items: center; gap: 0.4rem; color: var(--muted);
+  font-weight: 600; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.06em;
+  transition: color 0.2s;
+}
+.back-link:hover { color: var(--cyan); }
+
+/* ---------- NFT utility cards ---------- */
+.util-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.2rem; }
+.util-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+  padding: 1.8rem 1.4rem; transition: transform 0.2s, border-color 0.2s;
+}
+.util-card:hover { transform: translateY(-6px); border-color: var(--cyan); }
+.util-icon { font-size: 1.8rem; display: block; margin-bottom: 0.7rem; }
+.util-card h3 { font-size: 1.1rem; margin-bottom: 0.4rem; }
+.util-card p { color: var(--muted); font-size: 0.95rem; }
+
+/* ---------- Merch products ---------- */
+.product-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.4rem; }
+.product {
+  background: var(--card); border: 1px solid var(--border); border-radius: 18px;
+  overflow: hidden; transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+}
+.product:hover { transform: translateY(-8px); border-color: var(--magenta); box-shadow: 0 14px 44px rgba(210,77,255,0.18); }
+.product-img { position: relative; overflow: hidden; }
+.product-img img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; transition: transform 0.4s ease; }
+.product:hover .product-img img { transform: scale(1.06); }
+.product-badge {
+  position: absolute; top: 0.8rem; left: 0.8rem;
+  font-family: "Orbitron", sans-serif; font-size: 0.66rem; font-weight: 700;
+  letter-spacing: 0.08em; text-transform: uppercase; color: #07030f;
+  background: var(--grad); padding: 0.3rem 0.7rem; border-radius: 999px;
+}
+.product-body { padding: 1.1rem 1.2rem 1.4rem; }
+.product-body h3 { font-size: 1.05rem; margin-bottom: 0.3rem; }
+.product-price { color: var(--cyan); font-family: "Orbitron", sans-serif; font-weight: 700; font-size: 0.95rem; }
+.store-cta { text-align: center; margin-top: 2.5rem; }
+
 /* ---------- Responsive ---------- */
 @media (max-width: 900px) {
   .hero-inner { grid-template-columns: 1fr; text-align: center; }
@@ -358,12 +425,14 @@ body.splash-open { overflow: hidden; }
   .hero-sub { margin: 0 auto; }
   .hero-actions, .hero-stats { justify-content: center; }
   .timeline, .token-grid, .steps,
-  .nft-gallery, .roadmap, .merch-grid { grid-template-columns: repeat(2, 1fr); }
+  .nft-gallery, .roadmap, .merch-grid,
+  .util-grid, .product-grid { grid-template-columns: repeat(2, 1fr); }
   .nav-links { display: none; }
 }
 @media (max-width: 540px) {
   .timeline, .token-grid, .steps,
-  .nft-gallery, .roadmap, .merch-grid { grid-template-columns: 1fr; }
+  .nft-gallery, .roadmap, .merch-grid,
+  .util-grid, .product-grid { grid-template-columns: 1fr; }
   .nav-cta { display: none; }
   .hero-stats { gap: 1.2rem; }
   .form-row { flex-direction: column; }
