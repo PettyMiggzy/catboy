@@ -11,16 +11,16 @@
   // ---------- roster ----------
   const ROSTER = [
     { id: "catboy", name: "CATBOY", poses: true, color: "#9b4dff", hp: 100, pow: 1.05, spd: 1.15, special: "Nine Lives Fury", blurb: "The legend. Fast, relentless, nine chances." },
-    { id: "sol",    name: "SOLANA",   img: "coin_sol.png",   color: "#9945ff", hp: 125, pow: 1.15, spd: 1.1,  special: "Proof of Stake", blurb: "The chain itself. Balanced and unstoppable." },
-    { id: "jup",    name: "JUPITER",  img: "coin_jup.png",   color: "#c7f94c", hp: 100, pow: 1.0,  spd: 1.22, special: "Best Route", blurb: "The aggregator. Fast — finds every opening." },
-    { id: "pump",   name: "PUMP.FUN", img: "coin_pump.png",  color: "#2ed573", hp: 95,  pow: 1.05, spd: 1.16, special: "Bonding Curve", blurb: "The launchpad. Unpredictable chaos." },
-    { id: "bonk",   name: "BONK",     img: "coin_bonk.png",  color: "#f7a600", hp: 115, pow: 1.12, spd: 0.95, special: "Bonk Hammer", blurb: "The OG dog. Hits like a truck." },
-    { id: "wif",    name: "dogwifhat",img: "coin_wif.png",   color: "#d49a6a", hp: 100, pow: 1.0,  spd: 1.08, special: "Hat Trick", blurb: "Just a dog with a hat. Don't sleep on it." },
-    { id: "pengu",  name: "PENGU",    img: "coin_pengu.png", color: "#50aaff", hp: 105, pow: 1.02, spd: 1.05, special: "Ice Slide", blurb: "Pudgy Penguins. Cool under pressure." },
-    { id: "jto",    name: "JITO",     img: "coin_jto.png",   color: "#00d2b4", hp: 100, pow: 1.05, spd: 1.1,  special: "MEV Strike", blurb: "Liquid staking. Strikes out of nowhere." },
-    { id: "pyth",   name: "PYTH",     img: "coin_pyth.png",  color: "#aa78ff", hp: 90,  pow: 1.1,  spd: 1.05, special: "Price Feed", blurb: "The oracle. Ranged data blasts." },
-    { id: "trump",  name: "TRUMP",    img: "coin_trump.png", color: "#d4af37", hp: 122, pow: 1.18, spd: 0.85, special: "Tariff Slam", blurb: "Official Trump. Heavyweight, huge hits." },
-    { id: "popcat", name: "POPCAT",   img: "coin_popcat.png",color: "#e7b9a0", hp: 90,  pow: 0.95, spd: 1.22, special: "Pop Slam", blurb: "Pop pop pop. Glass cannon." },
+    { id: "sol",    name: "SOLANA",   img: "char_sol.png",   char: true, color: "#9945ff", hp: 125, pow: 1.15, spd: 1.1,  special: "Proof of Stake", blurb: "The chain itself. Balanced and unstoppable." },
+    { id: "jup",    name: "JUPITER",  img: "char_jup.png",   char: true, color: "#c7f94c", hp: 100, pow: 1.0,  spd: 1.22, special: "Best Route", blurb: "The aggregator. Fast — finds every opening." },
+    { id: "pump",   name: "PUMP.FUN", img: "char_pump.png",  char: true, color: "#2ed573", hp: 95,  pow: 1.05, spd: 1.16, special: "Bonding Curve", blurb: "The launchpad. Unpredictable chaos." },
+    { id: "bonk",   name: "BONK",     img: "char_bonk.png",  char: true, color: "#f7a600", hp: 115, pow: 1.12, spd: 0.95, special: "Bonk Hammer", blurb: "The OG dog with a bat. Hits like a truck." },
+    { id: "wif",    name: "dogwifhat",img: "char_wif.png",   char: true, color: "#d49a6a", hp: 100, pow: 1.0,  spd: 1.08, special: "Hat Trick", blurb: "Just a dog with a hat. Don't sleep on it." },
+    { id: "pengu",  name: "PENGU",    img: "char_pengu.png", char: true, color: "#50aaff", hp: 105, pow: 1.02, spd: 1.05, special: "Ice Slide", blurb: "Pudgy Penguins. Cool under pressure." },
+    { id: "jto",    name: "JITO",     img: "char_jto.png",   char: true, color: "#00d2b4", hp: 100, pow: 1.05, spd: 1.1,  special: "MEV Strike", blurb: "Liquid staking. Strikes out of nowhere." },
+    { id: "pyth",   name: "PYTH",     img: "char_pyth.png",  char: true, color: "#aa78ff", hp: 90,  pow: 1.1,  spd: 1.05, special: "Price Feed", blurb: "The oracle. Ranged data blasts." },
+    { id: "trump",  name: "TRUMP",    img: "char_trump.png", char: true, color: "#d4af37", hp: 122, pow: 1.18, spd: 0.85, special: "Tariff Slam", blurb: "Official Trump. Heavyweight, huge hits." },
+    { id: "popcat", name: "POPCAT",   img: "char_popcat.png",char: true, color: "#e7b9a0", hp: 90,  pow: 0.95, spd: 1.22, special: "Pop Slam", blurb: "Pop pop pop. Glass cannon." },
   ];
 
   // ---------- assets ----------
@@ -67,12 +67,12 @@
     this.state = "idle"; this.st = 0;       // state timer (ms)
     this.cool = 0; this.hitstun = 0; this.invuln = 0; this.flash = 0;
     this.didHit = false; this.combo = 0; this.comboT = 0;
-    this.h = def.poses ? 252 : 150;          // draw height
+    this.h = (def.poses || def.char) ? 252 : 150;  // draw height (full-body chars vs token)
     this.onGround = true;
     this.ai = { t: 0, want: "idle" };
     this.bob = Math.random() * 6;
   }
-  Fighter.prototype.reach = function () { return this.def.poses ? 150 : 120; };
+  Fighter.prototype.reach = function () { return (this.def.poses || this.def.char) ? 150 : 120; };
   Fighter.prototype.set = function (s, dur) { this.state = s; this.st = 0; this.dur = dur || 0; this.didHit = false; };
   Fighter.prototype.busy = function () { return ["punch","kick","special","hurt","ko"].includes(this.state); };
 
@@ -251,7 +251,7 @@
     if (f.facing < 0) ctx.scale(-1, 1);
     // procedural motion
     let dy = 0, rot = 0, sc = 1;
-    const bob = Math.sin(f.bob * (f.state === "walk" ? 2.4 : 1.4)) * (f.def.poses ? 3 : 7);
+    const bob = Math.sin(f.bob * (f.state === "walk" ? 2.4 : 1.4)) * ((f.def.poses || f.def.char) ? 3 : 7);
     if (f.state === "ko") { rot = Math.min(1.45, f.st / 600 * 1.45); }
     else if (f.state === "hurt") { rot = -0.18; }
     else if (f.state === "punch" || f.state === "kick") {
