@@ -56,7 +56,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({ ok: true, duplicate: rows.length === 0 });
   } catch (err) {
-    // detail is included to help debug setup; safe to remove once it works.
-    return res.status(500).json({ error: "server_error", detail: String((err && err.message) || err) });
+    console.error("allowlist insert failed:", err);
+    return res.status(500).json({ error: "server_error" });
   }
 }
