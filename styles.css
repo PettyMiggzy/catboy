@@ -945,3 +945,60 @@ body.splash-open { overflow: hidden; }
   .fight-banner-txt { max-width: 100%; }
   .fight-banner-art { width: 180px; }
 }
+
+/* ---------- The Cat's Den (club) ---------- */
+.grad-gold { background: linear-gradient(100deg, #f6d365, #e8c45a 40%, #b07d2b); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent; }
+.eyebrow.gold, .gold { color: #e8c45a; }
+.btn-gold { background: linear-gradient(100deg, #f6d365, #e8c45a 55%, #c89b3c); color: #1a1206; border: none; font-weight: 800; box-shadow: 0 8px 30px rgba(232,196,90,0.35); }
+.btn-gold:hover { filter: brightness(1.08); transform: translateY(-2px); }
+
+.den-hero { position: relative; overflow: hidden; min-height: 78vh; display: grid; place-items: center; }
+.den-hero-bg { position: absolute; inset: 0; background-size: cover; background-position: center; transform: scale(1.06); filter: saturate(1.05); }
+.den-hero-scrim { position: absolute; inset: 0; background: radial-gradient(120% 90% at 50% 30%, rgba(5,3,12,0.25), rgba(5,3,12,0.82) 70%, rgba(5,3,12,0.96)); }
+.den-figure { position: absolute; bottom: 0; height: 84%; max-height: 640px; z-index: 1; filter: drop-shadow(0 10px 30px rgba(0,0,0,0.6)); opacity: 0.96; pointer-events: none; }
+.den-figure-l { left: -2%; }
+.den-figure-r { right: -2%; }
+.den-hero-inner { position: relative; z-index: 2; text-align: center; max-width: 760px; padding: 5rem 1.2rem 3rem; }
+.den-hero-inner h1 { font-family: "Orbitron", sans-serif; font-size: clamp(2.6rem, 8vw, 5rem); margin: 0.6rem 0; }
+.den-hero-inner p { color: #d9d4e8; max-width: 620px; margin: 0 auto 1.4rem; }
+.den-badge { display: inline-block; font-family: "Orbitron", sans-serif; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.22em; text-transform: uppercase; color: #e8c45a; border: 1px solid rgba(232,196,90,0.5); border-radius: 999px; padding: 0.45rem 1.1rem; background: rgba(232,196,90,0.08); }
+@media (max-width: 900px) { .den-figure { opacity: 0.22; height: 70%; } }
+
+/* membership card */
+.member-card { position: relative; max-width: 440px; margin: 0 auto; aspect-ratio: 1.586; border-radius: 18px; overflow: hidden; padding: 1.3rem 1.4rem; color: #f3eede; background: linear-gradient(135deg, #1c1430 0%, #2a1d4a 50%, #120a22 100%); border: 1px solid rgba(232,196,90,0.45); box-shadow: 0 20px 60px rgba(0,0,0,0.55), inset 0 0 40px rgba(155,77,255,0.18); display: flex; flex-direction: column; justify-content: space-between; }
+.member-card.is-black { background: linear-gradient(135deg, #0b0b0f 0%, #14141c 55%, #000 100%); border-color: #e8c45a; box-shadow: 0 20px 60px rgba(0,0,0,0.7), inset 0 0 40px rgba(232,196,90,0.2); }
+.mc-shine { position: absolute; inset: 0; background: linear-gradient(115deg, transparent 30%, rgba(255,255,255,0.14) 48%, transparent 60%); transform: translateX(-100%); animation: mcShine 4.5s ease-in-out infinite; }
+@keyframes mcShine { 0%,60% { transform: translateX(-120%); } 100% { transform: translateX(120%); } }
+.mc-top { display: flex; justify-content: space-between; align-items: flex-start; z-index: 1; }
+.mc-club { font-family: "Orbitron", sans-serif; font-weight: 800; letter-spacing: 0.16em; font-size: 0.82rem; color: #e8c45a; }
+.mc-rank-num { font-family: "Orbitron", sans-serif; font-weight: 900; font-size: 1.6rem; color: rgba(255,255,255,0.85); }
+.mc-avatar { position: absolute; right: -10px; bottom: -6px; height: 78%; object-fit: contain; opacity: 0.92; filter: drop-shadow(0 6px 16px rgba(0,0,0,0.5)); z-index: 0; }
+.mc-body { z-index: 1; }
+.mc-label { font-size: 0.7rem; letter-spacing: 0.2em; text-transform: uppercase; color: #b9b2cf; }
+.mc-rank { font-family: "Orbitron", sans-serif; font-size: 2rem; margin: 0.1rem 0 0.2rem; color: #fff; }
+.mc-addr { font-family: monospace; font-size: 0.85rem; color: #cfc8e6; }
+.mc-foot { display: flex; justify-content: space-between; align-items: center; z-index: 1; }
+.mc-foot #mcHold { font-weight: 700; color: #e8c45a; }
+.mc-chip { font-family: "Orbitron", sans-serif; font-size: 0.62rem; letter-spacing: 0.14em; padding: 0.3rem 0.7rem; border-radius: 999px; border: 1px solid rgba(232,196,90,0.6); color: #e8c45a; }
+
+/* den rank cards gold accents */
+.den-rank .tier-rank { color: #e8c45a; }
+.den-rank.black-card { border-color: #e8c45a; box-shadow: 0 0 30px rgba(232,196,90,0.25); }
+.den-rank.black-card h3 { color: #e8c45a; }
+.tier-card.unlocked { border-color: rgba(232,196,90,0.55); }
+.tier-card.you { box-shadow: 0 0 0 2px #e8c45a, 0 10px 40px rgba(232,196,90,0.3); }
+.tier-card.you::after { content: "YOUR RANK"; position: absolute; top: 10px; right: 10px; font-family: "Orbitron", sans-serif; font-size: 0.58rem; letter-spacing: 0.12em; color: #1a1206; background: #e8c45a; padding: 0.2rem 0.5rem; border-radius: 999px; }
+
+/* high table */
+.hightable { max-width: 720px; margin: 0 auto; }
+.ht-head, .ht-row { display: grid; grid-template-columns: 60px 1fr 1fr 70px; gap: 0.6rem; align-items: center; padding: 0.7rem 1rem; }
+.ht-head { font-family: "Orbitron", sans-serif; font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; color: #b9b2cf; border-bottom: 1px solid var(--border); }
+.ht-row { border-bottom: 1px solid rgba(255,255,255,0.05); }
+.ht-row.ht-top { background: linear-gradient(90deg, rgba(232,196,90,0.14), transparent); border-radius: 10px; }
+.ht-seat { font-family: "Orbitron", sans-serif; font-weight: 800; color: #e8c45a; }
+.ht-addr { font-family: monospace; color: #e8e3f5; }
+.ht-amt { color: #cfc8e6; }
+.ht-pct { color: #19e0ff; text-align: right; }
+
+.den-lore { max-width: 720px; margin: 0 auto; text-align: center; }
+.den-lore p { color: var(--muted); }

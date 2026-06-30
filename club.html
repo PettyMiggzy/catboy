@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>The Nine Lives Society — Catboy Holders' Club</title>
-  <meta name="description" content="The Nine Lives Society — a members' club for $CATBOY holders. Connect your wallet to unlock your tier and holder perks: fee discounts, allowlist priority, holder chat, and more." />
-  <meta property="og:title" content="The Nine Lives Society — Catboy Holders' Club" />
-  <meta property="og:description" content="Hold $CATBOY, unlock the club. Tiers, perks, and the inner circle." />
-  <meta property="og:image" content="assets/art/superhero.png" />
+  <title>The Cat's Den — $CATBOY Private Members Club</title>
+  <meta name="description" content="The Cat's Den — a private members club for $CATBOY holders. Connect your wallet to claim your rank and unlock the perks: fee-free trading, allowlist, the inner circle, and a seat at the High Table." />
+  <meta property="og:title" content="The Cat's Den — $CATBOY Private Members Club" />
+  <meta property="og:description" content="Hold $CATBOY. Claim your rank. Enter the Den." />
+  <meta property="og:image" content="assets/club/lounge.jpg" />
   <meta name="twitter:card" content="summary_large_image" />
   <link rel="icon" type="image/png" href="assets/solana.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -43,68 +43,118 @@
     <a href="index.html#waitlist" class="btn btn-primary nav-cta">Join Allowlist</a>
   </header>
 
-  <section class="page-hero">
-    <div class="page-hero-inner">
+  <!-- HERO -->
+  <section class="den-hero">
+    <div class="den-hero-bg" style="background-image:url('assets/club/lounge.jpg');"></div>
+    <div class="den-hero-scrim"></div>
+    <img src="assets/club/hostess.png" alt="" class="den-figure den-figure-l" aria-hidden="true" />
+    <img src="assets/club/host.png" alt="" class="den-figure den-figure-r" aria-hidden="true" />
+    <div class="den-hero-inner">
       <a href="index.html" class="back-link">&lsaquo; Back to Home</a>
-      <span class="eyebrow" style="display:block;margin-top:1rem;">Members Only</span>
-      <h1>The Nine Lives <span class="grad">Society</span></h1>
-      <p>The inner circle of Catboy. Hold $CATBOY to claim your tier and unlock real perks — fee discounts, allowlist priority, a holders-only room, and a say in what the legend builds next.</p>
+      <span class="den-badge">Members Only · 21+ · Invite by $CATBOY</span>
+      <h1>The <span class="grad-gold">Cat's Den</span></h1>
+      <p>Behind the velvet rope sits the inner circle of Catboy — a private members club for holders. Connect your wallet to claim your rank and unlock the perks: fee-free trading, guaranteed allowlist, the strategy room, and a seat at the High Table.</p>
       <div class="club-connect">
-        <button id="connectClub" class="btn btn-primary" type="button">Connect to check tier</button>
+        <button id="connectClub" class="btn btn-gold" type="button">Step inside</button>
         <span id="clubStatus" class="muted-note" style="margin:0;"></span>
       </div>
     </div>
   </section>
 
+  <!-- MEMBERSHIP CARD -->
+  <section class="section" id="cardSection" style="display:none;padding-top:1.5rem;">
+    <div class="member-card" id="memberCard">
+      <div class="mc-shine" aria-hidden="true"></div>
+      <div class="mc-top">
+        <span class="mc-club">THE CAT'S DEN</span>
+        <span class="mc-rank-num" id="mcRankNum">—</span>
+      </div>
+      <img src="assets/club/host.png" alt="" class="mc-avatar" id="mcAvatar" />
+      <div class="mc-body">
+        <span class="mc-label">Member</span>
+        <h3 class="mc-rank" id="mcRank">—</h3>
+        <span class="mc-addr" id="mcAddr">—</span>
+      </div>
+      <div class="mc-foot">
+        <span id="mcHold">— $CATBOY</span>
+        <span class="mc-chip" id="mcChip">MEMBER</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- RANKS -->
   <section class="section" style="padding-top:1rem;">
     <div class="section-head">
-      <span class="eyebrow">Tiers</span>
-      <h2>Nine Lives, <span class="grad">Four Tiers</span></h2>
-      <p class="section-intro">Your tier is set by how much $CATBOY you hold. The deeper your conviction, the deeper the perks.</p>
+      <span class="eyebrow gold">The Ranks</span>
+      <h2>Four Doors, <span class="grad-gold">One Den</span></h2>
+      <p class="section-intro">Your rank is set by how much $CATBOY you hold. The deeper your conviction, the deeper into the Den you go.</p>
     </div>
     <div class="tier-grid">
-      <div class="tier-card" data-min="1">
+      <div class="tier-card den-rank" data-min="1">
         <span class="tier-rank">I</span><h3>Stray</h3><span class="tier-req">Any $CATBOY</span>
         <ul>
-          <li>Holders-only chat access</li>
+          <li>Through the door — holders-only chat</li>
           <li>Club role &amp; badge</li>
           <li>Early announcements</li>
         </ul>
       </div>
-      <div class="tier-card" data-min="100000">
-        <span class="tier-rank">II</span><h3>Alley Cat</h3><span class="tier-req">100K+ $CATBOY</span>
+      <div class="tier-card den-rank" data-min="100000">
+        <span class="tier-rank">II</span><h3>House Cat</h3><span class="tier-req">100K+ $CATBOY</span>
         <ul>
           <li>Everything in Stray</li>
           <li>50% off Terminal trade fees</li>
-          <li>Merch discount</li>
-          <li>Allowlist priority</li>
+          <li>Merch discount &amp; allowlist priority</li>
+          <li>Monthly "house pour" raffle</li>
         </ul>
       </div>
-      <div class="tier-card highlight" data-min="1000000">
-        <span class="tier-rank">III</span><h3>Nine Lives</h3><span class="tier-req">1M+ $CATBOY</span>
+      <div class="tier-card den-rank highlight" data-min="1000000">
+        <span class="tier-rank">III</span><h3>Tomcat</h3><span class="tier-req">1M+ $CATBOY</span>
         <ul>
-          <li>Everything in Alley Cat</li>
+          <li>Everything in House Cat</li>
           <li><b>Fee-free</b> Terminal trading</li>
           <li>Guaranteed mint allowlist</li>
-          <li>Arcade leaderboard flair</li>
-          <li>Vote on roadmap</li>
+          <li>Reserved booth — priority on drops</li>
+          <li>Vote on the roadmap</li>
         </ul>
       </div>
-      <div class="tier-card legend-card" data-min="10000000">
-        <span class="tier-rank">IX</span><h3>Legend</h3><span class="tier-req">10M+ $CATBOY</span>
+      <div class="tier-card den-rank black-card" data-min="10000000">
+        <span class="tier-rank">IX</span><h3>Black Cat</h3><span class="tier-req">10M+ · Black Card</span>
         <ul>
-          <li>Everything in Nine Lives</li>
-          <li>Inner-circle strategy room</li>
+          <li>Everything in Tomcat</li>
+          <li>The inner-circle strategy room</li>
           <li>1-of-1 Legend NFT eligibility</li>
-          <li>Direct line to the team</li>
+          <li>Bottle service — top-tier reward drops</li>
+          <li>Your name on the High Table wall</li>
         </ul>
       </div>
     </div>
-    <p class="muted-note" style="text-align:center;margin-top:1.5rem;">Tier thresholds are illustrative and finalize at token launch. Perks roll out across the roadmap. Not financial advice.</p>
+    <p class="muted-note" style="text-align:center;margin-top:1.5rem;">Thresholds are illustrative and finalize at token launch. Perks roll out across the roadmap. Not financial advice.</p>
+  </section>
+
+  <!-- HIGH TABLE -->
+  <section class="section" style="padding-top:1rem;">
+    <div class="section-head">
+      <span class="eyebrow gold">The High Table</span>
+      <h2>Who Holds the <span class="grad-gold">Den</span></h2>
+      <p class="section-intro">The biggest believers, ranked. The top seats run the room.</p>
+    </div>
+    <div class="hightable" id="highTable">
+      <p class="muted-note" id="htNote" style="text-align:center;">The High Table fills in at token launch.</p>
+    </div>
+  </section>
+
+  <!-- LORE -->
+  <section class="section" style="padding-top:1rem;">
+    <div class="den-lore">
+      <span class="eyebrow gold">The Order of Nine</span>
+      <h2>House Rules</h2>
+      <p>One cat, nine lives — and nine seats at the High Table. The Den isn't bought with a cover charge; it's earned by conviction. What's said in the Den stays in the Den. Hold the line, hold the bag, and the door is always open to you.</p>
+    </div>
   </section>
 
   <footer class="footer">
     <div class="footer-brand"><img src="assets/catboy.png" alt="Catboy" class="footer-logo" /><span>CATBOY</span></div>
+    <p class="footer-disclaimer">The Cat's Den is a holder perks program, not a security or investment. Perks are discretionary and may change. Nothing here is financial advice.</p>
     <p class="footer-copy">© <span id="year"></span> CATBOY · The Legend Evolves on Solana</p>
   </footer>
 
@@ -113,38 +163,90 @@
     import { Connection, PublicKey } from "https://esm.sh/@solana/web3.js@1.95.3";
     const connection = new Connection(location.origin + "/api/solrpc", "confirmed");
     const $ = (id) => document.getElementById(id);
-    // Set this to the $CATBOY mint after launch to enable real tier checks.
+    // Set this to the $CATBOY mint after launch to enable live rank + High Table.
     const TOKEN_MINT = "";
+
+    const RANKS = [
+      { min: 10000000, name: "Black Cat", num: "IX", chip: "BLACK CARD" },
+      { min: 1000000,  name: "Tomcat",    num: "III", chip: "HIGH ROLLER" },
+      { min: 100000,   name: "House Cat", num: "II",  chip: "MEMBER" },
+      { min: 1,        name: "Stray",     num: "I",   chip: "GUEST" },
+    ];
+    function rankFor(bal) { return RANKS.find((r) => bal >= r.min) || null; }
+    const short = (a) => a.slice(0, 4) + "…" + a.slice(-4);
 
     function highlightTier(balance) {
       let active = null;
       document.querySelectorAll(".tier-card").forEach((c) => {
-        const min = +c.dataset.min;
-        const ok = balance >= min;
-        c.classList.toggle("unlocked", ok);
+        const ok = balance >= +c.dataset.min;
+        c.classList.toggle("unlocked", ok); c.classList.remove("you");
         if (ok) active = c;
       });
-      document.querySelectorAll(".tier-card").forEach((c) => c.classList.remove("you"));
       if (active) active.classList.add("you");
-      return active;
+    }
+
+    function showCard(addr, bal) {
+      const r = rankFor(bal);
+      $("cardSection").style.display = "block";
+      $("mcRank").textContent = r ? r.name : "Guest";
+      $("mcRankNum").textContent = r ? r.num : "—";
+      $("mcChip").textContent = r ? r.chip : "GUEST";
+      $("mcAddr").textContent = short(addr);
+      $("mcHold").textContent = bal.toLocaleString(undefined, { maximumFractionDigits: 0 }) + " $CATBOY";
+      $("memberCard").classList.toggle("is-black", !!r && r.name === "Black Cat");
+      highlightTier(bal);
+      $("cardSection").scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+
+    const providers = {
+      phantom: () => (window.solana && window.solana.isPhantom ? window.solana : null),
+      solflare: () => window.solflare || null,
+      backpack: () => window.backpack || (window.xnft && window.xnft.solana) || null,
+    };
+    async function connectAny() {
+      const p = providers.phantom() || providers.solflare() || providers.backpack();
+      if (!p) throw new Error("no_wallet");
+      const r = await p.connect();
+      return (r && r.publicKey ? r.publicKey : p.publicKey);
     }
 
     $("connectClub").addEventListener("click", async () => {
       const s = $("clubStatus");
-      const p = window.solana;
-      if (!p || !p.isPhantom) { s.style.color = "var(--magenta)"; s.textContent = "Phantom not found — or use the Wallet page for seedless."; return; }
+      s.style.color = "var(--muted)"; s.textContent = "Opening the door…";
+      let owner;
+      try { owner = await connectAny(); }
+      catch { s.style.color = "var(--magenta)"; s.textContent = "No wallet found — install Phantom, or use the Wallet page for seedless."; return; }
+      if (!TOKEN_MINT) {
+        s.style.color = "var(--gold,#e8c45a)";
+        s.textContent = "Connected " + short(owner.toString()) + " — live ranks unlock at token launch. Preview the Den below.";
+        showCard(owner.toString(), 0);
+        return;
+      }
       try {
-        const r = await p.connect();
-        const owner = r.publicKey;
-        if (!TOKEN_MINT) { s.style.color = "var(--cyan)"; s.textContent = "Connected. Tier checks unlock at token launch — preview the tiers below."; return; }
         const res = await connection.getParsedTokenAccountsByOwner(owner, { mint: new PublicKey(TOKEN_MINT) });
         let bal = 0;
         res.value.forEach((a) => { bal += Number(a.account.data.parsed.info.tokenAmount.uiAmount) || 0; });
-        const tier = highlightTier(bal);
+        showCard(owner.toString(), bal);
+        const r = rankFor(bal);
         s.style.color = "var(--cyan)";
-        s.textContent = bal > 0 ? "You hold " + bal.toLocaleString() + " $CATBOY — Tier: " + (tier ? tier.querySelector("h3").textContent : "—") : "No $CATBOY yet — grab some to join.";
-      } catch { s.style.color = "var(--magenta)"; s.textContent = "Connection cancelled."; }
+        s.textContent = bal > 0 ? "Welcome to the Den — Rank: " + (r ? r.name : "Guest") : "No $CATBOY yet — grab a bag to enter.";
+      } catch { s.style.color = "var(--magenta)"; s.textContent = "Couldn't read balance. Try again."; }
     });
+
+    // High Table leaderboard
+    (async () => {
+      if (!TOKEN_MINT) return;
+      try {
+        const r = await fetch("/api/holders", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mint: TOKEN_MINT }) });
+        const d = await r.json();
+        if (!d.holders || !d.holders.length) return;
+        const seats = ["IX", "VIII", "VII", "VI", "V", "IV", "III", "II", "I"];
+        const rows = d.holders.slice(0, 9).map((h, i) =>
+          `<div class="ht-row${i === 0 ? " ht-top" : ""}"><span class="ht-seat">${seats[i] || i + 1}</span><span class="ht-addr">${short(h.owner)}</span><span class="ht-amt">${Math.round(h.amount).toLocaleString()}</span><span class="ht-pct">${h.pct.toFixed(1)}%</span></div>`
+        ).join("");
+        $("highTable").innerHTML = `<div class="ht-head"><span>Seat</span><span>Member</span><span>$CATBOY</span><span>Share</span></div>${rows}`;
+      } catch {}
+    })();
   </script>
 </body>
 </html>
