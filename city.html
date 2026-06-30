@@ -148,15 +148,29 @@
       const trimMats = tints.map((c) => new THREE.MeshBasicMaterial({ color: c }));
       const unit = new THREE.BoxGeometry(1, 1, 1);
 
+      // photoreal PBR facades (nano-banana) with normal maps for real depth
+      const texLoader = new THREE.TextureLoader();
+      const loadTex = (url, srgb) => new Promise((res) => texLoader.load(url, (t) => { t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; res(t); }, undefined, () => res(null)));
+      const FACN = ["fac1", "fac2", "fac3"];
+      const albs = await Promise.all(FACN.map((f) => loadTex("assets/city/" + f + ".jpg", true)));
+      const nrms = await Promise.all(FACN.map((f) => loadTex("assets/city/" + f + "_n.jpg", false)));
+      const BR = [2.0, 3.2, 4.6]; // vertical tiling per height bucket
+      const pbrSets = albs.map((alb, f) => !alb ? null : BR.map((ry) => {
+        const a = alb.clone(); a.repeat.set(1.4, ry); a.needsUpdate = true;
+        let n = null; if (nrms[f]) { n = nrms[f].clone(); n.repeat.set(1.4, ry); n.needsUpdate = true; }
+        return new THREE.MeshStandardMaterial({ map: a, emissive: 0xffffff, emissiveMap: a, emissiveIntensity: 0.3, normalMap: n || undefined, normalScale: new THREE.Vector2(0.85, 0.85), metalness: 0.4, roughness: 0.72 });
+      })).filter(Boolean);
+      const havePBR = pbrSets.length > 0;
+
       function makeBuilding(px, pz, w, d, h) {
         const g = new THREE.Group();
         const sections = 1 + (Math.random() < 0.5 ? 1 : 0) + (Math.random() < 0.2 ? 1 : 0);
-        const glass = Math.random() < 0.32;
+        const fset = havePBR ? pbrSets[(Math.random() * pbrSets.length) | 0] : null;
         const trim = trimMats[(Math.random() * trimMats.length) | 0];
         let y = 0, cw = w, cd = d, hLeft = h;
         for (let s = 0; s < sections; s++) {
           const sh = s === sections - 1 ? hLeft : hLeft * (0.45 + Math.random() * 0.2); hLeft -= sh;
-          const mat = glass ? glassMats[(Math.random() * glassMats.length) | 0] : winMats[(Math.random() * winMats.length) | 0];
+          const mat = fset ? fset[sh < 14 ? 0 : sh < 26 ? 1 : 2] : winMats[(Math.random() * winMats.length) | 0];
           const box = new THREE.Mesh(unit, mat); box.scale.set(cw, sh, cd); box.position.set(px, y + sh / 2, pz); g.add(box);
           const t = new THREE.Mesh(unit, trim); t.scale.set(cw * 1.04, 0.5, cd * 1.04); t.position.set(px, y + sh, pz); g.add(t);
           y += sh; cw *= 0.66 + Math.random() * 0.08; cd *= 0.66 + Math.random() * 0.08;
@@ -338,7 +352,7 @@
       // bloom
       const composer = new EffectComposer(renderer);
       composer.addPass(new RenderPass(scene, camera));
-      const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.85, 0.7, 0.2); composer.addPass(bloom);
+      const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.72, 0.62, 0.26); composer.addPass(bloom);
 
       // interaction (nav)
       const ray = new THREE.Raycaster(), pointer = new THREE.Vector2();
