@@ -8,6 +8,41 @@ const CONFIG = {
   },
 };
 
+// ----- Intro splash -----
+(function () {
+  const splash = document.getElementById("splash");
+  const video = document.getElementById("splashVideo");
+  const skip = document.getElementById("splashSkip");
+  if (!splash) return;
+
+  // Show only once per browser session.
+  if (sessionStorage.getItem("catboy_splash_seen")) {
+    splash.remove();
+    return;
+  }
+
+  document.body.classList.add("splash-open");
+  let done = false;
+  const dismiss = () => {
+    if (done) return;
+    done = true;
+    sessionStorage.setItem("catboy_splash_seen", "1");
+    splash.classList.add("hide");
+    document.body.classList.remove("splash-open");
+    setTimeout(() => splash.remove(), 900);
+  };
+
+  if (video) {
+    video.addEventListener("ended", dismiss);
+    video.addEventListener("error", dismiss); // if the video can't load, don't block the site
+    const tryPlay = video.play();
+    if (tryPlay && tryPlay.catch) tryPlay.catch(() => {}); // autoplay may be blocked; user can skip
+  }
+  if (skip) skip.addEventListener("click", dismiss);
+  // Hard safety: never let the splash trap the user.
+  setTimeout(dismiss, 12000);
+})();
+
 // ----- Footer year -----
 document.getElementById("year").textContent = new Date().getFullYear();
 
