@@ -23,6 +23,22 @@
     { id: "popcat", name: "POPCAT",   img: "char_popcat.png",char: true, color: "#e7b9a0", hp: 90,  pow: 0.95, spd: 1.22, special: "Pop Slam", blurb: "Pop pop pop. Glass cannon." },
   ];
 
+  // Per-fighter special moves — each its own archetype + visual.
+  const SPECIALS = {
+    catboy:  { type: "rush",      color: "#9b4dff", hits: 5, dmg: 7 },   // dashing claw flurry
+    sol:     { type: "beam",      color: "#14f195", dmg: 28 },           // wide stake beam
+    jup:     { type: "multishot", color: "#c7f94c", n: 3, dmg: 10 },     // 3 routed orbs
+    pump:    { type: "grow",      color: "#2ed573", dmg: 24 },           // bonding-curve orb that swells
+    bonk:    { type: "slam",      color: "#f7a600", dmg: 26 },           // bat shockwave
+    wif:     { type: "multishot", color: "#d49a6a", n: 3, dmg: 9, spin: true }, // spinning hats
+    pengu:   { type: "slide",     color: "#7fd4ff", dmg: 22 },           // ice belly-slide
+    jto:     { type: "teleport",  color: "#00d2b4", dmg: 26 },           // blink strike
+    pyth:    { type: "rain",      color: "#aa78ff", n: 5, dmg: 9 },      // candlestick rain
+    trump:   { type: "slam",      color: "#d4af37", dmg: 28 },           // tariff ground pound
+    popcat:  { type: "multishot", color: "#e7b9a0", n: 4, dmg: 6, fast: true }, // pop barrage
+  };
+  const specOf = (def) => SPECIALS[def.id] || { type: "orb", color: def.color, dmg: 22 };
+
   // ---------- assets ----------
   const IMG = {};
   function load(src) {
@@ -80,7 +96,8 @@
     if (this.cool > 0 || this.busy() || !this.onGround) return;
     if (kind === "special") {
       if (this.meter < 100) return;
-      this.meter = 0; this.set("special", 620); this.cool = 760; return;
+      this.meter = 0; this.set("special", 620); this.cool = 760;
+      this.specHits = 0; this._lastSpecHit = 0; return;
     }
     if (kind === "punch") { this.set("punch", 300); this.cool = 340; }
     else { this.set("kick", 420); this.cool = 480; }
@@ -92,7 +109,7 @@
     return {
       player, oppQueue: oppList.slice(), oppIdx: 0,
       p1: null, p2: null, round: 1, w1: 0, w2: 0,
-      phase: "intro", phaseT: 0, roundTime: 60, shake: 0, sparks: [], shots: [], pops: [], slow: 1,
+      phase: "intro", phaseT: 0, roundTime: 60, shake: 0, sparks: [], shots: [], beams: [], pops: [], slow: 1,
     };
   }
   function startRound(keepWins) {
@@ -102,7 +119,7 @@
     G.p2.maxhp = Math.round(G.p2.maxhp * (1 + G.oppIdx * 0.06));
     G.p2.hp = G.p2.maxhp;
     if (!keepWins) { G.w1 = 0; G.w2 = 0; G.round = 1; }
-    G.roundTime = 60; G.phase = "intro"; G.phaseT = 0; G.sparks = []; G.shots = []; G.pops = [];
+    G.roundTime = 60; G.phase = "intro"; G.phaseT = 0; G.sparks = []; G.shots = []; G.beams = []; G.pops = [];
   }
 
   function spark(x, y, c, n) {
@@ -189,12 +206,22 @@
           applyHit(f, foe, dmg, kb, (f.x + foe.x) / 2, f.y - f.h * 0.55);
         }
       }
-      // special: fire projectile near start
-      if (f.state === "special" && !f.didHit && f.st > 140) {
-        f.didHit = true;
-        G.shots.push({ x: f.x + f.facing * 40, y: f.y - f.h * 0.55, vx: f.facing * 9, owner: f,
-          dmg: Math.round(22 * f.def.pow), c: f.def.color, r: 22, life: 1400, label: f.def.special });
-        G.shake = Math.max(G.shake, 7); spark(f.x + f.facing * 40, f.y - f.h * 0.55, f.def.color, 16);
+      // special move — per-fighter archetype
+      if (f.state === "special") {
+        const cfg = specOf(f.def);
+        if (cfg.type === "rush") {
+          if (f.st < f.dur * 0.78) f.vx = f.facing * f.def.spd * 4.4;
+          if (f.st - f._lastSpecHit > 110 && (f.specHits || 0) < (cfg.hits || 4)) {
+            const dist = Math.abs(f.x - foe.x), facingFoe = (foe.x - f.x) * f.facing > 0;
+            if (dist <= f.reach() + 12 && facingFoe && foe.state !== "ko") {
+              applyHit(f, foe, Math.round((cfg.dmg || 7) * f.def.pow), 4, (f.x + foe.x) / 2, f.y - f.h * 0.55);
+              f.specHits = (f.specHits || 0) + 1; f._lastSpecHit = f.st;
+            }
+          }
+          if (Math.random() < 0.55) G.sparks.push({ x: f.x, y: f.y - f.h * 0.5, vx: -f.facing * 2, vy: -1, life: 0.5, c: cfg.color });
+        } else if (!f.didHit && f.st > 140) {
+          f.didHit = true; fireSpecial(f, foe, cfg);
+        }
       }
       if (f.busy() && f.st >= f.dur && f.state !== "ko") f.set("idle");
       if (Math.abs(f.vx) > 0.2 && f.state === "idle") f.state = "walk";
@@ -210,14 +237,76 @@
     if (f.state !== "ko") f.bob += dt / 200;
   }
 
+  function fireSpecial(f, foe, cfg) {
+    const ox = f.x + f.facing * 40, oy = f.y - f.h * 0.55, P = f.def.pow;
+    G.shake = Math.max(G.shake, 9); spark(ox, oy, cfg.color, 18);
+    popText(f.x, f.y - f.h - 16, f.def.special.toUpperCase(), cfg.color);
+    const S = (o) => G.shots.push(Object.assign({ x: ox, y: oy, vx: f.facing * 9, vy: 0, owner: f, c: cfg.color, r: 18, life: 1500, shape: "orb", kb: 10 }, o));
+    switch (cfg.type) {
+      case "beam":
+        G.beams.push({ x: ox, y: oy, c: cfg.color, life: 440, max: 440, facing: f.facing });
+        if ((foe.x - f.x) * f.facing > 0 && foe.state !== "ko") applyHit(f, foe, Math.round((cfg.dmg || 26) * P), 13, foe.x, oy);
+        break;
+      case "slam":
+        S({ y: GROUND - 14, vx: f.facing * 6, dmg: Math.round((cfg.dmg || 24) * P), r: 32, shape: "wave", grow: 0.05, life: 1700, kb: 15 });
+        break;
+      case "grow":
+        S({ vx: f.facing * 6, dmg: Math.round((cfg.dmg || 22) * P), r: 14, grow: 0.08, life: 1700, kb: 12 });
+        break;
+      case "slide":
+        f.vx = f.facing * f.def.spd * 5;
+        S({ y: GROUND - 22, vx: f.facing * 10, dmg: Math.round((cfg.dmg || 20) * P), r: 22, kb: 11 });
+        break;
+      case "multishot": {
+        const n = cfg.n || 3;
+        for (let i = 0; i < n; i++) S({
+          y: oy - 28 + i * (56 / Math.max(1, n - 1)), vx: f.facing * (cfg.fast ? 12 : 9),
+          dmg: Math.round((cfg.dmg || 8) * P), r: cfg.fast ? 12 : 16, shape: cfg.spin ? "hat" : "orb", ang: 0, kb: 6, life: 1500,
+        });
+        break;
+      }
+      case "rain": {
+        const n = cfg.n || 5;
+        for (let i = 0; i < n; i++) S({
+          x: foe.x - 90 + i * (180 / Math.max(1, n - 1)), y: -30 - i * 36, vx: 0, vy: 6, gravity: 0.26,
+          dmg: Math.round((cfg.dmg || 8) * P), r: 13, shape: "candle", kb: 6, life: 2400,
+        });
+        break;
+      }
+      case "teleport":
+        spark(f.x, oy, cfg.color, 16);
+        f.x = Math.max(60, Math.min(W - 60, foe.x - f.facing * 92));
+        f.facing = foe.x >= f.x ? 1 : -1;
+        spark(f.x, oy, cfg.color, 22); G.shake = Math.max(G.shake, 11);
+        if (foe.state !== "ko") applyHit(f, foe, Math.round((cfg.dmg || 26) * P), 13, foe.x, oy);
+        break;
+      default:
+        S({ dmg: Math.round((cfg.dmg || 22) * P), r: 20, kb: 11 });
+    }
+  }
+
+  function updateBeams(dt) {
+    if (!G.beams) return;
+    for (let i = G.beams.length - 1; i >= 0; i--) { G.beams[i].life -= dt; if (G.beams[i].life <= 0) G.beams.splice(i, 1); }
+  }
+
   function updateShots(dt) {
     for (let i = G.shots.length - 1; i >= 0; i--) {
-      const s = G.shots[i]; s.x += s.vx * dt / 16; s.life -= dt;
+      const s = G.shots[i];
+      s.x += s.vx * dt / 16;
+      if (s.vy) s.y += s.vy * dt / 16;
+      if (s.gravity) s.vy += s.gravity * dt / 16;
+      if (s.grow) s.r += s.grow * dt / 16;
+      if (s.ang !== undefined) s.ang += 0.32;
+      s.life -= dt;
       const foe = s.owner === G.p1 ? G.p2 : G.p1;
-      if (Math.abs(s.x - foe.x) < 50 && foe.state !== "ko" && s.life > 0) {
-        applyHit(s.owner, foe, s.dmg, 11, s.x, s.y); s.life = 0;
+      const fy = foe.y - foe.h * 0.5, dx = Math.abs(s.x - foe.x);
+      if (!s.dead && foe.state !== "ko" && s.life > 0) {
+        const hit = s.shape === "wave" ? (dx < s.r + 28) : (dx < s.r + 40 && Math.abs(s.y - fy) < foe.h * 0.55 + s.r);
+        if (hit) { applyHit(s.owner, foe, s.dmg, s.kb || 11, s.x, s.y); s.dead = true; }
       }
-      if (s.life <= 0 || s.x < -40 || s.x > W + 40) G.shots.splice(i, 1);
+      if (s.shape === "candle" && s.y > GROUND) { s.dead = true; spark(s.x, GROUND, s.c, 8); }
+      if (s.dead || s.life <= 0 || s.x < -60 || s.x > W + 60) G.shots.splice(i, 1);
     }
   }
 
@@ -281,11 +370,38 @@
   }
 
   function drawShots() {
+    // beams (behind projectiles)
+    (G.beams || []).forEach((b) => {
+      const a = b.life / b.max, x1 = b.facing > 0 ? W : 0, left = Math.min(b.x, x1), w = Math.abs(x1 - b.x);
+      ctx.save();
+      const grad = ctx.createLinearGradient(b.x, 0, x1, 0);
+      grad.addColorStop(0, b.c); grad.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.globalAlpha = a; ctx.fillStyle = grad; const h = 50 * a + 12; ctx.fillRect(left, b.y - h / 2, w, h);
+      ctx.globalAlpha = a * 0.8; ctx.fillStyle = "#fff"; ctx.fillRect(left, b.y - 6, w, 12);
+      ctx.restore();
+    });
     G.shots.forEach((s) => {
       ctx.save();
-      const grad = ctx.createRadialGradient(s.x, s.y, 2, s.x, s.y, s.r);
-      grad.addColorStop(0, "#fff"); grad.addColorStop(0.4, s.c); grad.addColorStop(1, "rgba(0,0,0,0)");
-      ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, 7); ctx.fill();
+      if (s.shape === "wave") {
+        ctx.globalAlpha = Math.max(0, Math.min(1, s.life / 700));
+        ctx.strokeStyle = s.c; ctx.lineWidth = 6;
+        ctx.beginPath(); ctx.ellipse(s.x, GROUND, s.r, s.r * 0.5, 0, Math.PI, 2 * Math.PI); ctx.stroke();
+        ctx.globalAlpha *= 0.3; ctx.fillStyle = s.c;
+        ctx.beginPath(); ctx.ellipse(s.x, GROUND, s.r, s.r * 0.5, 0, Math.PI, 2 * Math.PI); ctx.fill();
+      } else if (s.shape === "hat") {
+        ctx.translate(s.x, s.y); ctx.rotate(s.ang || 0); ctx.fillStyle = s.c;
+        ctx.beginPath(); ctx.ellipse(0, 0, s.r, s.r * 0.55, 0, 0, 7); ctx.fill();
+        ctx.fillStyle = "rgba(255,255,255,0.7)"; ctx.fillRect(-s.r * 0.6, -2, s.r * 1.2, 4);
+      } else if (s.shape === "candle") {
+        ctx.strokeStyle = s.c; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(s.x, s.y - 24); ctx.lineTo(s.x, s.y + 24); ctx.stroke();
+        ctx.fillStyle = s.c; ctx.fillRect(s.x - 6, s.y - 16, 12, 32);
+        ctx.fillStyle = "rgba(255,255,255,0.5)"; ctx.fillRect(s.x - 6, s.y - 16, 12, 4);
+      } else {
+        const grad = ctx.createRadialGradient(s.x, s.y, 2, s.x, s.y, s.r);
+        grad.addColorStop(0, "#fff"); grad.addColorStop(0.4, s.c); grad.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, 7); ctx.fill();
+      }
       ctx.restore();
     });
   }
@@ -370,6 +486,7 @@
       updateFighter(G.p1, G.p2, dt);
       updateFighter(G.p2, G.p1, dt);
       updateShots(dt);
+      updateBeams(dt);
       G.roundTime -= dt / 1000;
       drawWorld(dt);
       if (G.p1.combo > 1 && G.p1.comboT > 0) { ctx.fillStyle = "#ffd84d"; ctx.font = "900 26px Orbitron"; ctx.textAlign = "left"; ctx.fillText(G.p1.combo + " COMBO", 30, 110); }
