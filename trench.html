@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>CATBOY Trench Terminal — Live Board · Scan · Chart · Trade</title>
-  <meta name="description" content="A real-time Solana trading terminal: live New / Final Stretch / Migrated board streaming straight off-chain, on-chain rug forensics with a risk score, live chart, and 1-tap buy/sell. $CATBOY holders trade discounted." />
+  <title>CATBOY Trench Terminal — Scan · Chart · Buy · Sell</title>
+  <meta name="description" content="A real-time Solana trading terminal: live card-grid feed (New / Trending / Graduated / Pad), on-chain rug forensics with mint & freeze authority checks and a risk score, live chart, and 1-tap buy/sell. $CATBOY holders trade discounted." />
   <meta property="og:title" content="CATBOY Trench Terminal" />
-  <meta property="og:description" content="Live board of new Solana launches + scan, chart, and 1-tap trade." />
+  <meta property="og:description" content="Live Solana token feed + scan, chart, and 1-tap trade. Holders trade discounted." />
   <meta property="og:image" content="assets/art/arcade.jpg" />
   <meta name="twitter:card" content="summary_large_image" />
   <link rel="icon" type="image/png" href="assets/solana.png" />
@@ -40,93 +40,96 @@
     <a href="index.html#waitlist" class="btn btn-primary nav-cta">Join Allowlist</a>
   </header>
 
-  <!-- Search / status bar -->
   <div class="term-bar">
     <div class="term-bar-inner">
       <span class="term-logo">⌖ TRENCH</span>
-      <button id="boardBtn" class="btn btn-ghost btn-sm" type="button" style="display:none;">‹ Board</button>
-      <input id="caInput" type="text" placeholder="Paste a CA to scan · or click a token on the live board" spellcheck="false" />
+      <button id="backBtn" class="btn btn-ghost btn-sm" type="button" style="display:none;">‹ Feed</button>
+      <input id="caInput" type="text" placeholder="Paste a CA to scan · or tap a token below" spellcheck="false" />
       <button id="scanBtn" class="btn btn-primary btn-sm" type="button">Scan</button>
       <button id="connectBtn2" class="btn btn-ghost btn-sm" type="button">Connect</button>
-      <span id="walletAddr2" class="term-wallet"><span id="wsState" class="ws-state">● connecting</span></span>
+      <span id="wsState" class="ws-state">● connecting</span>
     </div>
   </div>
 
-  <!-- FILTER BAR -->
-  <div id="filters" class="term-filters">
-    <label class="flt"><input type="checkbox" id="fltNsfw" checked /> Hide NSFW</label>
-    <label class="flt"><input type="checkbox" id="fltDedupe" checked /> Dedupe</label>
-    <label class="flt">Min MC ◎ <input type="number" id="fltMinMc" min="0" step="1" value="0" /></label>
-    <input type="text" id="fltSearch" class="flt-search" placeholder="filter by name or ticker…" spellcheck="false" />
-  </div>
-
-  <!-- BOARD VIEW (default) -->
-  <main id="boardView" class="term-board">
-    <section class="board-lane">
-      <div class="lane-head">🆕 New <span class="live-dot"></span><span id="cntNew" class="lane-cnt">0</span></div>
-      <div id="laneNew" class="lane-list"></div>
-    </section>
-    <section class="board-lane">
-      <div class="lane-head">⏳ Final Stretch <span id="cntFinal" class="lane-cnt">0</span></div>
-      <div id="laneFinal" class="lane-list"></div>
-    </section>
-    <section class="board-lane">
-      <div class="lane-head">🎓 Migrated <span id="cntMig" class="lane-cnt">0</span></div>
-      <div id="laneMig" class="lane-list"></div>
-    </section>
+  <!-- FEED VIEW -->
+  <main id="feedView" class="term-feedwrap">
+    <div class="feed-tabs" id="feedTabs">
+      <button class="feed-tab active" data-tab="new" type="button">🆕 New <span class="live-dot"></span></button>
+      <button class="feed-tab" data-tab="trending" type="button">🔥 Trending</button>
+      <button class="feed-tab" data-tab="graduated" type="button">🎓 Graduated</button>
+      <button class="feed-tab" data-tab="pad" type="button">🚀 Pad</button>
+    </div>
+    <div class="term-filters">
+      <label class="flt"><input type="checkbox" id="fltNsfw" checked /> Hide NSFW</label>
+      <label class="flt"><input type="checkbox" id="fltDedupe" checked /> Dedupe</label>
+      <label class="flt">Max age (m) <input type="number" id="fltMaxAge" min="0" step="1" value="0" placeholder="any" /></label>
+      <label class="flt">Min MC ◎ <input type="number" id="fltMinMc" min="0" step="1" value="0" /></label>
+      <input type="text" id="fltSearch" class="flt-search" placeholder="filter by name or ticker…" spellcheck="false" />
+    </div>
+    <div id="coinGrid" class="coingrid"></div>
+    <p id="feedEmpty" class="muted-note" style="text-align:center;padding:2rem;"></p>
   </main>
 
-  <!-- TOKEN VIEW (cockpit) -->
-  <main id="tokenView" class="term-cockpit" style="display:none;">
-    <section class="term-main">
-      <div id="chartWrap" class="term-chart">
-        <iframe id="chart" title="chart" loading="lazy" allow="clipboard-write"></iframe>
+  <!-- DETAIL VIEW (Photon-style) -->
+  <main id="detailView" class="term-detail" style="display:none;">
+    <div class="detailgrid">
+      <div class="dg-main">
+        <div class="term-chart"><iframe id="chart" title="chart" loading="lazy" allow="clipboard-write"></iframe></div>
       </div>
-      <div class="term-trade">
-        <div class="term-presets">
-          <button data-sol="0.25" type="button">0.25</button>
-          <button data-sol="0.5" type="button">0.5</button>
-          <button data-sol="1" type="button">1</button>
-          <button data-sol="2" type="button">2</button>
-          <button data-sol="5" type="button">5</button>
+      <div class="dg-side">
+        <div class="trench-card">
+          <div class="tok-head">
+            <img id="tokImg" alt="" />
+            <div><h3 id="tokName">—</h3><span id="tokSymbol" class="muted-note" style="margin:0;"></span></div>
+          </div>
+          <div class="stat-rows">
+            <div><span>Price</span><b id="tokPrice">—</b></div>
+            <div><span>Market cap</span><b id="tokMc">—</b></div>
+            <div><span>Liquidity</span><b id="tokLiq">—</b></div>
+            <div><span>24h volume</span><b id="tokVol">—</b></div>
+          </div>
+          <div class="cbar">
+            <div class="cbarlbl">Bonding curve · <b id="tokCurve">—</b></div>
+            <div class="ctrack"><i id="curveFill"></i></div>
+          </div>
         </div>
-        <div class="term-trade-row">
-          <input id="tradeAmt" type="number" min="0" step="0.01" placeholder="Amount (SOL to buy / tokens to sell)" />
-          <button id="buyBtn" class="btn btn-primary" type="button">Buy</button>
-          <button id="sellBtn" class="btn btn-ghost" type="button">Sell</button>
+
+        <div class="trench-card">
+          <div class="term-presets">
+            <button data-sol="0.25" type="button">0.25</button>
+            <button data-sol="0.5" type="button">0.5</button>
+            <button data-sol="1" type="button">1</button>
+            <button data-sol="2" type="button">2</button>
+            <button data-sol="5" type="button">5</button>
+          </div>
+          <div class="term-trade-row">
+            <input id="tradeAmt" type="number" min="0" step="0.01" placeholder="SOL to buy / tokens to sell" />
+            <button id="buyBtn" class="btn btn-primary" type="button">Buy</button>
+            <button id="sellBtn" class="btn btn-ghost" type="button">Sell</button>
+          </div>
+          <p class="form-status" id="tradeStatus" role="status" aria-live="polite"></p>
+          <p class="muted-note" style="margin:0.2rem 0 0;">1% fee · $CATBOY holders pay less (100k=half · 1M=free) · non-custodial.</p>
         </div>
-        <p class="form-status" id="tradeStatus" role="status" aria-live="polite"></p>
-        <p class="muted-note" style="margin:0.2rem 0 0;">Flat 1% fee · $CATBOY holders pay less (100k = half · 1M = free) · non-custodial.</p>
+
+        <div class="trench-card">
+          <h3>Safety / Risk</h3>
+          <div class="risk-meter"><div id="riskFill" class="risk-fill"></div></div>
+          <div class="risk-line"><span id="riskScore" class="risk-num">—</span><span id="riskLevel" class="risk-level"></span></div>
+          <div class="auth-badges">
+            <span id="authMint" class="auth-badge">Mint: —</span>
+            <span id="authFreeze" class="auth-badge">Freeze: —</span>
+          </div>
+          <div class="conc-rows">
+            <div><span>Top 10 hold</span><b id="cTop10">—</b></div>
+            <div><span>Largest wallet</span><b id="cLargest">—</b></div>
+            <div><span>Sniped at launch</span><b id="cSniped">—</b></div>
+            <div><span>Bundles found</span><b id="cBundles">—</b></div>
+          </div>
+          <ul id="riskFlags" class="launch-steps" style="margin-top:0.7rem;"></ul>
+          <p class="form-status" id="scanStatus" role="status" aria-live="polite" style="margin-top:0.5rem;"></p>
+        </div>
       </div>
-    </section>
-    <aside class="term-side">
-      <div class="trench-card">
-        <div class="tok-head">
-          <img id="tokImg" alt="" />
-          <div><h3 id="tokName">—</h3><span id="tokSymbol" class="muted-note" style="margin:0;"></span></div>
-        </div>
-        <div class="stat-rows">
-          <div><span>Price</span><b id="tokPrice">—</b></div>
-          <div><span>Market cap</span><b id="tokMc">—</b></div>
-          <div><span>Liquidity</span><b id="tokLiq">—</b></div>
-          <div><span>24h volume</span><b id="tokVol">—</b></div>
-          <div><span>Bonding curve</span><b id="tokCurve">—</b></div>
-        </div>
-      </div>
-      <div class="trench-card">
-        <h3>Safety / Risk</h3>
-        <div class="risk-meter"><div id="riskFill" class="risk-fill"></div></div>
-        <div class="risk-line"><span id="riskScore" class="risk-num">—</span><span id="riskLevel" class="risk-level"></span></div>
-        <div class="conc-rows">
-          <div><span>Top 10 hold</span><b id="cTop10">—</b></div>
-          <div><span>Largest wallet</span><b id="cLargest">—</b></div>
-          <div><span>Sniped at launch</span><b id="cSniped">—</b></div>
-          <div><span>Bundles found</span><b id="cBundles">—</b></div>
-        </div>
-        <ul id="riskFlags" class="launch-steps" style="margin-top:0.7rem;"></ul>
-        <p class="form-status" id="scanStatus" role="status" aria-live="polite" style="margin-top:0.5rem;"></p>
-      </div>
-    </aside>
+    </div>
   </main>
 
   <footer class="footer">
@@ -145,14 +148,11 @@
     const SOL = "So11111111111111111111111111111111111111112";
     const $ = (id) => document.getElementById(id);
 
-    // marketCapSol at which a token is "final stretch" (near pump graduation ~ a few hundred SOL)
-    const FINAL_STRETCH_SOL = 250;
-    const NEW_MAX = 40;                 // keep only the newest N launches in the New lane
-    const NEW_TTL_MS = 5 * 60 * 1000;   // and only ones from the last 5 minutes
-    const LANE_MAX = 25;                // cap stored Final Stretch / Migrated too
+    const NEW_MAX = 60, NEW_TTL_MS = 6 * 60 * 1000;
+    let provider = null, pubkey = null, currentMint = null, currentDecimals = 6, tab = "new";
 
-    let provider = null, pubkey = null, currentMint = null, currentDecimals = 6;
-    const tokens = new Map(); // mint -> {mint,name,symbol,mcap,created,lane}
+    const news = new Map();        // mint -> {mint,name,symbol,mcap,created}
+    let trending = [], graduated = [], pad = [];
 
     const fmtUsd = (n) => n == null ? "—" : "$" + Number(n).toLocaleString(undefined, { maximumFractionDigits: n < 1 ? 8 : 2 });
     const ago = (t) => { const s = Math.floor((Date.now() - t) / 1000); return s < 60 ? s + "s" : s < 3600 ? Math.floor(s/60) + "m" : Math.floor(s/3600) + "h"; };
@@ -165,110 +165,92 @@
       return { ok: r.ok, status: r.status, data };
     }
 
-    // ---------- LIVE BOARD (pumpportal websocket) ----------
+    // ---------- WEBSOCKET (live new + migrations) ----------
     let ws, tracked = new Set();
-    function wsState(s, cls) { const e = $("wsState"); e.textContent = s; e.className = "ws-state " + (cls || ""); }
-
+    const wsState = (s, c) => { const e = $("wsState"); e.textContent = s; e.className = "ws-state " + (c || ""); };
     function connectWS() {
       try { ws = new WebSocket("wss://pumpportal.fun/api/data"); } catch { wsState("● offline", "off"); return; }
-      ws.onopen = () => {
-        wsState("● live", "on");
-        ws.send(JSON.stringify({ method: "subscribeNewToken" }));
-        ws.send(JSON.stringify({ method: "subscribeMigration" }));
-      };
+      ws.onopen = () => { wsState("● live", "on"); ws.send(JSON.stringify({ method: "subscribeNewToken" })); ws.send(JSON.stringify({ method: "subscribeMigration" })); };
       ws.onmessage = (ev) => {
         let d; try { d = JSON.parse(ev.data); } catch { return; }
         if (!d || !d.mint) return;
         if (d.txType === "create") {
-          tokens.set(d.mint, { mint: d.mint, name: d.name, symbol: d.symbol, mcap: d.marketCapSol || 0, created: Date.now(), lane: "new" });
-          trackTrades(d.mint);
-          sweep();
-        } else if (d.txType === "buy" || d.txType === "sell") {
-          const t = tokens.get(d.mint);
-          if (t) { if (d.marketCapSol) t.mcap = d.marketCapSol; if (t.lane === "new" && t.mcap >= FINAL_STRETCH_SOL) t.lane = "final"; }
+          news.set(d.mint, { mint: d.mint, name: d.name, symbol: d.symbol, mcap: d.marketCapSol || 0, created: Date.now() });
+          trackTrades(d.mint); sweep();
+        } else if ((d.txType === "buy" || d.txType === "sell") && news.has(d.mint)) {
+          if (d.marketCapSol) news.get(d.mint).mcap = d.marketCapSol;
         } else if (d.txType === "migrate" || d.pool) {
-          const t = tokens.get(d.mint) || { mint: d.mint, name: d.name, symbol: d.symbol, mcap: 0, created: Date.now() };
-          t.lane = "migrated"; tokens.set(d.mint, t);
+          if (!graduated.find((g) => g.mint === d.mint)) graduated.unshift({ mint: d.mint, name: d.name, symbol: d.symbol, mcap: d.marketCapSol || 0, created: Date.now() });
+          graduated = graduated.slice(0, 40);
         }
       };
       ws.onclose = () => { wsState("● reconnecting", "off"); setTimeout(connectWS, 3000); };
       ws.onerror = () => { try { ws.close(); } catch {} };
     }
+    function trackTrades(m) { if (ws && ws.readyState === 1 && !tracked.has(m)) { tracked.add(m); ws.send(JSON.stringify({ method: "subscribeTokenTrade", keys: [m] })); } }
+    function drop(m) { news.delete(m); if (tracked.has(m) && ws && ws.readyState === 1) { ws.send(JSON.stringify({ method: "unsubscribeTokenTrade", keys: [m] })); tracked.delete(m); } }
+    function sweep() { const now = Date.now(); [...news.values()].sort((a, b) => b.created - a.created).forEach((t, i) => { if (i >= NEW_MAX || now - t.created > NEW_TTL_MS) drop(t.mint); }); }
 
-    function trackTrades(mint) {
-      if (!ws || ws.readyState !== 1 || tracked.has(mint)) return;
-      tracked.add(mint);
-      ws.send(JSON.stringify({ method: "subscribeTokenTrade", keys: [mint] }));
-    }
-    function drop(mint) {
-      tokens.delete(mint);
-      if (tracked.has(mint) && ws && ws.readyState === 1) { ws.send(JSON.stringify({ method: "unsubscribeTokenTrade", keys: [mint] })); tracked.delete(mint); }
-    }
-    // Keep the feed lean: New lane = newest NEW_MAX within NEW_TTL; cap the other lanes too.
-    function sweep() {
-      const now = Date.now();
-      const news = [...tokens.values()].filter((t) => t.lane === "new").sort((a, b) => b.created - a.created);
-      news.forEach((t, i) => { if (i >= NEW_MAX || now - t.created > NEW_TTL_MS) drop(t.mint); });
-      const cap = (lane, key) => {
-        const arr = [...tokens.values()].filter((t) => t.lane === lane).sort((a, b) => key(b) - key(a));
-        arr.forEach((t, i) => { if (i >= LANE_MAX) tokens.delete(t.mint); });
-      };
-      cap("final", (t) => t.mcap); cap("migrated", (t) => t.created);
-    }
-
-    function row(t) {
-      const b = document.createElement("button");
-      b.className = "tok-row";
-      const label = t.symbol ? "$" + t.symbol : t.mint.slice(0, 4) + "…" + t.mint.slice(-4);
-      b.innerHTML =
-        '<span class="tr-main"><span class="tr-sym">' + label + '</span><span class="tr-name">' + ((t.name || "").slice(0, 20) || "—") + '</span></span>' +
-        '<span class="tr-stats"><span class="tr-mc">' + (t.mcap ? t.mcap.toFixed(1) + "◎" : "—") + '</span><span class="tr-age">' + ago(t.created) + '</span></span>';
-      b.addEventListener("click", () => openToken(t.mint));
-      return b;
-    }
-    // Profanity / NSFW blocklist (substring match on normalized name+symbol).
-    const BLOCK = ["fuck","fuk","fck","fk u","shit","bitch","cunt","nigg","fagg","retard","rape","molest","titty","tittie","tits","boob","cum","cock","dick","pussy","porn","nsfw","sex","slut","whore","nazi","hitler","kkk","pedo","incest"];
+    // ---------- FEED RENDER ----------
+    const BLOCK = ["fuck","fuk","fck","fk u","shit","bitch","cunt","nigg","fagg","retard","rape","molest","titty","tittie","tits","boob","cum","cock","dick","pussy","porn","nsfw","slut","whore","nazi","hitler","kkk","pedo","incest"];
     const norm = (s) => (s || "").toLowerCase().replace(/[^a-z0-9 ]/g, "");
     const isVulgar = (t) => { const s = norm(t.name) + " " + norm(t.symbol); return BLOCK.some((w) => s.includes(w)); };
 
     function applyFilters(arr) {
       const nsfw = $("fltNsfw").checked, dedupe = $("fltDedupe").checked;
       const minMc = parseFloat($("fltMinMc").value) || 0;
-      const q = norm($("fltSearch").value);
+      const maxAge = (parseFloat($("fltMaxAge").value) || 0) * 60 * 1000;
+      const q = norm($("fltSearch").value), now = Date.now();
       let out = arr.filter((t) => (!nsfw || !isVulgar(t)) && (t.mcap || 0) >= minMc &&
+        (!maxAge || !t.created || now - t.created <= maxAge) &&
         (!q || (norm(t.name) + " " + norm(t.symbol)).includes(q)));
-      if (dedupe) {
-        const seen = new Set();
-        out = out.filter((t) => { const k = norm(t.symbol) + "|" + norm(t.name); if (seen.has(k)) return false; seen.add(k); return true; });
-      }
+      if (dedupe) { const seen = new Set(); out = out.filter((t) => { const k = norm(t.symbol) + "|" + norm(t.name); if (seen.has(k)) return false; seen.add(k); return true; }); }
       return out;
     }
 
-    function renderBoard() {
-      const lanes = { new: [], final: [], migrated: [] };
-      for (const t of tokens.values()) (lanes[t.lane] || lanes.new).push(t);
-      lanes.new.sort((a, b) => b.created - a.created);
-      lanes.final.sort((a, b) => b.mcap - a.mcap);
-      lanes.migrated.sort((a, b) => b.created - a.created);
-      const fill = (el, arr, cnt) => { const f = applyFilters(arr); el.innerHTML = ""; f.slice(0, 25).forEach((t) => el.appendChild(row(t))); cnt.textContent = f.length; };
-      fill($("laneNew"), lanes.new, $("cntNew"));
-      fill($("laneFinal"), lanes.final, $("cntFinal"));
-      fill($("laneMig"), lanes.migrated, $("cntMig"));
+    function card(t) {
+      const b = document.createElement("button");
+      b.className = "coin-card";
+      const sym = t.symbol ? "$" + t.symbol : t.mint.slice(0, 4) + "…" + t.mint.slice(-4);
+      const av = t.icon ? '<img src="' + t.icon + '" onerror="this.style.visibility=\'hidden\'" />' : '<span class="cc-av">' + (t.symbol ? t.symbol[0] : "?").toUpperCase() + '</span>';
+      b.innerHTML =
+        '<div class="cc-top">' + av + '<div class="cc-id"><span class="cc-sym">' + sym + '</span><span class="cc-name">' + ((t.name || "").slice(0, 18) || "—") + '</span></div></div>' +
+        '<div class="cc-stats"><span>' + (t.mcap ? t.mcap.toFixed(1) + "◎" : (t.mcapUsd ? fmtUsd(t.mcapUsd) : "—")) + '</span>' + (t.created ? '<span class="cc-age">' + ago(t.created) + '</span>' : '') + '</div>';
+      b.addEventListener("click", () => openToken(t.mint));
+      return b;
     }
 
-    // ---------- TOKEN VIEW ----------
-    function showBoard() { $("tokenView").style.display = "none"; $("boardView").style.display = "grid"; $("filters").style.display = "flex"; $("boardBtn").style.display = "none"; }
-    function showToken() { $("boardView").style.display = "none"; $("filters").style.display = "none"; $("tokenView").style.display = "grid"; $("boardBtn").style.display = "inline-flex"; }
-
-    function loadChart(pairOrMint) {
-      $("chart").src = "https://dexscreener.com/solana/" + pairOrMint + "?embed=1&theme=dark&info=0&trades=0&chartTheme=dark&chartStyle=1&interval=5";
+    function renderFeed() {
+      let src = [];
+      if (tab === "new") { sweep(); src = applyFilters([...news.values()].sort((a, b) => b.created - a.created)); }
+      else if (tab === "trending") src = applyFilters(trending);
+      else if (tab === "graduated") src = applyFilters(graduated);
+      else if (tab === "pad") src = applyFilters(pad);
+      const grid = $("coinGrid");
+      grid.innerHTML = "";
+      src.slice(0, 60).forEach((t) => grid.appendChild(card(t)));
+      $("feedEmpty").textContent = src.length ? "" : (tab === "new" ? "Waiting for new launches…" : "Nothing here yet.");
     }
+
+    async function loadTrending() {
+      try { const r = await fetch("https://api.dexscreener.com/token-boosts/latest/v1"); const a = await r.json();
+        trending = (Array.isArray(a) ? a : []).filter((t) => t.chainId === "solana").map((t) => ({ mint: t.tokenAddress, name: (t.description || "").slice(0, 18), symbol: "", icon: t.icon })).slice(0, 40);
+      } catch {} if (tab === "trending") renderFeed();
+    }
+    async function loadPad() {
+      const { data } = await postJSON("/api/launch", { action: "feed" });
+      pad = (data?.launches || []).map((l) => ({ mint: l.mint, name: l.name, symbol: l.symbol, created: l.created_at ? Date.parse(l.created_at) : 0 }));
+      if (tab === "pad") renderFeed();
+    }
+
+    // ---------- DETAIL ----------
+    const showFeed = () => { $("detailView").style.display = "none"; $("feedView").style.display = "block"; $("backBtn").style.display = "none"; };
+    const showDetail = () => { $("feedView").style.display = "none"; $("detailView").style.display = "block"; $("backBtn").style.display = "inline-flex"; };
+    const loadChart = (x) => { $("chart").src = "https://dexscreener.com/solana/" + x + "?embed=1&theme=dark&info=0&trades=0&chartTheme=dark&chartStyle=1&interval=5"; };
 
     async function openToken(mint) {
       mint = (mint || "").trim(); if (!mint) return;
-      currentMint = mint; $("caInput").value = mint;
-      showToken();
-      setScan("Scanning…");
+      currentMint = mint; $("caInput").value = mint; showDetail(); setScan("Scanning…");
       let dex = null;
       try { const r = await fetch("https://api.dexscreener.com/latest/dex/tokens/" + mint); const j = await r.json(); dex = (j.pairs || []).sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0] || null; } catch {}
       if (dex) {
@@ -278,11 +260,14 @@
         $("tokImg").src = dex.info?.imageUrl || "assets/solana.png"; loadChart(dex.pairAddress);
       } else {
         $("tokName").textContent = "New / unlisted"; $("tokSymbol").textContent = "";
-        ["tokPrice","tokMc","tokLiq","tokVol"].forEach((id) => $(id).textContent = "—");
-        $("tokImg").src = "assets/solana.png"; loadChart(mint);
+        ["tokPrice","tokMc","tokLiq","tokVol"].forEach((id) => $(id).textContent = "—"); $("tokImg").src = "assets/solana.png"; loadChart(mint);
       }
       try { const s = await connection.getTokenSupply(new PublicKey(mint)); currentDecimals = s.value.decimals; } catch {}
-      postJSON("/api/curve", { mint }).then(({ data }) => { $("tokCurve").textContent = data?.exists === false ? "Graduated" : (data?.progress != null ? data.progress + "%" : "—"); });
+      postJSON("/api/curve", { mint }).then(({ data }) => {
+        const pg = data?.exists === false ? 100 : (data?.progress ?? 0);
+        $("tokCurve").textContent = data?.exists === false ? "Graduated" : (data?.progress != null ? data.progress + "%" : "—");
+        $("curveFill").style.width = pg + "%";
+      });
 
       setScan("Running forensics…");
       const { ok, status, data } = await postJSON("/api/bundle", { mint });
@@ -291,6 +276,9 @@
       const rk = data.risk || { score: 0, level: "low", flags: [] };
       $("riskScore").textContent = rk.score; $("riskLevel").textContent = (rk.level || "").toUpperCase(); $("riskLevel").className = "risk-level lvl-" + (rk.level || "low");
       $("riskFill").style.width = rk.score + "%"; $("riskFill").className = "risk-fill lvl-" + (rk.level || "low");
+      const mintBadge = $("authMint"), freezeBadge = $("authFreeze");
+      mintBadge.textContent = "Mint: " + (data.mintAuthority ? "ACTIVE" : "revoked"); mintBadge.className = "auth-badge " + (data.mintAuthority ? "bad" : "good");
+      freezeBadge.textContent = "Freeze: " + (data.freezeAuthority ? "ACTIVE" : "revoked"); freezeBadge.className = "auth-badge " + (data.freezeAuthority ? "bad" : "good");
       $("cTop10").textContent = (data.top10 ?? "—") + "%"; $("cLargest").textContent = (data.largest ?? "—") + "%";
       $("cSniped").textContent = (data.snipedPct ?? "—") + "%"; $("cBundles").textContent = (data.clusters?.length ?? 0);
       $("riskFlags").innerHTML = ""; (rk.flags || []).forEach((f) => { const li = document.createElement("li"); li.textContent = "⚠ " + f; $("riskFlags").appendChild(li); });
@@ -298,12 +286,9 @@
     }
 
     async function connect() {
-      const p = window.solana;
-      if (!p || !p.isPhantom) return setTrade("Phantom not found (seedless coming soon).", false);
-      try { const resp = await p.connect(); provider = p; pubkey = resp.publicKey; const a = pubkey.toBase58(); $("walletAddr2").textContent = a.slice(0,4)+"…"+a.slice(-4); $("connectBtn2").textContent = "Connected"; }
-      catch { setTrade("Connection cancelled.", false); }
+      const p = window.solana; if (!p || !p.isPhantom) return setTrade("Phantom not found (seedless coming soon).", false);
+      try { const r = await p.connect(); provider = p; pubkey = r.publicKey; const a = pubkey.toBase58(); $("connectBtn2").textContent = a.slice(0,4)+"…"+a.slice(-4); } catch {}
     }
-
     async function trade(side) {
       if (!currentMint) return setTrade("Open a token first.", false);
       if (!provider || !pubkey) return connect();
@@ -322,17 +307,23 @@
       } catch (e) { setTrade("Trade failed: " + (e.message || e), false); }
     }
 
+    document.querySelectorAll(".feed-tab").forEach((t) => t.addEventListener("click", () => {
+      document.querySelectorAll(".feed-tab").forEach((x) => x.classList.remove("active")); t.classList.add("active");
+      tab = t.dataset.tab; renderFeed();
+      if (tab === "trending" && !trending.length) loadTrending();
+      if (tab === "pad" && !pad.length) loadPad();
+    }));
+    ["fltNsfw","fltDedupe","fltMinMc","fltMaxAge","fltSearch"].forEach((id) => $(id).addEventListener("input", renderFeed));
     $("scanBtn").addEventListener("click", () => openToken($("caInput").value));
     $("caInput").addEventListener("keydown", (e) => { if (e.key === "Enter") openToken($("caInput").value); });
-    $("boardBtn").addEventListener("click", showBoard);
+    $("backBtn").addEventListener("click", showFeed);
     $("connectBtn2").addEventListener("click", connect);
     $("buyBtn").addEventListener("click", () => trade("buy"));
     $("sellBtn").addEventListener("click", () => trade("sell"));
     document.querySelectorAll(".term-presets button").forEach((b) => b.addEventListener("click", () => { $("tradeAmt").value = b.dataset.sol; }));
-    ["fltNsfw","fltDedupe","fltMinMc","fltSearch"].forEach((id) => $(id).addEventListener("input", renderBoard));
 
-    connectWS();
-    setInterval(() => { sweep(); renderBoard(); }, 1500); // live re-render + lean sweep
+    connectWS(); loadTrending(); loadPad();
+    setInterval(() => { if (tab === "new") renderFeed(); }, 1500);
   </script>
 </body>
 </html>

@@ -73,8 +73,16 @@ export default async function handler(req, res) {
   catch { return res.status(400).json({ error: "bad_json" }); }
   if (!mint) return res.status(400).json({ error: "missing_mint" });
 
-  const out = { mint, supply: 0, top10: 0, top20: 0, largest: 0, holders: [], snipers: [], sniupedPct: 0, clusters: [], risk: { score: 0, level: "low", flags: [] } };
+  const out = { mint, supply: 0, top10: 0, top20: 0, largest: 0, holders: [], snipers: [], snipedPct: 0, clusters: [], mintAuthority: null, freezeAuthority: null, risk: { score: 0, level: "low", flags: [] } };
   const curve = curvePdaFor(mint);
+
+  // 0) MINT / FREEZE AUTHORITY (rug signals — null is safest)
+  try {
+    const acc = await rpc("getAccountInfo", [mint, { encoding: "jsonParsed" }]);
+    const info = acc?.value?.data?.parsed?.info;
+    out.mintAuthority = info?.mintAuthority || null;
+    out.freezeAuthority = info?.freezeAuthority || null;
+  } catch {}
 
   // 1) SUPPLY + CONCENTRATION
   try {
@@ -150,8 +158,12 @@ export default async function handler(req, res) {
     score += Math.min(20, out.largest * 0.8);         // whale
     score += Math.min(25, out.snipedPct * 1.2);       // launch snipe
     score += Math.min(20, biggestCluster * 6);        // bundle
+    if (out.mintAuthority) score += 12;               // can mint more
+    if (out.freezeAuthority) score += 8;              // can freeze wallets
     score = Math.round(Math.min(100, score));
     const flags = out.risk.flags.slice();
+    if (out.mintAuthority) flags.push("mint authority active (supply can grow)");
+    if (out.freezeAuthority) flags.push("freeze authority active (wallets can be frozen)");
     if (out.top10 > 40) flags.push(`top 10 hold ${out.top10}%`);
     if (out.largest > 15) flags.push(`largest wallet ${out.largest}%`);
     if (out.snipedPct > 15) flags.push(`${out.snipedPct}% sniped at launch`);
