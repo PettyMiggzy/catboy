@@ -236,9 +236,24 @@
     }
 
     async function loadTrending() {
-      try { const r = await fetch("https://api.dexscreener.com/token-boosts/latest/v1"); const a = await r.json();
-        trending = (Array.isArray(a) ? a : []).filter((t) => t.chainId === "solana").map((t) => ({ mint: t.tokenAddress, name: (t.description || "").slice(0, 18), symbol: "", icon: t.icon })).slice(0, 40);
-      } catch {} if (tab === "trending") renderFeed();
+      try {
+        const r = await fetch("https://api.dexscreener.com/token-boosts/latest/v1");
+        const a = await r.json();
+        const addrs = (Array.isArray(a) ? a : []).filter((t) => t.chainId === "solana").map((t) => t.tokenAddress).slice(0, 30);
+        if (!addrs.length) { trending = []; if (tab === "trending") renderFeed(); return; }
+        // Enrich with real token data (symbol, mcap, image) in one batched call.
+        const tr = await fetch("https://api.dexscreener.com/latest/dex/tokens/" + addrs.join(","));
+        const tj = await tr.json();
+        const byMint = new Map();
+        (tj.pairs || []).forEach((p) => {
+          const m = p.baseToken?.address; if (!m) return;
+          const liq = p.liquidity?.usd || 0;
+          const prev = byMint.get(m);
+          if (!prev || liq > prev._liq) byMint.set(m, { mint: m, symbol: p.baseToken.symbol, name: p.baseToken.name, mcapUsd: p.marketCap || p.fdv, icon: p.info?.imageUrl, _liq: liq });
+        });
+        trending = addrs.map((m) => byMint.get(m)).filter(Boolean);
+      } catch { trending = []; }
+      if (tab === "trending") renderFeed();
     }
     async function loadPad() {
       const { data } = await postJSON("/api/launch", { action: "feed" });
