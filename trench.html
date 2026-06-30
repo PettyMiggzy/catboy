@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>CATBOY Trench Terminal — Scan · Chart · Buy · Sell</title>
-  <meta name="description" content="A full Solana trading terminal: live trending feed, real-time chart, on-chain rug/bundle forensics with a risk score, and 1-tap buy/sell. $CATBOY holders trade discounted (or free)." />
+  <title>CATBOY Trench Terminal — Live Board · Scan · Chart · Trade</title>
+  <meta name="description" content="A real-time Solana trading terminal: live New / Final Stretch / Migrated board streaming straight off-chain, on-chain rug forensics with a risk score, live chart, and 1-tap buy/sell. $CATBOY holders trade discounted." />
   <meta property="og:title" content="CATBOY Trench Terminal" />
-  <meta property="og:description" content="Scan, chart, and trade any Solana token in one cockpit." />
+  <meta property="og:description" content="Live board of new Solana launches + scan, chart, and 1-tap trade." />
   <meta property="og:image" content="assets/art/arcade.jpg" />
   <meta name="twitter:card" content="summary_large_image" />
   <link rel="icon" type="image/png" href="assets/solana.png" />
@@ -40,37 +40,40 @@
     <a href="index.html#waitlist" class="btn btn-primary nav-cta">Join Allowlist</a>
   </header>
 
-  <!-- Search bar -->
+  <!-- Search / status bar -->
   <div class="term-bar">
     <div class="term-bar-inner">
       <span class="term-logo">⌖ TRENCH</span>
-      <input id="caInput" type="text" placeholder="Paste a Solana contract address (CA)…  scan · chart · buy · sell" spellcheck="false" />
+      <button id="boardBtn" class="btn btn-ghost btn-sm" type="button" style="display:none;">‹ Board</button>
+      <input id="caInput" type="text" placeholder="Paste a CA to scan · or click a token on the live board" spellcheck="false" />
       <button id="scanBtn" class="btn btn-primary btn-sm" type="button">Scan</button>
       <button id="connectBtn2" class="btn btn-ghost btn-sm" type="button">Connect</button>
-      <span id="walletAddr2" class="term-wallet"></span>
+      <span id="walletAddr2" class="term-wallet"><span id="wsState" class="ws-state">● connecting</span></span>
     </div>
   </div>
 
-  <!-- Cockpit -->
-  <main class="term-cockpit">
-    <!-- LEFT: live trending/new feed -->
-    <aside class="term-feed">
-      <div class="term-feed-head">
-        <button class="feed-tab active" data-tab="live" type="button">Live <span class="live-dot"></span></button>
-        <button class="feed-tab" data-tab="trending" type="button">Trending</button>
-      </div>
-      <div id="feedList" class="term-feed-list"><p class="muted-note" style="padding:0.6rem;">Connecting to the live feed…</p></div>
-    </aside>
+  <!-- BOARD VIEW (default) -->
+  <main id="boardView" class="term-board">
+    <section class="board-lane">
+      <div class="lane-head">🆕 New <span class="live-dot"></span><span id="cntNew" class="lane-cnt">0</span></div>
+      <div id="laneNew" class="lane-list"></div>
+    </section>
+    <section class="board-lane">
+      <div class="lane-head">⏳ Final Stretch <span id="cntFinal" class="lane-cnt">0</span></div>
+      <div id="laneFinal" class="lane-list"></div>
+    </section>
+    <section class="board-lane">
+      <div class="lane-head">🎓 Migrated <span id="cntMig" class="lane-cnt">0</span></div>
+      <div id="laneMig" class="lane-list"></div>
+    </section>
+  </main>
 
-    <!-- CENTER: chart + trade -->
+  <!-- TOKEN VIEW (cockpit) -->
+  <main id="tokenView" class="term-cockpit" style="display:none;">
     <section class="term-main">
       <div id="chartWrap" class="term-chart">
-        <div id="chartEmpty" class="term-empty">
-          <p>Paste a contract address above — or pick a trending token — to load the chart, safety scan, and trading.</p>
-        </div>
-        <iframe id="chart" title="chart" style="display:none;" loading="lazy" allow="clipboard-write"></iframe>
+        <iframe id="chart" title="chart" loading="lazy" allow="clipboard-write"></iframe>
       </div>
-
       <div class="term-trade">
         <div class="term-presets">
           <button data-sol="0.25" type="button">0.25</button>
@@ -88,13 +91,11 @@
         <p class="muted-note" style="margin:0.2rem 0 0;">Flat 1% fee · $CATBOY holders pay less (100k = half · 1M = free) · non-custodial.</p>
       </div>
     </section>
-
-    <!-- RIGHT: token info + safety -->
     <aside class="term-side">
       <div class="trench-card">
         <div class="tok-head">
           <img id="tokImg" alt="" />
-          <div><h3 id="tokName">No token loaded</h3><span id="tokSymbol" class="muted-note" style="margin:0;"></span></div>
+          <div><h3 id="tokName">—</h3><span id="tokSymbol" class="muted-note" style="margin:0;"></span></div>
         </div>
         <div class="stat-rows">
           <div><span>Price</span><b id="tokPrice">—</b></div>
@@ -104,7 +105,6 @@
           <div><span>Bonding curve</span><b id="tokCurve">—</b></div>
         </div>
       </div>
-
       <div class="trench-card">
         <h3>Safety / Risk</h3>
         <div class="risk-meter"><div id="riskFill" class="risk-fill"></div></div>
@@ -122,10 +122,10 @@
   </main>
 
   <footer class="footer">
-    <p class="footer-disclaimer" style="margin-top:1.5rem;">
-      The Trench Terminal shows on-chain data for information only — not financial advice, and the
-      forensics are best-effort heuristics, not a safety guarantee. Trades are non-custodial and signed
-      by you. Crypto is extremely risky; many tokens go to zero. DYOR.
+    <p class="footer-disclaimer" style="margin-top:1rem;">
+      On-chain data for information only — not financial advice; forensics are best-effort heuristics,
+      not a safety guarantee. Trades are non-custodial and signed by you. Crypto is extremely risky;
+      many tokens go to zero. DYOR.
     </p>
     <p class="footer-copy">© <span id="year"></span> CATBOY · The Legend Evolves on Solana</p>
   </footer>
@@ -137,9 +137,15 @@
     const SOL = "So11111111111111111111111111111111111111112";
     const $ = (id) => document.getElementById(id);
 
+    // marketCapSol at which a token is "final stretch" (near pump graduation ~ a few hundred SOL)
+    const FINAL_STRETCH_SOL = 250;
+    const MAX_TRACK = 80;
+
     let provider = null, pubkey = null, currentMint = null, currentDecimals = 6;
+    const tokens = new Map(); // mint -> {mint,name,symbol,mcap,created,lane}
 
     const fmtUsd = (n) => n == null ? "—" : "$" + Number(n).toLocaleString(undefined, { maximumFractionDigits: n < 1 ? 8 : 2 });
+    const ago = (t) => { const s = Math.floor((Date.now() - t) / 1000); return s < 60 ? s + "s" : s < 3600 ? Math.floor(s/60) + "m" : Math.floor(s/3600) + "h"; };
     const setScan = (m, ok) => { $("scanStatus").textContent = m; $("scanStatus").style.color = ok === false ? "var(--magenta)" : "var(--muted)"; };
     const setTrade = (m, ok) => { $("tradeStatus").textContent = m; $("tradeStatus").style.color = ok === false ? "var(--magenta)" : ok ? "var(--cyan)" : "var(--muted)"; };
 
@@ -149,67 +155,110 @@
       return { ok: r.ok, status: r.status, data };
     }
 
-    function loadChart(pairAddress) {
-      const f = $("chart");
-      if (!pairAddress) { f.style.display = "none"; $("chartEmpty").style.display = "grid"; return; }
-      f.src = "https://dexscreener.com/solana/" + pairAddress + "?embed=1&theme=dark&info=0&trades=0&chartTheme=dark&chartStyle=1&interval=5";
-      f.style.display = "block"; $("chartEmpty").style.display = "none";
+    // ---------- LIVE BOARD (pumpportal websocket) ----------
+    let ws, tracked = new Set();
+    function wsState(s, cls) { const e = $("wsState"); e.textContent = s; e.className = "ws-state " + (cls || ""); }
+
+    function connectWS() {
+      try { ws = new WebSocket("wss://pumpportal.fun/api/data"); } catch { wsState("● offline", "off"); return; }
+      ws.onopen = () => {
+        wsState("● live", "on");
+        ws.send(JSON.stringify({ method: "subscribeNewToken" }));
+        ws.send(JSON.stringify({ method: "subscribeMigration" }));
+      };
+      ws.onmessage = (ev) => {
+        let d; try { d = JSON.parse(ev.data); } catch { return; }
+        if (!d || !d.mint) return;
+        if (d.txType === "create") {
+          tokens.set(d.mint, { mint: d.mint, name: d.name, symbol: d.symbol, mcap: d.marketCapSol || 0, created: Date.now(), lane: "new" });
+          trackTrades(d.mint);
+          prune();
+        } else if (d.txType === "buy" || d.txType === "sell") {
+          const t = tokens.get(d.mint);
+          if (t) { if (d.marketCapSol) t.mcap = d.marketCapSol; if (t.lane === "new" && t.mcap >= FINAL_STRETCH_SOL) t.lane = "final"; }
+        } else if (d.txType === "migrate" || d.pool) {
+          const t = tokens.get(d.mint) || { mint: d.mint, name: d.name, symbol: d.symbol, mcap: 0, created: Date.now() };
+          t.lane = "migrated"; tokens.set(d.mint, t);
+        }
+      };
+      ws.onclose = () => { wsState("● reconnecting", "off"); setTimeout(connectWS, 3000); };
+      ws.onerror = () => { try { ws.close(); } catch {} };
     }
 
-    async function scan(mintArg) {
-      const mint = (mintArg || $("caInput").value).trim();
-      if (!mint) return setScan("Paste a contract address.", false);
-      $("caInput").value = mint;
-      currentMint = mint;
-      setScan("Scanning…");
-
-      // DexScreener (client-side): price/liq/vol/mcap/image/chart pair
-      let dex = null;
-      try {
-        const r = await fetch("https://api.dexscreener.com/latest/dex/tokens/" + mint);
-        const j = await r.json();
-        dex = (j.pairs || []).sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0] || null;
-      } catch {}
-
-      if (dex) {
-        $("tokName").textContent = dex.baseToken?.name || "Token";
-        $("tokSymbol").textContent = "$" + (dex.baseToken?.symbol || "?");
-        $("tokPrice").textContent = fmtUsd(Number(dex.priceUsd));
-        $("tokMc").textContent = fmtUsd(dex.marketCap || dex.fdv);
-        $("tokLiq").textContent = fmtUsd(dex.liquidity?.usd);
-        $("tokVol").textContent = fmtUsd(dex.volume?.h24);
-        $("tokImg").src = dex.info?.imageUrl || "assets/solana.png";
-        loadChart(dex.pairAddress);
-      } else {
-        $("tokName").textContent = "New / unlisted token";
-        $("tokSymbol").textContent = "";
-        ["tokPrice","tokMc","tokLiq","tokVol"].forEach((id) => $(id).textContent = "—");
-        $("tokImg").src = "assets/solana.png";
-        loadChart(mint); // DexScreener also resolves by token sometimes
+    function trackTrades(mint) {
+      if (!ws || ws.readyState !== 1 || tracked.has(mint)) return;
+      tracked.add(mint);
+      ws.send(JSON.stringify({ method: "subscribeTokenTrade", keys: [mint] }));
+    }
+    function prune() {
+      if (tokens.size <= MAX_TRACK) return;
+      const news = [...tokens.values()].filter((t) => t.lane === "new").sort((a, b) => a.created - b.created);
+      while (tokens.size > MAX_TRACK && news.length) {
+        const t = news.shift();
+        tokens.delete(t.mint);
+        if (tracked.has(t.mint) && ws && ws.readyState === 1) { ws.send(JSON.stringify({ method: "unsubscribeTokenTrade", keys: [t.mint] })); tracked.delete(t.mint); }
       }
+    }
 
+    function row(t) {
+      const b = document.createElement("button");
+      b.className = "tok-row";
+      const label = t.symbol ? "$" + t.symbol : t.mint.slice(0, 4) + "…" + t.mint.slice(-4);
+      b.innerHTML =
+        '<span class="tr-main"><span class="tr-sym">' + label + '</span><span class="tr-name">' + ((t.name || "").slice(0, 20) || "—") + '</span></span>' +
+        '<span class="tr-stats"><span class="tr-mc">' + (t.mcap ? t.mcap.toFixed(1) + "◎" : "—") + '</span><span class="tr-age">' + ago(t.created) + '</span></span>';
+      b.addEventListener("click", () => openToken(t.mint));
+      return b;
+    }
+    function renderBoard() {
+      const lanes = { new: [], final: [], migrated: [] };
+      for (const t of tokens.values()) (lanes[t.lane] || lanes.new).push(t);
+      lanes.new.sort((a, b) => b.created - a.created);
+      lanes.final.sort((a, b) => b.mcap - a.mcap);
+      lanes.migrated.sort((a, b) => b.created - a.created);
+      const fill = (el, arr) => { el.innerHTML = ""; arr.slice(0, 25).forEach((t) => el.appendChild(row(t))); };
+      fill($("laneNew"), lanes.new); fill($("laneFinal"), lanes.final); fill($("laneMig"), lanes.migrated);
+      $("cntNew").textContent = lanes.new.length; $("cntFinal").textContent = lanes.final.length; $("cntMig").textContent = lanes.migrated.length;
+    }
+
+    // ---------- TOKEN VIEW ----------
+    function showBoard() { $("tokenView").style.display = "none"; $("boardView").style.display = "grid"; $("boardBtn").style.display = "none"; }
+    function showToken() { $("boardView").style.display = "none"; $("tokenView").style.display = "grid"; $("boardBtn").style.display = "inline-flex"; }
+
+    function loadChart(pairOrMint) {
+      $("chart").src = "https://dexscreener.com/solana/" + pairOrMint + "?embed=1&theme=dark&info=0&trades=0&chartTheme=dark&chartStyle=1&interval=5";
+    }
+
+    async function openToken(mint) {
+      mint = (mint || "").trim(); if (!mint) return;
+      currentMint = mint; $("caInput").value = mint;
+      showToken();
+      setScan("Scanning…");
+      let dex = null;
+      try { const r = await fetch("https://api.dexscreener.com/latest/dex/tokens/" + mint); const j = await r.json(); dex = (j.pairs || []).sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0] || null; } catch {}
+      if (dex) {
+        $("tokName").textContent = dex.baseToken?.name || "Token"; $("tokSymbol").textContent = "$" + (dex.baseToken?.symbol || "?");
+        $("tokPrice").textContent = fmtUsd(Number(dex.priceUsd)); $("tokMc").textContent = fmtUsd(dex.marketCap || dex.fdv);
+        $("tokLiq").textContent = fmtUsd(dex.liquidity?.usd); $("tokVol").textContent = fmtUsd(dex.volume?.h24);
+        $("tokImg").src = dex.info?.imageUrl || "assets/solana.png"; loadChart(dex.pairAddress);
+      } else {
+        $("tokName").textContent = "New / unlisted"; $("tokSymbol").textContent = "";
+        ["tokPrice","tokMc","tokLiq","tokVol"].forEach((id) => $(id).textContent = "—");
+        $("tokImg").src = "assets/solana.png"; loadChart(mint);
+      }
       try { const s = await connection.getTokenSupply(new PublicKey(mint)); currentDecimals = s.value.decimals; } catch {}
-      postJSON("/api/curve", { mint }).then(({ data }) => {
-        $("tokCurve").textContent = data?.exists === false ? "Graduated" : (data?.progress != null ? data.progress + "%" : "—");
-      });
+      postJSON("/api/curve", { mint }).then(({ data }) => { $("tokCurve").textContent = data?.exists === false ? "Graduated" : (data?.progress != null ? data.progress + "%" : "—"); });
 
       setScan("Running forensics…");
       const { ok, status, data } = await postJSON("/api/bundle", { mint });
-      if (status === 503) return setScan("Forensics need SOLANA_RPC set in Vercel. Chart + price work without it.", false);
+      if (status === 503) return setScan("Forensics need SOLANA_RPC in Vercel. Chart + price work without it.", false);
       if (!ok || !data) return setScan("Forensics unavailable.", false);
-
       const rk = data.risk || { score: 0, level: "low", flags: [] };
-      $("riskScore").textContent = rk.score;
-      $("riskLevel").textContent = (rk.level || "").toUpperCase();
-      $("riskLevel").className = "risk-level lvl-" + (rk.level || "low");
-      $("riskFill").style.width = rk.score + "%";
-      $("riskFill").className = "risk-fill lvl-" + (rk.level || "low");
-      $("cTop10").textContent = (data.top10 ?? "—") + "%";
-      $("cLargest").textContent = (data.largest ?? "—") + "%";
-      $("cSniped").textContent = (data.snipedPct ?? "—") + "%";
-      $("cBundles").textContent = (data.clusters?.length ?? 0);
-      $("riskFlags").innerHTML = "";
-      (rk.flags || []).forEach((f) => { const li = document.createElement("li"); li.textContent = "⚠ " + f; $("riskFlags").appendChild(li); });
+      $("riskScore").textContent = rk.score; $("riskLevel").textContent = (rk.level || "").toUpperCase(); $("riskLevel").className = "risk-level lvl-" + (rk.level || "low");
+      $("riskFill").style.width = rk.score + "%"; $("riskFill").className = "risk-fill lvl-" + (rk.level || "low");
+      $("cTop10").textContent = (data.top10 ?? "—") + "%"; $("cLargest").textContent = (data.largest ?? "—") + "%";
+      $("cSniped").textContent = (data.snipedPct ?? "—") + "%"; $("cBundles").textContent = (data.clusters?.length ?? 0);
+      $("riskFlags").innerHTML = ""; (rk.flags || []).forEach((f) => { const li = document.createElement("li"); li.textContent = "⚠ " + f; $("riskFlags").appendChild(li); });
       setScan("");
     }
 
@@ -221,16 +270,13 @@
     }
 
     async function trade(side) {
-      if (!currentMint) return setTrade("Scan a token first.", false);
+      if (!currentMint) return setTrade("Open a token first.", false);
       if (!provider || !pubkey) return connect();
-      const amt = parseFloat($("tradeAmt").value);
-      if (!amt || amt <= 0) return setTrade("Enter an amount.", false);
+      const amt = parseFloat($("tradeAmt").value); if (!amt || amt <= 0) return setTrade("Enter an amount.", false);
       try {
         setTrade("Building " + side + "…");
-        const inputMint = side === "buy" ? SOL : currentMint;
-        const outputMint = side === "buy" ? currentMint : SOL;
-        const decimals = side === "buy" ? 9 : currentDecimals;
-        const amount = Math.round(amt * Math.pow(10, decimals));
+        const inputMint = side === "buy" ? SOL : currentMint, outputMint = side === "buy" ? currentMint : SOL;
+        const decimals = side === "buy" ? 9 : currentDecimals, amount = Math.round(amt * Math.pow(10, decimals));
         const { ok, status, data } = await postJSON("/api/swap", { userPublicKey: pubkey.toBase58(), inputMint, outputMint, amount, slippageBps: 150 });
         if (status === 503) return setTrade("Trading needs SOLANA_RPC configured.", false);
         if (!ok || !data.tx) return setTrade("Swap unavailable: " + (data.detail || data.error || status), false);
@@ -241,85 +287,16 @@
       } catch (e) { setTrade("Trade failed: " + (e.message || e), false); }
     }
 
-    // ---- Feed: two tabs, "Live" (websocket new mints) + "Trending" (DexScreener) ----
-    let tab = "live";
-    const liveRows = [];
-
-    function rowEl({ addr, label, sub, icon }) {
-      const row = document.createElement("button");
-      row.className = "feed-row";
-      row.innerHTML =
-        '<img src="' + (icon || "assets/solana.png") + '" onerror="this.src=\'assets/solana.png\'" />' +
-        '<span class="feed-meta"><span class="feed-ca">' + label + '</span>' + (sub ? '<span class="feed-sub">' + sub + '</span>' : '') + '</span>' +
-        '<span class="feed-go">scan ›</span>';
-      row.addEventListener("click", () => { scan(addr); window.scrollTo({ top: 0, behavior: "smooth" }); });
-      return row;
-    }
-
-    function renderLive() {
-      const list = $("feedList");
-      if (!liveRows.length) { list.innerHTML = '<p class="muted-note" style="padding:0.6rem;">Waiting for new launches…</p>'; return; }
-      list.innerHTML = "";
-      liveRows.slice(0, 40).forEach((t) => list.appendChild(rowEl({
-        addr: t.mint,
-        label: (t.symbol ? "$" + t.symbol : t.mint.slice(0, 4) + "…" + t.mint.slice(-4)),
-        sub: t.name ? t.name.slice(0, 22) : "new mint",
-        icon: null,
-      })));
-    }
-
-    function connectLive() {
-      let ws;
-      try { ws = new WebSocket("wss://pumpportal.fun/api/data"); } catch { return; }
-      ws.onopen = () => ws.send(JSON.stringify({ method: "subscribeNewToken" }));
-      ws.onmessage = (ev) => {
-        try {
-          const d = JSON.parse(ev.data);
-          if (d.mint && (d.txType === "create" || d.name || d.symbol)) {
-            liveRows.unshift({ mint: d.mint, name: d.name, symbol: d.symbol });
-            if (liveRows.length > 60) liveRows.pop();
-            if (tab === "live") renderLive();
-          }
-        } catch {}
-      };
-      ws.onclose = () => setTimeout(connectLive, 4000); // auto-reconnect
-    }
-
-    async function loadTrending() {
-      const list = $("feedList");
-      list.innerHTML = '<p class="muted-note" style="padding:0.6rem;">Loading trending…</p>';
-      try {
-        const r = await fetch("https://api.dexscreener.com/token-boosts/latest/v1");
-        const arr = await r.json();
-        const sol = (Array.isArray(arr) ? arr : []).filter((t) => t.chainId === "solana").slice(0, 30);
-        if (!sol.length) { list.innerHTML = '<p class="muted-note" style="padding:0.6rem;">No trending tokens right now.</p>'; return; }
-        list.innerHTML = "";
-        sol.forEach((t) => list.appendChild(rowEl({
-          addr: t.tokenAddress,
-          label: t.tokenAddress.slice(0, 4) + "…" + t.tokenAddress.slice(-4),
-          sub: (t.description || "").slice(0, 22),
-          icon: t.icon,
-        })));
-      } catch { list.innerHTML = '<p class="muted-note" style="padding:0.6rem;">Feed unavailable.</p>'; }
-    }
-
-    document.querySelectorAll(".feed-tab").forEach((t) => t.addEventListener("click", () => {
-      document.querySelectorAll(".feed-tab").forEach((x) => x.classList.remove("active"));
-      t.classList.add("active");
-      tab = t.dataset.tab;
-      if (tab === "live") renderLive(); else loadTrending();
-    }));
-
-    document.querySelectorAll(".term-presets button").forEach((b) =>
-      b.addEventListener("click", () => { $("tradeAmt").value = b.dataset.sol; }));
-
-    $("scanBtn").addEventListener("click", () => scan());
-    $("caInput").addEventListener("keydown", (e) => { if (e.key === "Enter") scan(); });
+    $("scanBtn").addEventListener("click", () => openToken($("caInput").value));
+    $("caInput").addEventListener("keydown", (e) => { if (e.key === "Enter") openToken($("caInput").value); });
+    $("boardBtn").addEventListener("click", showBoard);
     $("connectBtn2").addEventListener("click", connect);
     $("buyBtn").addEventListener("click", () => trade("buy"));
     $("sellBtn").addEventListener("click", () => trade("sell"));
-    connectLive();
-    renderLive();
+    document.querySelectorAll(".term-presets button").forEach((b) => b.addEventListener("click", () => { $("tradeAmt").value = b.dataset.sol; }));
+
+    connectWS();
+    setInterval(renderBoard, 1500); // live re-render (ages + new rows)
   </script>
 </body>
 </html>
