@@ -886,3 +886,62 @@ body.splash-open { overflow: hidden; }
   .form-row { flex-direction: column; }
   .waitlist-form .btn { width: 100%; }
 }
+
+/* ---------- Fight Game ---------- */
+.fight-shell { max-width: 1000px; margin: 0 auto; padding: 0 1rem; }
+.fight-frame {
+  position: relative; border: 1px solid var(--border); border-radius: 16px;
+  overflow: hidden; background: #05030c;
+  box-shadow: 0 0 50px rgba(155,77,255,0.25), inset 0 0 60px rgba(0,0,0,0.6);
+}
+.fight-frame canvas {
+  display: block; width: 100%; height: auto; touch-action: none;
+  image-rendering: auto; transition: transform 0.03s linear;
+}
+.fight-keys { text-align: center; margin-top: 1rem; }
+.fight-keys b { color: var(--cyan); }
+.fight-pad { display: none; margin-top: 1rem; }
+.fight-pad .pad-side { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+.fight-pad { justify-content: space-between; gap: 1rem; }
+.pad-act { flex: 1; justify-content: flex-end; }
+.pad-btn {
+  min-width: 58px; height: 58px; border-radius: 14px;
+  border: 1px solid var(--border); background: rgba(155,77,255,0.12);
+  color: var(--ink); font-family: "Orbitron", sans-serif; font-weight: 700;
+  font-size: 0.85rem; letter-spacing: 0.04em; cursor: pointer; user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.pad-btn.hot { background: rgba(255,61,240,0.16); border-color: rgba(255,61,240,0.4); }
+.pad-btn.sp { background: rgba(255,216,77,0.16); border-color: rgba(255,216,77,0.5); color: #ffd84d; }
+.pad-btn.on { transform: scale(0.92); filter: brightness(1.4); }
+@media (max-width: 820px) {
+  .fight-pad { display: flex; }
+  .fight-keys { display: none; }
+}
+
+/* ---------- Fight banner (arcade) ---------- */
+.fight-banner {
+  display: flex; align-items: center; justify-content: space-between; gap: 1.5rem;
+  max-width: 1000px; margin: 0 auto 1.5rem; padding: 1.4rem 1.8rem;
+  border: 1px solid var(--border); border-radius: 18px; text-decoration: none;
+  background: linear-gradient(110deg, rgba(155,77,255,0.18), rgba(25,224,255,0.08) 60%, rgba(255,61,240,0.12));
+  position: relative; overflow: hidden; transition: transform 0.25s, box-shadow 0.25s, border-color 0.25s;
+}
+.fight-banner:hover { transform: translateY(-3px); border-color: var(--cyan); box-shadow: 0 14px 40px rgba(155,77,255,0.3); }
+.fight-banner-txt { max-width: 60%; }
+.fight-banner-txt h2 { font-family: "Orbitron", sans-serif; font-size: clamp(1.5rem,4vw,2.2rem); margin: 0.2rem 0 0.4rem; color: var(--ink); }
+.fight-banner-txt p { color: var(--muted); margin: 0 0 0.9rem; font-size: 0.95rem; }
+.fight-banner-art { position: relative; width: 220px; height: 160px; flex-shrink: 0; }
+.fight-banner-art > img:first-child {
+  height: 168px; position: absolute; right: 0; bottom: -14px;
+  filter: drop-shadow(0 6px 18px rgba(155,77,255,0.5));
+}
+.fb-coin { width: 70px; height: 70px; position: absolute; left: 0; bottom: 10px;
+  filter: drop-shadow(0 4px 12px rgba(0,0,0,0.5)); animation: fbFloat 3s ease-in-out infinite; }
+.fb-coin2 { width: 54px; height: 54px; left: 46px; bottom: 78px; animation-delay: 0.6s; }
+@keyframes fbFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+@media (max-width: 640px) {
+  .fight-banner { flex-direction: column; text-align: center; }
+  .fight-banner-txt { max-width: 100%; }
+  .fight-banner-art { width: 180px; }
+}

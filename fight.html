@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no" />
+  <title>CATBOY Brawl — Fight the Solana Roster</title>
+  <meta name="description" content="Catboy vs the Solana memecoin roster. Pick your fighter and brawl through BONK, WIF, POPCAT, PNUT, MEW, Moo Deng and Fartcoin. A 2.5D neon fighter." />
+  <meta property="og:title" content="CATBOY Brawl" />
+  <meta property="og:description" content="Catboy vs the Solana roster — a neon 2.5D fighting game." />
+  <meta property="og:image" content="assets/art/arcade.jpg" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <link rel="icon" type="image/png" href="assets/solana.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="bg-grid" aria-hidden="true"></div>
+  <div class="bg-glow" aria-hidden="true"></div>
+
+  <header class="nav">
+    <a href="index.html" class="brand">
+      <img src="assets/catboy.png" alt="Catboy logo" class="brand-logo" />
+      <span class="brand-name">CATBOY</span>
+    </a>
+    <nav class="nav-links">
+      <a href="index.html#lore">Lore</a>
+      <a href="saga.html">Saga</a>
+      <a href="trench.html">Terminal</a>
+      <a href="nft.html">NFTs</a>
+      <a href="launch.html">Launch</a>
+      <a href="casino.html">Casino</a>
+      <a href="arcade.html" class="active">Arcade</a>
+      <a href="club.html">Club</a>
+      <a href="meme.html">Meme</a>
+      <a href="wallet.html">Wallet</a>
+      <a href="merch.html">Merch</a>
+      <a href="index.html#faq">FAQ</a>
+    </nav>
+    <a href="index.html#waitlist" class="btn btn-primary nav-cta">Join Allowlist</a>
+  </header>
+
+  <section class="page-hero" style="padding-bottom:0.5rem;">
+    <div class="page-hero-inner">
+      <a href="arcade.html" class="back-link">&lsaquo; Back to Arcade</a>
+      <span class="eyebrow" style="display:block;margin-top:1rem;">Arcade · Fighter</span>
+      <h1>CATBOY <span class="grad">Brawl</span></h1>
+      <p>Pick your fighter and throw down with the Solana roster. Best of 3. No mercy.</p>
+    </div>
+  </section>
+
+  <section class="section" style="padding-top:0.5rem;">
+    <div class="fight-shell">
+      <div class="fight-frame">
+        <canvas id="fg" width="960" height="540"></canvas>
+      </div>
+      <!-- touch controls -->
+      <div class="fight-pad" id="pad" aria-hidden="true">
+        <div class="pad-side">
+          <button data-k="left" class="pad-btn">&lsaquo;</button>
+          <button data-k="right" class="pad-btn">&rsaquo;</button>
+        </div>
+        <div class="pad-side pad-act">
+          <button data-k="jump" class="pad-btn">JMP</button>
+          <button data-k="block" class="pad-btn">BLK</button>
+          <button data-k="punch" class="pad-btn hot">PCH</button>
+          <button data-k="kick" class="pad-btn hot">KCK</button>
+          <button data-k="special" class="pad-btn sp">SP</button>
+        </div>
+      </div>
+      <p class="muted-note fight-keys">
+        Keyboard — Move: <b>A/D</b> · Jump: <b>W</b> · Block: <b>S</b> · Punch: <b>J</b> · Kick: <b>K</b> · Special: <b>L</b>
+      </p>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="footer-brand"><img src="assets/catboy.png" alt="Catboy" class="footer-logo" /><span>CATBOY</span></div>
+    <p class="footer-disclaimer">Parody fan game. Coin mascots belong to their respective communities. Not affiliated, not financial advice.</p>
+    <p class="footer-copy">© <span id="year"></span> CATBOY · The Legend Evolves on Solana</p>
+  </footer>
+
+  <script src="script.js"></script>
+  <script src="fight.js"></script>
+</body>
+</html>
