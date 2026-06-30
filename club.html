@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The Nine Lives Society — Catboy Holders' Club</title>
+  <meta name="description" content="The Nine Lives Society — a members' club for $CATBOY holders. Connect your wallet to unlock your tier and holder perks: fee discounts, allowlist priority, holder chat, and more." />
+  <meta property="og:title" content="The Nine Lives Society — Catboy Holders' Club" />
+  <meta property="og:description" content="Hold $CATBOY, unlock the club. Tiers, perks, and the inner circle." />
+  <meta property="og:image" content="assets/art/superhero.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <link rel="icon" type="image/png" href="assets/solana.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <noscript><style>.reveal { opacity: 1 !important; transform: none !important; filter: none !important; }</style></noscript>
+</head>
+<body>
+  <div class="bg-grid" aria-hidden="true"></div>
+  <div class="bg-glow" aria-hidden="true"></div>
+  <div class="scroll-progress" id="progress" aria-hidden="true"></div>
+
+  <header class="nav">
+    <a href="index.html" class="brand">
+      <img src="assets/catboy.png" alt="Catboy logo" class="brand-logo" />
+      <span class="brand-name">CATBOY</span>
+    </a>
+    <nav class="nav-links">
+      <a href="index.html#lore">Lore</a>
+      <a href="saga.html">Saga</a>
+      <a href="trench.html">Terminal</a>
+      <a href="nft.html">NFTs</a>
+      <a href="launch.html">Launch</a>
+      <a href="casino.html">Casino</a>
+      <a href="arcade.html">Arcade</a>
+      <a href="club.html" class="active">Club</a>
+      <a href="meme.html">Meme</a>
+      <a href="wallet.html">Wallet</a>
+      <a href="merch.html">Merch</a>
+      <a href="index.html#faq">FAQ</a>
+    </nav>
+    <a href="index.html#waitlist" class="btn btn-primary nav-cta">Join Allowlist</a>
+  </header>
+
+  <section class="page-hero">
+    <div class="page-hero-inner">
+      <a href="index.html" class="back-link">&lsaquo; Back to Home</a>
+      <span class="eyebrow" style="display:block;margin-top:1rem;">Members Only</span>
+      <h1>The Nine Lives <span class="grad">Society</span></h1>
+      <p>The inner circle of Catboy. Hold $CATBOY to claim your tier and unlock real perks — fee discounts, allowlist priority, a holders-only room, and a say in what the legend builds next.</p>
+      <div class="club-connect">
+        <button id="connectClub" class="btn btn-primary" type="button">Connect to check tier</button>
+        <span id="clubStatus" class="muted-note" style="margin:0;"></span>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" style="padding-top:1rem;">
+    <div class="section-head">
+      <span class="eyebrow">Tiers</span>
+      <h2>Nine Lives, <span class="grad">Four Tiers</span></h2>
+      <p class="section-intro">Your tier is set by how much $CATBOY you hold. The deeper your conviction, the deeper the perks.</p>
+    </div>
+    <div class="tier-grid">
+      <div class="tier-card" data-min="1">
+        <span class="tier-rank">I</span><h3>Stray</h3><span class="tier-req">Any $CATBOY</span>
+        <ul>
+          <li>Holders-only chat access</li>
+          <li>Club role &amp; badge</li>
+          <li>Early announcements</li>
+        </ul>
+      </div>
+      <div class="tier-card" data-min="100000">
+        <span class="tier-rank">II</span><h3>Alley Cat</h3><span class="tier-req">100K+ $CATBOY</span>
+        <ul>
+          <li>Everything in Stray</li>
+          <li>50% off Terminal trade fees</li>
+          <li>Merch discount</li>
+          <li>Allowlist priority</li>
+        </ul>
+      </div>
+      <div class="tier-card highlight" data-min="1000000">
+        <span class="tier-rank">III</span><h3>Nine Lives</h3><span class="tier-req">1M+ $CATBOY</span>
+        <ul>
+          <li>Everything in Alley Cat</li>
+          <li><b>Fee-free</b> Terminal trading</li>
+          <li>Guaranteed mint allowlist</li>
+          <li>Arcade leaderboard flair</li>
+          <li>Vote on roadmap</li>
+        </ul>
+      </div>
+      <div class="tier-card legend-card" data-min="10000000">
+        <span class="tier-rank">IX</span><h3>Legend</h3><span class="tier-req">10M+ $CATBOY</span>
+        <ul>
+          <li>Everything in Nine Lives</li>
+          <li>Inner-circle strategy room</li>
+          <li>1-of-1 Legend NFT eligibility</li>
+          <li>Direct line to the team</li>
+        </ul>
+      </div>
+    </div>
+    <p class="muted-note" style="text-align:center;margin-top:1.5rem;">Tier thresholds are illustrative and finalize at token launch. Perks roll out across the roadmap. Not financial advice.</p>
+  </section>
+
+  <footer class="footer">
+    <div class="footer-brand"><img src="assets/catboy.png" alt="Catboy" class="footer-logo" /><span>CATBOY</span></div>
+    <p class="footer-copy">© <span id="year"></span> CATBOY · The Legend Evolves on Solana</p>
+  </footer>
+
+  <script src="script.js"></script>
+  <script type="module">
+    import { Connection, PublicKey } from "https://esm.sh/@solana/web3.js@1.95.3";
+    const connection = new Connection(location.origin + "/api/solrpc", "confirmed");
+    const $ = (id) => document.getElementById(id);
+    // Set this to the $CATBOY mint after launch to enable real tier checks.
+    const TOKEN_MINT = "";
+
+    function highlightTier(balance) {
+      let active = null;
+      document.querySelectorAll(".tier-card").forEach((c) => {
+        const min = +c.dataset.min;
+        const ok = balance >= min;
+        c.classList.toggle("unlocked", ok);
+        if (ok) active = c;
+      });
+      document.querySelectorAll(".tier-card").forEach((c) => c.classList.remove("you"));
+      if (active) active.classList.add("you");
+      return active;
+    }
+
+    $("connectClub").addEventListener("click", async () => {
+      const s = $("clubStatus");
+      const p = window.solana;
+      if (!p || !p.isPhantom) { s.style.color = "var(--magenta)"; s.textContent = "Phantom not found — or use the Wallet page for seedless."; return; }
+      try {
+        const r = await p.connect();
+        const owner = r.publicKey;
+        if (!TOKEN_MINT) { s.style.color = "var(--cyan)"; s.textContent = "Connected. Tier checks unlock at token launch — preview the tiers below."; return; }
+        const res = await connection.getParsedTokenAccountsByOwner(owner, { mint: new PublicKey(TOKEN_MINT) });
+        let bal = 0;
+        res.value.forEach((a) => { bal += Number(a.account.data.parsed.info.tokenAmount.uiAmount) || 0; });
+        const tier = highlightTier(bal);
+        s.style.color = "var(--cyan)";
+        s.textContent = bal > 0 ? "You hold " + bal.toLocaleString() + " $CATBOY — Tier: " + (tier ? tier.querySelector("h3").textContent : "—") : "No $CATBOY yet — grab some to join.";
+      } catch { s.style.color = "var(--magenta)"; s.textContent = "Connection cancelled."; }
+    });
+  </script>
+</body>
+</html>

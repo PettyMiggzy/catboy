@@ -110,10 +110,10 @@ body.splash-open { overflow: hidden; }
 .brand { display: flex; align-items: center; gap: 0.6rem; }
 .brand-logo { width: 38px; height: 38px; border-radius: 50%; box-shadow: 0 0 14px rgba(155,77,255,0.6); }
 .brand-name { font-weight: 900; font-size: 1.15rem; }
-.nav-links { display: flex; gap: 0.65rem; }
+.nav-links { display: flex; gap: 0.5rem; }
 .nav-links a {
-  color: var(--muted); font-weight: 600; font-size: 0.82rem;
-  text-transform: uppercase; letter-spacing: 0.02em; transition: color 0.2s; white-space: nowrap;
+  color: var(--muted); font-weight: 600; font-size: 0.78rem;
+  text-transform: uppercase; letter-spacing: 0.01em; transition: color 0.2s; white-space: nowrap;
 }
 .nav-links a:hover { color: var(--cyan); }
 .nav-links a.active { color: var(--cyan); }
@@ -473,7 +473,28 @@ body.splash-open { overflow: hidden; }
 .flt-search { flex: 1 1 220px; min-width: 0; background: rgba(0,0,0,0.45); border: 1px solid var(--border); border-radius: 999px; padding: 0.45rem 1rem; color: var(--ink); font-family: "Rajdhani", sans-serif; font-size: 0.9rem; }
 .flt-search:focus, .term-filters input:focus { outline: none; border-color: var(--cyan); }
 
+/* Club / Nine Lives Society */
+.club-connect { display: flex; gap: 1rem; align-items: center; justify-content: center; margin-top: 1.2rem; flex-wrap: wrap; }
+.tier-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.2rem; }
+.tier-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 1.6rem 1.3rem; position: relative; transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s; }
+.tier-card:hover { transform: translateY(-5px); border-color: var(--cyan); }
+.tier-card.highlight { border-color: var(--magenta); box-shadow: 0 0 30px rgba(210,77,255,0.2); }
+.tier-card.you { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.tier-card.unlocked::after { content: "UNLOCKED"; position: absolute; top: 0.8rem; right: 0.8rem; font-size: 0.58rem; color: #14f195; font-family: "Orbitron", sans-serif; letter-spacing: 0.06em; }
+.tier-rank { font-family: "Orbitron", sans-serif; font-weight: 900; font-size: 1.7rem; background: var(--grad); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+.tier-card h3 { font-size: 1.1rem; margin: 0.3rem 0; }
+.tier-req { color: var(--cyan); font-size: 0.78rem; font-family: "Orbitron", sans-serif; }
+.tier-card ul { list-style: none; margin-top: 0.9rem; display: grid; gap: 0.45rem; }
+.tier-card li { color: var(--muted); font-size: 0.9rem; padding-left: 1rem; position: relative; }
+.tier-card li::before { content: "\203A"; position: absolute; left: 0; color: var(--cyan); }
+.tier-card li b { color: var(--ink); }
+@media (max-width: 860px) { .tier-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 480px) { .tier-grid { grid-template-columns: 1fr; } }
+
 /* Arcade game */
+.game-select { display: flex; gap: 0.6rem; justify-content: center; margin-bottom: 1rem; }
+.game-tab { font-family: "Orbitron", sans-serif; font-size: 0.78rem; padding: 0.6rem 1.2rem; border-radius: 999px; border: 1px solid var(--border); background: rgba(0,0,0,0.4); color: var(--muted); cursor: pointer; transition: 0.2s; }
+.game-tab.active { background: var(--grad); color: #07030f; border-color: transparent; }
 .game-wrap { max-width: 940px; margin: 0 auto; }
 .game-stage { position: relative; border: 1px solid var(--border); border-radius: 16px; overflow: hidden; background: #05030c; box-shadow: 0 0 40px rgba(155,77,255,0.25); }
 .game-stage canvas { display: block; width: 100%; height: auto; touch-action: manipulation; }
