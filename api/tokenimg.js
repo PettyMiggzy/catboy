@@ -4,8 +4,17 @@
 //   GET /api/tokenimg?img=<url>     -> proxies a direct image
 // Redirects to wsrv.nl for resize + cache + CORS. Never hard-fails the UI.
 
-import { rpc } from "../lib/rpc.js";
-import { PublicKey } from "@solana/web3.js";
+import web3 from "@solana/web3.js";
+const { PublicKey } = web3;
+
+async function rpc(method, params = []) {
+  const url = process.env.SOLANA_RPC;
+  if (!url) throw new Error("rpc_not_configured");
+  const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) });
+  const j = await r.json();
+  if (j.error) throw new Error(j.error.message || "rpc_error");
+  return j.result;
+}
 
 const MPL = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"; // Metaplex Token Metadata program
 

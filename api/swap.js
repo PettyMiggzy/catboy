@@ -5,9 +5,26 @@
 // via signAndSendTransaction. Falls back to a plain (no-fee) swap if the fee account
 // isn't usable, so trading never hard-fails.
 
-import { rpc } from "../lib/rpc.js";
-import { PublicKey } from "@solana/web3.js";
-import { getAssociatedTokenAddressSync } from "@solana/spl-token";
+import web3 from "@solana/web3.js";
+const { PublicKey } = web3;
+
+const TOKEN_PROGRAM = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+const ATA_PROGRAM = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
+function ata(mint, owner) {
+  return PublicKey.findProgramAddressSync(
+    [new PublicKey(owner).toBuffer(), TOKEN_PROGRAM.toBuffer(), new PublicKey(mint).toBuffer()],
+    ATA_PROGRAM
+  )[0];
+}
+
+async function rpc(method, params = []) {
+  const url = process.env.SOLANA_RPC;
+  if (!url) throw new Error("rpc_not_configured");
+  const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) });
+  const j = await r.json();
+  if (j.error) throw new Error(j.error.message || "rpc_error");
+  return j.result;
+}
 
 const JUP = "https://lite-api.jup.ag/swap/v1";
 const BASE_FEE_BPS = 100; // 1%
@@ -74,7 +91,7 @@ export default async function handler(req, res) {
     let feeAccount = null;
     if (referral && feeBps > 0) {
       try {
-        feeAccount = getAssociatedTokenAddressSync(new PublicKey(outputMint), new PublicKey(referral), true).toBase58();
+        feeAccount = ata(outputMint, referral).toBase58();
       } catch { feeAccount = null; }
     }
 
