@@ -1002,3 +1002,48 @@ body.splash-open { overflow: hidden; }
 
 .den-lore { max-width: 720px; margin: 0 auto; text-align: center; }
 .den-lore p { color: var(--muted); }
+
+/* ---------- NFT Marketplace ---------- */
+.mkt-stats { display: flex; flex-wrap: wrap; gap: 1.5rem; margin-top: 1.4rem; }
+.mkt-stat { display: flex; flex-direction: column; }
+.mkt-stat b { font-family: "Orbitron", sans-serif; font-size: 1.4rem; color: var(--cyan); }
+.mkt-stat span { font-size: 0.8rem; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; }
+.mkt-filters { max-width: 1200px; margin: 0 auto 1.4rem; display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; padding: 0 1rem; }
+.mkt-chip { font-family: "Orbitron", sans-serif; font-weight: 700; font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink); background: rgba(155,77,255,0.1); border: 1px solid var(--border); padding: 0.5rem 1rem; border-radius: 999px; cursor: pointer; transition: all 0.2s; }
+.mkt-chip.active, .mkt-chip:hover { border-color: var(--cyan); color: #fff; background: rgba(25,224,255,0.15); }
+.mkt-sort { margin-left: auto; background: rgba(10,6,24,0.8); color: var(--ink); border: 1px solid var(--border); border-radius: 999px; padding: 0.5rem 1rem; font-family: "Rajdhani", sans-serif; font-weight: 600; cursor: pointer; }
+.mkt-grid { max-width: 1200px; margin: 0 auto; padding: 0 1rem; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 1rem; }
+.nft-card { background: rgba(12,8,26,0.7); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s; }
+.nft-card:hover { transform: translateY(-4px); border-color: var(--cyan); box-shadow: 0 12px 34px rgba(155,77,255,0.3); }
+.nft-thumb { aspect-ratio: 1; overflow: hidden; }
+.nft-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.nft-meta { padding: 0.7rem 0.8rem; }
+.nft-row { display: flex; justify-content: space-between; align-items: center; }
+.nft-row + .nft-row { margin-top: 0.35rem; }
+.nft-name { font-family: "Orbitron", sans-serif; font-weight: 700; font-size: 0.82rem; }
+.nft-price { color: var(--cyan); font-weight: 700; font-size: 0.9rem; }
+.nft-buy { font-family: "Orbitron", sans-serif; font-size: 0.66rem; letter-spacing: 0.08em; color: var(--ink); border: 1px solid var(--border); border-radius: 999px; padding: 0.18rem 0.6rem; }
+.nft-badge { font-family: "Orbitron", sans-serif; font-size: 0.6rem; letter-spacing: 0.08em; text-transform: uppercase; padding: 0.18rem 0.5rem; border-radius: 999px; border: 1px solid; }
+.b-Legendary { color: #ffd84d; border-color: #ffd84d; background: rgba(255,216,77,0.12); }
+.b-Epic { color: #ff3df0; border-color: #ff3df0; background: rgba(255,61,240,0.12); }
+.b-Rare { color: #19e0ff; border-color: #19e0ff; background: rgba(25,224,255,0.12); }
+.b-Common { color: #b9b2cf; border-color: var(--border); background: rgba(255,255,255,0.04); }
+.t-Legendary { border-color: rgba(255,216,77,0.4); }
+.t-Epic { border-color: rgba(255,61,240,0.3); }
+
+.nft-modal { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; padding: 1rem; }
+.nft-modal[hidden] { display: none; }
+.nft-modal-bg { position: absolute; inset: 0; background: rgba(3,2,10,0.85); backdrop-filter: blur(6px); }
+.nft-modal-card { position: relative; z-index: 1; display: flex; gap: 1.4rem; max-width: 760px; width: 100%; background: #0c0820; border: 1px solid var(--border); border-radius: 18px; padding: 1.2rem; box-shadow: 0 30px 80px rgba(0,0,0,0.6); }
+.nft-modal-img { width: 300px; max-width: 42%; border-radius: 12px; object-fit: cover; }
+.nft-modal-info { flex: 1; }
+.nft-modal-info h3 { font-family: "Orbitron", sans-serif; margin: 0.4rem 0 0.6rem; }
+.nft-modal-x { position: absolute; top: 0.6rem; right: 0.8rem; background: none; border: none; color: var(--ink); font-size: 1.8rem; cursor: pointer; line-height: 1; }
+.nft-price-row { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
+.nft-price-row b { font-family: "Orbitron", sans-serif; color: var(--cyan); font-size: 1.2rem; }
+.nft-traits { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.9rem; }
+.nft-trait { background: rgba(155,77,255,0.08); border: 1px solid var(--border); border-radius: 8px; padding: 0.4rem 0.6rem; }
+.nft-trait span { display: block; font-size: 0.65rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+.nft-trait b { font-size: 0.85rem; }
+@media (max-width: 560px) { .nft-modal-card { flex-direction: column; } .nft-modal-img { width: 100%; max-width: 100%; } }

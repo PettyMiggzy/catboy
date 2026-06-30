@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CATBOY Marketplace — The Nine Lives Collection</title>
+  <meta name="description" content="The official $CATBOY NFT marketplace. Browse the Nine Lives Collection — high-quality anime Catboy PFPs with traits and rarity. Mint at launch." />
+  <meta property="og:title" content="CATBOY Marketplace — Nine Lives Collection" />
+  <meta property="og:description" content="Browse and mint the Catboy NFT collection on Solana." />
+  <meta property="og:image" content="assets/nft/collection/001.jpg" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <link rel="icon" type="image/png" href="assets/solana.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <noscript><style>.reveal { opacity: 1 !important; transform: none !important; }</style></noscript>
+</head>
+<body>
+  <div class="bg-grid" aria-hidden="true"></div>
+  <div class="bg-glow" aria-hidden="true"></div>
+  <div class="scroll-progress" id="progress" aria-hidden="true"></div>
+
+  <header class="nav">
+    <a href="index.html" class="brand">
+      <img src="assets/catboy.png" alt="Catboy logo" class="brand-logo" />
+      <span class="brand-name">CATBOY</span>
+    </a>
+    <nav class="nav-links">
+      <a href="index.html#lore">Lore</a>
+      <a href="saga.html">Saga</a>
+      <a href="trench.html">Terminal</a>
+      <a href="nft.html" class="active">NFTs</a>
+      <a href="launch.html">Launch</a>
+      <a href="casino.html">Casino</a>
+      <a href="arcade.html">Arcade</a>
+      <a href="club.html">Club</a>
+      <a href="meme.html">Meme</a>
+      <a href="wallet.html">Wallet</a>
+      <a href="merch.html">Merch</a>
+      <a href="index.html#faq">FAQ</a>
+    </nav>
+    <a href="index.html#waitlist" class="btn btn-primary nav-cta">Join Allowlist</a>
+  </header>
+
+  <section class="page-hero" style="padding-bottom:0.5rem;">
+    <div class="page-hero-inner">
+      <a href="nft.html" class="back-link">&lsaquo; Back to NFTs</a>
+      <span class="eyebrow" style="display:block;margin-top:1rem;">Marketplace</span>
+      <h1>The <span class="grad">Nine Lives</span> Collection</h1>
+      <p>High-quality anime Catboy PFPs — each with its own traits and rarity. Browse the drop and mint your favorite at launch.</p>
+      <div class="mkt-stats" id="mktStats"></div>
+    </div>
+  </section>
+
+  <section class="section" style="padding-top:1rem;">
+    <div class="mkt-filters" id="mktFilters">
+      <button class="mkt-chip active" data-f="all" type="button">All</button>
+      <button class="mkt-chip" data-f="Legendary" type="button">Legendary</button>
+      <button class="mkt-chip" data-f="Epic" type="button">Epic</button>
+      <button class="mkt-chip" data-f="Rare" type="button">Rare</button>
+      <button class="mkt-chip" data-f="Common" type="button">Common</button>
+      <select id="mktSort" class="mkt-sort">
+        <option value="id">Sort: Number</option>
+        <option value="rarity">Sort: Rarity</option>
+        <option value="priceup">Price: Low → High</option>
+        <option value="pricedown">Price: High → Low</option>
+      </select>
+    </div>
+    <div class="mkt-grid" id="mktGrid"></div>
+    <p class="muted-note" id="mktNote" style="text-align:center;margin-top:1.5rem;"></p>
+  </section>
+
+  <!-- modal -->
+  <div class="nft-modal" id="nftModal" hidden>
+    <div class="nft-modal-bg" id="nftModalBg"></div>
+    <div class="nft-modal-card">
+      <button class="nft-modal-x" id="nftModalX" type="button" aria-label="Close">&times;</button>
+      <img id="mImg" class="nft-modal-img" src="" alt="" />
+      <div class="nft-modal-info">
+        <span class="nft-badge" id="mBadge"></span>
+        <h3 id="mName"></h3>
+        <div class="nft-price-row"><span class="muted-note" style="margin:0;">Price</span><b id="mPrice"></b></div>
+        <div class="nft-traits" id="mTraits"></div>
+        <button class="btn btn-primary" id="mMint" type="button" style="width:100%;margin-top:1rem;">Mint at launch</button>
+        <p class="form-status" id="mStatus" role="status" aria-live="polite"></p>
+      </div>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <div class="footer-brand"><img src="assets/catboy.png" alt="Catboy" class="footer-logo" /><span>CATBOY</span></div>
+    <p class="footer-disclaimer">NFT art previews. Collection size, traits, and pricing finalize at mint. Not financial advice.</p>
+    <p class="footer-copy">© <span id="year"></span> CATBOY · The Legend Evolves on Solana</p>
+  </footer>
+
+  <script src="script.js"></script>
+  <script>
+    (function () {
+      const grid = document.getElementById("mktGrid");
+      const RANK = { Legendary: 0, Epic: 1, Rare: 2, Common: 3 };
+      let items = [], filter = "all", sort = "id";
+
+      fetch("assets/nft/collection/manifest.json")
+        .then((r) => r.json())
+        .then((data) => { items = data; render(); stats(); })
+        .catch(() => { document.getElementById("mktNote").textContent = "Collection failed to load."; });
+
+      function stats() {
+        const n = items.length;
+        const floor = Math.min(...items.map((i) => i.price));
+        const legend = items.filter((i) => i.tier === "Legendary").length;
+        document.getElementById("mktStats").innerHTML =
+          stat(n, "Items") + stat(floor + " SOL", "Floor") + stat(legend, "Legendary") + stat("Solana", "Chain");
+      }
+      function stat(v, l) { return `<div class="mkt-stat"><b>${v}</b><span>${l}</span></div>`; }
+
+      function sorted() {
+        let a = items.filter((i) => filter === "all" || i.tier === filter);
+        if (sort === "id") a.sort((x, y) => x.id - y.id);
+        else if (sort === "rarity") a.sort((x, y) => RANK[x.tier] - RANK[y.tier] || x.id - y.id);
+        else if (sort === "priceup") a.sort((x, y) => x.price - y.price);
+        else if (sort === "pricedown") a.sort((x, y) => y.price - x.price);
+        return a;
+      }
+
+      function render() {
+        const a = sorted();
+        grid.innerHTML = a.map((i) => `
+          <div class="nft-card t-${i.tier}" data-id="${i.id}">
+            <div class="nft-thumb"><img loading="lazy" src="assets/nft/collection/${i.file}" alt="${i.name}" /></div>
+            <div class="nft-meta">
+              <div class="nft-row"><span class="nft-name">${i.name}</span><span class="nft-badge b-${i.tier}">${i.tier}</span></div>
+              <div class="nft-row"><span class="nft-price">${i.price} SOL</span><span class="nft-buy">Mint</span></div>
+            </div>
+          </div>`).join("");
+        document.getElementById("mktNote").textContent = a.length + " of " + items.length + " shown · 100-piece collection completes at mint";
+      }
+
+      grid.addEventListener("click", (e) => {
+        const card = e.target.closest(".nft-card"); if (!card) return;
+        openModal(items.find((i) => i.id === +card.dataset.id));
+      });
+      document.querySelectorAll(".mkt-chip").forEach((c) => c.addEventListener("click", () => {
+        document.querySelectorAll(".mkt-chip").forEach((x) => x.classList.remove("active")); c.classList.add("active");
+        filter = c.dataset.f; render();
+      }));
+      document.getElementById("mktSort").addEventListener("change", (e) => { sort = e.target.value; render(); });
+
+      const modal = document.getElementById("nftModal");
+      function openModal(i) {
+        if (!i) return;
+        document.getElementById("mImg").src = "assets/nft/collection/" + i.file;
+        document.getElementById("mName").textContent = i.name;
+        const b = document.getElementById("mBadge"); b.textContent = i.tier; b.className = "nft-badge b-" + i.tier;
+        document.getElementById("mPrice").textContent = i.price + " SOL";
+        document.getElementById("mTraits").innerHTML = Object.entries(i.traits).map(([k, v]) =>
+          `<div class="nft-trait"><span>${k}</span><b>${v}</b></div>`).join("");
+        document.getElementById("mStatus").textContent = "";
+        modal.hidden = false; document.body.style.overflow = "hidden";
+      }
+      function close() { modal.hidden = true; document.body.style.overflow = ""; }
+      document.getElementById("nftModalX").addEventListener("click", close);
+      document.getElementById("nftModalBg").addEventListener("click", close);
+      document.getElementById("mMint").addEventListener("click", () => {
+        document.getElementById("mStatus").style.color = "var(--cyan)";
+        document.getElementById("mStatus").textContent = "Minting opens at token launch — join the allowlist for guaranteed access.";
+      });
+      addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
+    })();
+  </script>
+</body>
+</html>
