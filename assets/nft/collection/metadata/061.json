@@ -1,0 +1,50 @@
+{
+ "name": "Catboy #061",
+ "symbol": "CATBOY",
+ "description": "$CATBOY \u2014 The Nine Lives Collection. A legendary anime catboy reborn on Solana. Holders unlock real utility across the Catboy ecosystem: The Cat's Den club, allowlist, and more.",
+ "image": "https://catboy-ecru.vercel.app/assets/nft/collection/061.jpg",
+ "external_url": "https://catboy-ecru.vercel.app/market.html",
+ "attributes": [
+  {
+   "trait_type": "Background",
+   "value": "Vaporwave"
+  },
+  {
+   "trait_type": "Fur",
+   "value": "Ice"
+  },
+  {
+   "trait_type": "Eyes",
+   "value": "Violet"
+  },
+  {
+   "trait_type": "Outfit",
+   "value": "Trench"
+  },
+  {
+   "trait_type": "Headwear",
+   "value": "AR Visor"
+  },
+  {
+   "trait_type": "Accessory",
+   "value": "Face Mask"
+  },
+  {
+   "trait_type": "Expression",
+   "value": "Smug"
+  },
+  {
+   "trait_type": "Rarity",
+   "value": "Common"
+  }
+ ],
+ "properties": {
+  "files": [
+   {
+    "uri": "https://catboy-ecru.vercel.app/assets/nft/collection/061.jpg",
+    "type": "image/jpeg"
+   }
+  ],
+  "category": "image"
+ }
+}

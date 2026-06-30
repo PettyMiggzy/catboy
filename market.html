@@ -162,9 +162,17 @@
       function close() { modal.hidden = true; document.body.style.overflow = ""; }
       document.getElementById("nftModalX").addEventListener("click", close);
       document.getElementById("nftModalBg").addEventListener("click", close);
-      document.getElementById("mMint").addEventListener("click", () => {
-        document.getElementById("mStatus").style.color = "var(--cyan)";
-        document.getElementById("mStatus").textContent = "Minting opens at token launch — join the allowlist for guaranteed access.";
+      document.getElementById("mMint").addEventListener("click", async () => {
+        const s = document.getElementById("mStatus");
+        const p = (window.solana && window.solana.isPhantom) ? window.solana : (window.solflare || window.backpack || (window.xnft && window.xnft.solana));
+        if (!p) { s.style.color = "var(--magenta)"; s.textContent = "No Solana wallet found — install Phantom, or use the Wallet page."; return; }
+        try {
+          s.style.color = "var(--muted)"; s.textContent = "Connecting…";
+          const r = await p.connect();
+          const addr = (r && r.publicKey ? r.publicKey : p.publicKey).toString();
+          s.style.color = "var(--cyan)";
+          s.textContent = "Wallet " + addr.slice(0, 4) + "…" + addr.slice(-4) + " ready. Mint goes live at launch — you're on deck.";
+        } catch { s.style.color = "var(--magenta)"; s.textContent = "Connection cancelled."; }
       });
       addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
     })();
