@@ -52,6 +52,14 @@
     </div>
   </div>
 
+  <!-- FILTER BAR -->
+  <div id="filters" class="term-filters">
+    <label class="flt"><input type="checkbox" id="fltNsfw" checked /> Hide NSFW</label>
+    <label class="flt"><input type="checkbox" id="fltDedupe" checked /> Dedupe</label>
+    <label class="flt">Min MC ◎ <input type="number" id="fltMinMc" min="0" step="1" value="0" /></label>
+    <input type="text" id="fltSearch" class="flt-search" placeholder="filter by name or ticker…" spellcheck="false" />
+  </div>
+
   <!-- BOARD VIEW (default) -->
   <main id="boardView" class="term-board">
     <section class="board-lane">
@@ -139,7 +147,9 @@
 
     // marketCapSol at which a token is "final stretch" (near pump graduation ~ a few hundred SOL)
     const FINAL_STRETCH_SOL = 250;
-    const MAX_TRACK = 80;
+    const NEW_MAX = 40;                 // keep only the newest N launches in the New lane
+    const NEW_TTL_MS = 5 * 60 * 1000;   // and only ones from the last 5 minutes
+    const LANE_MAX = 25;                // cap stored Final Stretch / Migrated too
 
     let provider = null, pubkey = null, currentMint = null, currentDecimals = 6;
     const tokens = new Map(); // mint -> {mint,name,symbol,mcap,created,lane}
@@ -172,7 +182,7 @@
         if (d.txType === "create") {
           tokens.set(d.mint, { mint: d.mint, name: d.name, symbol: d.symbol, mcap: d.marketCapSol || 0, created: Date.now(), lane: "new" });
           trackTrades(d.mint);
-          prune();
+          sweep();
         } else if (d.txType === "buy" || d.txType === "sell") {
           const t = tokens.get(d.mint);
           if (t) { if (d.marketCapSol) t.mcap = d.marketCapSol; if (t.lane === "new" && t.mcap >= FINAL_STRETCH_SOL) t.lane = "final"; }
@@ -190,14 +200,20 @@
       tracked.add(mint);
       ws.send(JSON.stringify({ method: "subscribeTokenTrade", keys: [mint] }));
     }
-    function prune() {
-      if (tokens.size <= MAX_TRACK) return;
-      const news = [...tokens.values()].filter((t) => t.lane === "new").sort((a, b) => a.created - b.created);
-      while (tokens.size > MAX_TRACK && news.length) {
-        const t = news.shift();
-        tokens.delete(t.mint);
-        if (tracked.has(t.mint) && ws && ws.readyState === 1) { ws.send(JSON.stringify({ method: "unsubscribeTokenTrade", keys: [t.mint] })); tracked.delete(t.mint); }
-      }
+    function drop(mint) {
+      tokens.delete(mint);
+      if (tracked.has(mint) && ws && ws.readyState === 1) { ws.send(JSON.stringify({ method: "unsubscribeTokenTrade", keys: [mint] })); tracked.delete(mint); }
+    }
+    // Keep the feed lean: New lane = newest NEW_MAX within NEW_TTL; cap the other lanes too.
+    function sweep() {
+      const now = Date.now();
+      const news = [...tokens.values()].filter((t) => t.lane === "new").sort((a, b) => b.created - a.created);
+      news.forEach((t, i) => { if (i >= NEW_MAX || now - t.created > NEW_TTL_MS) drop(t.mint); });
+      const cap = (lane, key) => {
+        const arr = [...tokens.values()].filter((t) => t.lane === lane).sort((a, b) => key(b) - key(a));
+        arr.forEach((t, i) => { if (i >= LANE_MAX) tokens.delete(t.mint); });
+      };
+      cap("final", (t) => t.mcap); cap("migrated", (t) => t.created);
     }
 
     function row(t) {
@@ -210,20 +226,39 @@
       b.addEventListener("click", () => openToken(t.mint));
       return b;
     }
+    // Profanity / NSFW blocklist (substring match on normalized name+symbol).
+    const BLOCK = ["fuck","fuk","fck","fk u","shit","bitch","cunt","nigg","fagg","retard","rape","molest","titty","tittie","tits","boob","cum","cock","dick","pussy","porn","nsfw","sex","slut","whore","nazi","hitler","kkk","pedo","incest"];
+    const norm = (s) => (s || "").toLowerCase().replace(/[^a-z0-9 ]/g, "");
+    const isVulgar = (t) => { const s = norm(t.name) + " " + norm(t.symbol); return BLOCK.some((w) => s.includes(w)); };
+
+    function applyFilters(arr) {
+      const nsfw = $("fltNsfw").checked, dedupe = $("fltDedupe").checked;
+      const minMc = parseFloat($("fltMinMc").value) || 0;
+      const q = norm($("fltSearch").value);
+      let out = arr.filter((t) => (!nsfw || !isVulgar(t)) && (t.mcap || 0) >= minMc &&
+        (!q || (norm(t.name) + " " + norm(t.symbol)).includes(q)));
+      if (dedupe) {
+        const seen = new Set();
+        out = out.filter((t) => { const k = norm(t.symbol) + "|" + norm(t.name); if (seen.has(k)) return false; seen.add(k); return true; });
+      }
+      return out;
+    }
+
     function renderBoard() {
       const lanes = { new: [], final: [], migrated: [] };
       for (const t of tokens.values()) (lanes[t.lane] || lanes.new).push(t);
       lanes.new.sort((a, b) => b.created - a.created);
       lanes.final.sort((a, b) => b.mcap - a.mcap);
       lanes.migrated.sort((a, b) => b.created - a.created);
-      const fill = (el, arr) => { el.innerHTML = ""; arr.slice(0, 25).forEach((t) => el.appendChild(row(t))); };
-      fill($("laneNew"), lanes.new); fill($("laneFinal"), lanes.final); fill($("laneMig"), lanes.migrated);
-      $("cntNew").textContent = lanes.new.length; $("cntFinal").textContent = lanes.final.length; $("cntMig").textContent = lanes.migrated.length;
+      const fill = (el, arr, cnt) => { const f = applyFilters(arr); el.innerHTML = ""; f.slice(0, 25).forEach((t) => el.appendChild(row(t))); cnt.textContent = f.length; };
+      fill($("laneNew"), lanes.new, $("cntNew"));
+      fill($("laneFinal"), lanes.final, $("cntFinal"));
+      fill($("laneMig"), lanes.migrated, $("cntMig"));
     }
 
     // ---------- TOKEN VIEW ----------
-    function showBoard() { $("tokenView").style.display = "none"; $("boardView").style.display = "grid"; $("boardBtn").style.display = "none"; }
-    function showToken() { $("boardView").style.display = "none"; $("tokenView").style.display = "grid"; $("boardBtn").style.display = "inline-flex"; }
+    function showBoard() { $("tokenView").style.display = "none"; $("boardView").style.display = "grid"; $("filters").style.display = "flex"; $("boardBtn").style.display = "none"; }
+    function showToken() { $("boardView").style.display = "none"; $("filters").style.display = "none"; $("tokenView").style.display = "grid"; $("boardBtn").style.display = "inline-flex"; }
 
     function loadChart(pairOrMint) {
       $("chart").src = "https://dexscreener.com/solana/" + pairOrMint + "?embed=1&theme=dark&info=0&trades=0&chartTheme=dark&chartStyle=1&interval=5";
@@ -294,9 +329,10 @@
     $("buyBtn").addEventListener("click", () => trade("buy"));
     $("sellBtn").addEventListener("click", () => trade("sell"));
     document.querySelectorAll(".term-presets button").forEach((b) => b.addEventListener("click", () => { $("tradeAmt").value = b.dataset.sol; }));
+    ["fltNsfw","fltDedupe","fltMinMc","fltSearch"].forEach((id) => $(id).addEventListener("input", renderBoard));
 
     connectWS();
-    setInterval(renderBoard, 1500); // live re-render (ages + new rows)
+    setInterval(() => { sweep(); renderBoard(); }, 1500); // live re-render + lean sweep
   </script>
 </body>
 </html>
