@@ -44,8 +44,16 @@ export default async function handler(req, res) {
     img = toHttp(img);
     if (!img) return res.status(404).json({ error: "no_image" });
 
+    // Stream the bytes (no cross-origin redirect for the <img> to follow).
+    const proxied = "https://wsrv.nl/?url=" + encodeURIComponent(img) + "&w=64&h=64&fit=cover&output=webp";
+    let up = await fetch(proxied);
+    if (!up.ok) up = await fetch(img); // fall back to the raw image
+    if (!up.ok) return res.status(404).json({ error: "img_fetch" });
+
+    const buf = Buffer.from(await up.arrayBuffer());
+    res.setHeader("Content-Type", up.headers.get("content-type") || "image/webp");
     res.setHeader("Cache-Control", "public, max-age=86400, s-maxage=604800");
-    res.redirect(302, "https://wsrv.nl/?url=" + encodeURIComponent(img) + "&w=64&h=64&fit=cover&output=webp");
+    return res.send(buf);
   } catch (e) {
     res.status(404).json({ error: "img_failed" });
   }
