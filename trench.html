@@ -212,7 +212,7 @@
       const b = document.createElement("button");
       b.className = "coin-card";
       const sym = t.symbol ? "$" + t.symbol : t.mint.slice(0, 4) + "…" + t.mint.slice(-4);
-      const imgSrc = t.icon || (t.uri ? "/api/tokenimg?uri=" + encodeURIComponent(t.uri) : "");
+      const imgSrc = t.icon || (t.mint ? "/api/tokenimg?ca=" + t.mint + (t.uri ? "&uri=" + encodeURIComponent(t.uri) : "") : "");
       const av = imgSrc
         ? '<img class="cc-pic" src="' + imgSrc + '" loading="lazy" onerror="this.onerror=null;this.src=\'assets/solana.png\'" />'
         : '<span class="cc-av">' + (t.symbol ? t.symbol[0] : "?").toUpperCase() + '</span>';
