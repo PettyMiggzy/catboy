@@ -31,6 +31,7 @@ export default async function handler(req, res) {
     const acc = await rpc("getAccountInfo", [pda, { encoding: "base64" }]);
     if (!acc || !acc.value) return res.status(200).json({ exists: false, graduated: true, progress: 100 });
     const data = Buffer.from(acc.value.data[0], "base64");
+    if (data.length < 49) return res.status(200).json({ exists: false, graduated: true, progress: 100 });
     const realToken = data.readBigUInt64LE(24);
     const complete = data.readUInt8(48) === 1;
     let progress = Number(((PUMP_INIT_REAL_TOKEN - realToken) * 10000n) / PUMP_INIT_REAL_TOKEN) / 100;

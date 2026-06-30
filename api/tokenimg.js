@@ -35,7 +35,12 @@ async function uriFromMint(mint) {
   if (!acc || !acc.value) return "";
   const d = Buffer.from(acc.value.data[0], "base64");
   let pos = 1 + 32 + 32; // key + update_authority + mint
-  const readStr = () => { const len = d.readUInt32LE(pos); pos += 4; const s = d.slice(pos, pos + len).toString("utf8").replace(/\0+$/, ""); pos += len; return s; };
+  const readStr = () => {
+    if (pos + 4 > d.length) return "";
+    const len = d.readUInt32LE(pos); pos += 4;
+    if (len > 400 || pos + len > d.length) return "";
+    const s = d.slice(pos, pos + len).toString("utf8").replace(/\0+$/, ""); pos += len; return s;
+  };
   readStr(); readStr(); // name, symbol
   return readStr().trim(); // uri
 }
