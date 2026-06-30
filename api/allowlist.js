@@ -1,17 +1,16 @@
-// Vercel Serverless Function — stores allowlist signups in Vercel Postgres.
+// Vercel Serverless Function — stores allowlist signups in Neon Postgres.
 //
-// Setup (one time):
-//   1. Vercel dashboard → your project → Storage → Create Database → Postgres,
-//      and connect it to this project. That injects POSTGRES_URL automatically.
-//   2. Redeploy. That's it — signups land in the `allowlist` table.
+// Uses Neon's own serverless driver against the DATABASE_URL that the Neon
+// (Vercel) integration injects. Falls back to POSTGRES_URL if present.
 //
-// View/export: Vercel → Storage → your DB → Data, or run
+// View/export signups: Vercel → Storage → your DB → Open in Neon Console →
 //   SELECT * FROM allowlist ORDER BY created_at DESC;
-// Until the DB is connected this returns 503 and the site shows "opens soon".
+// Until a database is connected this returns 503 and the site shows "opens soon".
 
-import { sql } from "@vercel/postgres";
+import { neon } from "@neondatabase/serverless";
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+const CONN = process.env.DATABASE_URL || process.env.POSTGRES_URL || "";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -20,7 +19,7 @@ export default async function handler(req, res) {
   }
 
   // No database connected yet → tell the client to show "opens soon".
-  if (!process.env.POSTGRES_URL) {
+  if (!CONN) {
     return res.status(503).json({ error: "not_configured" });
   }
 
@@ -36,6 +35,8 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "too_long" });
     }
 
+    const sql = neon(CONN);
+
     await sql`
       CREATE TABLE IF NOT EXISTS allowlist (
         id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -45,15 +46,17 @@ export default async function handler(req, res) {
       )
     `;
 
-    const result = await sql`
+    // RETURNING id yields [] when ON CONFLICT skips the insert (already on list).
+    const rows = await sql`
       INSERT INTO allowlist (email, wallet)
       VALUES (${email}, ${wallet})
       ON CONFLICT (email) DO NOTHING
+      RETURNING id
     `;
 
-    // rowCount === 0 means the email was already on the list.
-    return res.status(200).json({ ok: true, duplicate: result.rowCount === 0 });
+    return res.status(200).json({ ok: true, duplicate: rows.length === 0 });
   } catch (err) {
-    return res.status(500).json({ error: "server_error" });
+    // detail is included to help debug setup; safe to remove once it works.
+    return res.status(500).json({ error: "server_error", detail: String((err && err.message) || err) });
   }
 }

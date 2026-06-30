@@ -4,6 +4,6 @@
   "private": true,
   "description": "CATBOY on Solana — landing site with allowlist serverless function",
   "dependencies": {
-    "@vercel/postgres": "^0.10.0"
+    "@neondatabase/serverless": "^0.10.4"
   }
 }
