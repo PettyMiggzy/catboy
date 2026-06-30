@@ -10,6 +10,8 @@ const CONFIG = {
   mintUrl: "",
   // Merch — paste your Fourthwall / Shopify store URL when it's live.
   merchUrl: "",
+  // Casino / burn-lottery game — paste the dApp URL when it launches.
+  gameUrl: "",
   // Allowlist storage — primary backend is our own Vercel serverless function
   // (api/allowlist.js) writing to Vercel Postgres. Nothing third-party.
   // Returns 503 until the database is provisioned, so the form shows
@@ -119,6 +121,7 @@ function wireLinkButton(selector, url, comingSoonLabel) {
 }
 wireLinkButton("[data-mint]", CONFIG.mintUrl, "Minting Soon");
 wireLinkButton("[data-merch]", CONFIG.merchUrl, "Store Opening Soon");
+wireLinkButton("[data-game]", CONFIG.gameUrl, "Game Coming Soon");
 
 // ----- Waitlist / allowlist form -----
 (function () {
@@ -222,6 +225,36 @@ wireLinkButton("[data-merch]", CONFIG.merchUrl, "Store Opening Soon");
       submitBtn.textContent = prev;
     }
   });
+})();
+
+// ----- Art Wall lightbox -----
+(function () {
+  const lb = document.getElementById("lightbox");
+  const lbImg = document.getElementById("lightboxImg");
+  const lbClose = document.getElementById("lightboxClose");
+  if (!lb || !lbImg) return;
+  const open = (src, alt) => {
+    lbImg.src = src;
+    lbImg.alt = alt || "Catboy art";
+    lb.classList.add("open");
+    lb.setAttribute("aria-hidden", "false");
+    document.body.style.overflow = "hidden";
+  };
+  const close = () => {
+    lb.classList.remove("open");
+    lb.setAttribute("aria-hidden", "true");
+    lbImg.src = "";
+    document.body.style.overflow = "";
+  };
+  document.querySelectorAll(".art-tile").forEach((tile) => {
+    tile.addEventListener("click", () => {
+      const img = tile.querySelector("img");
+      open(tile.dataset.full || (img && img.src), img && img.alt);
+    });
+  });
+  lb.addEventListener("click", (e) => { if (e.target === lb) close(); });
+  if (lbClose) lbClose.addEventListener("click", close);
+  addEventListener("keydown", (e) => { if (e.key === "Escape" && lb.classList.contains("open")) close(); });
 })();
 
 // ----- Scroll-progress bar -----

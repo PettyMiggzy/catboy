@@ -28,7 +28,7 @@
 
   <!-- INTRO SPLASH -->
   <div id="splash" class="splash">
-    <video id="splashVideo" class="splash-video" muted playsinline autoplay preload="auto">
+    <video id="splashVideo" class="splash-video" muted playsinline autoplay preload="auto" poster="assets/art/welcome.jpg">
       <source src="assets/splash.mp4" type="video/mp4" />
     </video>
     <button id="splashSkip" class="splash-skip" type="button">Skip &rsaquo;</button>
@@ -47,6 +47,7 @@
     <nav class="nav-links">
       <a href="#lore">Lore</a>
       <a href="nft.html">NFTs</a>
+      <a href="casino.html">Casino</a>
       <a href="#roadmap">Roadmap</a>
       <a href="#tokenomics">Token</a>
       <a href="merch.html">Merch</a>
@@ -162,6 +163,26 @@
     </div>
   </section>
 
+  <!-- ART WALL -->
+  <section id="artwall" class="section">
+    <div class="section-head">
+      <span class="eyebrow">Art Wall</span>
+      <h2>The Legend in <span class="grad">Motion</span></h2>
+      <p class="section-intro">Posters, propaganda &amp; community art. Tap any piece to view it full size.</p>
+    </div>
+    <div class="art-wall">
+      <button class="art-tile" data-full="assets/art/welcome.jpg"><img src="assets/art/welcome.jpg" alt="Welcome to Catboy" loading="lazy" /></button>
+      <button class="art-tile" data-full="assets/art/ninelives.jpg"><img src="assets/art/ninelives.jpg" alt="Nine Lives" loading="lazy" /></button>
+      <button class="art-tile" data-full="assets/art/pumps.jpg"><img src="assets/art/pumps.jpg" alt="We Don't Chase Pumps" loading="lazy" /></button>
+      <button class="art-tile" data-full="assets/art/solanahome.jpg"><img src="assets/art/solanahome.jpg" alt="Solana Is Home" loading="lazy" /></button>
+      <button class="art-tile" data-full="assets/art/lead.jpg"><img src="assets/art/lead.jpg" alt="Built to Lead" loading="lazy" /></button>
+      <button class="art-tile" data-full="assets/art/speed.jpg"><img src="assets/art/speed.jpg" alt="Speed of the Pack" loading="lazy" /></button>
+      <button class="art-tile" data-full="assets/art/lastholder.jpg"><img src="assets/art/lastholder.jpg" alt="The Last Holder" loading="lazy" /></button>
+      <button class="art-tile" data-full="assets/art/rooftop.jpg"><img src="assets/art/rooftop.jpg" alt="Build Hold Repeat" loading="lazy" /></button>
+      <button class="art-tile" data-full="assets/art/arcade.jpg"><img src="assets/art/arcade.jpg" alt="Insert Coin" loading="lazy" /></button>
+    </div>
+  </section>
+
   <!-- NFT -->
   <section id="nft" class="section">
     <div class="section-head">
@@ -266,10 +287,10 @@
         <span class="phase-tag">Phase 4</span>
         <h3>Expansion</h3>
         <ul>
+          <li>Burn Lottery casino launch 🔥</li>
           <li>Partnerships &amp; collabs</li>
           <li>Creator tools &amp; meme engine</li>
           <li>CEX listing pushes</li>
-          <li>Long-term ecosystem building</li>
         </ul>
       </div>
     </div>
@@ -400,6 +421,12 @@
     </p>
     <p class="footer-copy">© <span id="year"></span> CATBOY · The Legend Evolves on Solana</p>
   </footer>
+
+  <!-- Lightbox -->
+  <div class="lightbox" id="lightbox" aria-hidden="true">
+    <button class="lightbox-close" id="lightboxClose" aria-label="Close">&times;</button>
+    <img id="lightboxImg" src="" alt="Catboy art full size" />
+  </div>
 
   <script src="script.js"></script>
 </body>

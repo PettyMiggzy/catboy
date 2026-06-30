@@ -29,6 +29,7 @@ const CONFIG = {
   },
   mintUrl: "",                  // NFT mint page (Crossmint / LaunchMyNFT)
   merchUrl: "",                 // merch store (Fourthwall / Shopify)
+  gameUrl: "",                  // casino / burn-lottery dApp URL
   supabase: { url: "", anonKey: "", table: "allowlist" }, // allowlist storage
   waitlistEndpoint: "",         // optional fallback (Formspree/Getform)
 };
@@ -76,15 +77,20 @@ handled gracefully ("already on the list").
 
 ### Pages
 
-- `index.html` — home: hero, lore, journey, NFT teaser, tokenomics, roadmap,
-  how to buy, merch teaser, FAQ, allowlist, socials. Intro splash video plays
-  once per session.
-- `nft.html` — full Genesis NFT collection: gallery, mint details, holder
-  utility, how-to-mint.
+- `index.html` — home: hero, lore, journey, **art wall** (lightbox gallery),
+  NFT teaser, tokenomics, roadmap, how to buy, merch teaser, FAQ, allowlist,
+  socials. Intro splash video plays once per session (poster = welcome art).
+- `nft.html` — full Genesis NFT collection: gallery (uses the key art),
+  mint details, holder utility, how-to-mint.
 - `merch.html` — full store: product grid, store button, shipping/payment info.
+- `casino.html` — the **Burn Lottery**: enter with $CATBOY, winner takes the
+  pot, losing entries are burned (deflationary). How-it-works + disclaimer.
 
 All pages share `styles.css` + `script.js` and the same scroll-animation
 engine (staggered reveals, parallax, progress bar, count-up stats).
+
+Key art lives in `assets/art/`. Swap any file there to update both the art
+wall and the NFT gallery.
 
 ### Replace the artwork
 
