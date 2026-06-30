@@ -110,33 +110,73 @@
       const grid = new THREE.GridHelper(900, 180, 0x9b4dff, 0x1d1438);
       grid.material.transparent = true; grid.material.opacity = 0.16; grid.position.y = 0.03; scene.add(grid);
 
-      function windowTex(tint) {
-        const cv = document.createElement("canvas"); cv.width = 32; cv.height = 64;
-        const x = cv.getContext("2d");
-        x.fillStyle = "#070411"; x.fillRect(0, 0, 32, 64);
-        for (let yy = 4; yy < 64; yy += 6) for (let xx = 4; xx < 32; xx += 7) {
-          if (Math.random() < 0.45) { x.fillStyle = tint; x.globalAlpha = 0.5 + Math.random() * 0.5; x.fillRect(xx, yy, 4, 4); }
-        }
+      // environment map so glass towers reflect the neon city
+      const pmrem = new THREE.PMREMGenerator(renderer);
+      (function () {
+        const cv = document.createElement("canvas"); cv.width = 512; cv.height = 256; const x = cv.getContext("2d");
+        const g = x.createLinearGradient(0, 0, 0, 256); g.addColorStop(0, "#0c0a26"); g.addColorStop(0.55, "#170b2e"); g.addColorStop(1, "#05030c");
+        x.fillStyle = g; x.fillRect(0, 0, 512, 256);
+        ["#19e0ff", "#ff3df0", "#9b4dff", "#ffd84d", "#7fd4ff"].forEach((c, i) => { x.fillStyle = c; x.globalAlpha = 0.22; x.beginPath(); x.ellipse(40 + i * 110, 170 + (i % 2) * 40, 90, 46, 0, 0, 7); x.fill(); });
         x.globalAlpha = 1;
-        const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; return t;
+        const tex = new THREE.CanvasTexture(cv); tex.mapping = THREE.EquirectangularReflectionMapping;
+        scene.environment = pmrem.fromEquirectangular(tex).texture; tex.dispose();
+      })();
+
+      // full-face facade texture: multi-colour lit windows, floor lines, storefront glow
+      function facadeTex(tint) {
+        const W = 128, H = 512, cv = document.createElement("canvas"); cv.width = W; cv.height = H; const x = cv.getContext("2d");
+        x.fillStyle = "#05030e"; x.fillRect(0, 0, W, H);
+        const cols = 6 + (Math.random() * 4 | 0), floors = 30 + (Math.random() * 14 | 0), cw = W / cols, fh = H / floors;
+        const pal = tint ? [tint] : ["#9fe6ff", "#bfa8ff", "#7fd4ff", "#ffd9a0", "#ff9fe0", "#cfeaff"];
+        for (let f = 0; f < floors; f++) {
+          const ground = f >= floors - 2;             // bottom rows = warm storefronts
+          const lit = ground || Math.random() < 0.72;
+          for (let c = 0; c < cols; c++) {
+            const on = ground || (lit && Math.random() < 0.62);
+            x.fillStyle = on ? (ground ? "#ffce9a" : pal[(Math.random() * pal.length) | 0]) : "#0a0a16";
+            x.globalAlpha = on ? 0.55 + Math.random() * 0.45 : 1;
+            x.fillRect(c * cw + 1.3, f * fh + 1.3, cw - 2.6, fh - 2.6);
+          }
+          x.globalAlpha = 1; x.fillStyle = "rgba(0,0,0,0.45)"; x.fillRect(0, f * fh, W, 1);
+        }
+        x.fillStyle = "rgba(0,0,0,0.4)"; for (let c = 0; c <= cols; c++) x.fillRect(c * cw, 0, 1, H);
+        return new THREE.CanvasTexture(cv);
+      }
+      const FAC = []; for (let i = 0; i < 10; i++) FAC.push(facadeTex());
+      const winMats = FAC.map((t) => new THREE.MeshStandardMaterial({ color: 0x0c0820, map: t, emissive: 0xffffff, emissiveMap: t, emissiveIntensity: 0.85, metalness: 0.45, roughness: 0.55 }));
+      const glassMats = [0x0a1430, 0x14082a, 0x0a1228].map((c, i) => new THREE.MeshStandardMaterial({ color: c, metalness: 1.0, roughness: 0.08, emissive: 0xffffff, emissiveMap: FAC[i], emissiveIntensity: 0.16 }));
+      const trimMats = tints.map((c) => new THREE.MeshBasicMaterial({ color: c }));
+      const unit = new THREE.BoxGeometry(1, 1, 1);
+
+      function makeBuilding(px, pz, w, d, h) {
+        const g = new THREE.Group();
+        const sections = 1 + (Math.random() < 0.5 ? 1 : 0) + (Math.random() < 0.2 ? 1 : 0);
+        const glass = Math.random() < 0.32;
+        const trim = trimMats[(Math.random() * trimMats.length) | 0];
+        let y = 0, cw = w, cd = d, hLeft = h;
+        for (let s = 0; s < sections; s++) {
+          const sh = s === sections - 1 ? hLeft : hLeft * (0.45 + Math.random() * 0.2); hLeft -= sh;
+          const mat = glass ? glassMats[(Math.random() * glassMats.length) | 0] : winMats[(Math.random() * winMats.length) | 0];
+          const box = new THREE.Mesh(unit, mat); box.scale.set(cw, sh, cd); box.position.set(px, y + sh / 2, pz); g.add(box);
+          const t = new THREE.Mesh(unit, trim); t.scale.set(cw * 1.04, 0.5, cd * 1.04); t.position.set(px, y + sh, pz); g.add(t);
+          y += sh; cw *= 0.66 + Math.random() * 0.08; cd *= 0.66 + Math.random() * 0.08;
+        }
+        if (Math.random() < 0.45) {
+          const ah = 3 + Math.random() * 7;
+          const ant = new THREE.Mesh(unit, new THREE.MeshBasicMaterial({ color: 0x20202a })); ant.scale.set(0.3, ah, 0.3); ant.position.set(px, y + ah / 2, pz); g.add(ant);
+          const beac = new THREE.Mesh(unit, trim); beac.scale.set(0.7, 0.7, 0.7); beac.position.set(px, y + ah, pz); g.add(beac);
+        }
+        scene.add(g);
       }
 
-      const STEP = 11, SPAN = 16, ROAD_HALF = STEP * SPAN;
-      // generic skyline with a little variety (caps + antennae)
-      const capGeo = new THREE.BoxGeometry(1, 1, 1);
+      const STEP = 12, SPAN = 12, ROAD_HALF = STEP * SPAN;
       for (let i = -SPAN; i <= SPAN; i++) for (let j = -SPAN; j <= SPAN; j++) {
         const r = Math.hypot(i, j);
-        if (r < 4.2) continue;
-        if (Math.random() < 0.16) continue;
-        const h = 6 + Math.random() * (r > 8 ? 30 : 16);
-        const w = 4 + Math.random() * 3;
-        const tint = tints[(Math.random() * tints.length) | 0];
-        const tex = windowTex(tint); tex.repeat.set(Math.max(1, w / 3), Math.max(1, h / 4));
-        const mat = new THREE.MeshStandardMaterial({ color: 0x0c0820, emissive: new THREE.Color(tint), emissiveMap: tex, emissiveIntensity: 0.7, metalness: 0.5, roughness: 0.6 });
-        const px = i * STEP + (Math.random() - 0.5) * 2.5, pz = j * STEP + (Math.random() - 0.5) * 2.5;
-        const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, w), mat);
-        b.position.set(px, h / 2, pz); scene.add(b);
-        if (Math.random() < 0.4) { const cap = new THREE.Mesh(capGeo, new THREE.MeshBasicMaterial({ color: tint })); cap.scale.set(0.5, 2 + Math.random() * 4, 0.5); cap.position.set(px, h + cap.scale.y / 2, pz); scene.add(cap); }
+        if (r < 4.0) continue;
+        if (Math.random() < 0.26) continue;
+        const h = 7 + Math.random() * (r > 8 ? 34 : 16);
+        const w = 4.5 + Math.random() * 3, d = 4.5 + Math.random() * 3;
+        makeBuilding(i * STEP + (Math.random() - 0.5) * 2, j * STEP + (Math.random() - 0.5) * 2, w, d, h);
       }
 
       function roundRect(x, a, b, w, h, r) { x.beginPath(); x.moveTo(a + r, b); x.arcTo(a + w, b, a + w, b + h, r); x.arcTo(a + w, b + h, a, b + h, r); x.arcTo(a, b + h, a, b, r); x.arcTo(a, b, a + w, b, r); x.closePath(); }
@@ -158,8 +198,8 @@
       NAV.forEach((n, k) => {
         const ang = (k / NAV.length) * Math.PI * 2, px = Math.cos(ang) * 30, pz = Math.sin(ang) * 30, h = 30 + (k % 3) * 6;
         const col = new THREE.Color(n.color);
-        const tex = windowTex("#" + n.color.toString(16).padStart(6, "0")); tex.repeat.set(2, h / 4);
-        const mat = new THREE.MeshStandardMaterial({ color: 0x0b0820, emissive: col, emissiveMap: tex, emissiveIntensity: 0.9, metalness: 0.6, roughness: 0.45 });
+        const tex = facadeTex("#" + n.color.toString(16).padStart(6, "0"));
+        const mat = new THREE.MeshStandardMaterial({ color: 0x0b0820, map: tex, emissive: col, emissiveMap: tex, emissiveIntensity: 0.95, metalness: 0.6, roughness: 0.4 });
         const tower = new THREE.Mesh(new THREE.BoxGeometry(7, h, 7), mat);
         tower.position.set(px, h / 2, pz); tower.userData = { url: n.url, name: n.name, base: 0.9, mat };
         scene.add(tower); clickable.push(tower);
