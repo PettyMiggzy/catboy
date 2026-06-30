@@ -335,7 +335,7 @@ wireLinkButton("[data-game]", CONFIG.gameUrl, "Game Coming Soon");
 
   // Single elements (headings, blocks) reveal as one unit.
   document.querySelectorAll(
-    ".section-head, .lore-grid, .contract, .nft-info, .nft-mint, .waitlist-form, .cta-card, .ticker, .page-hero-inner"
+    ".section-head, .lore-grid, .contract, .nft-info, .nft-mint, .waitlist-form, .cta-card, .ticker, .page-hero-inner, .saga-row, .lives-layout, .burn-stats"
   ).forEach((el) => mark(el));
 
   // Grids reveal their children in a staggered cascade.

@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CATBOY Meme Generator — Make &amp; Share the Legend</title>
+  <meta name="description" content="Make your own $CATBOY memes — pick the art, add your caption, and download to share. Spread the legend." />
+  <meta property="og:title" content="CATBOY Meme Generator" />
+  <meta property="og:description" content="Caption Catboy art and download your meme. Spread the legend." />
+  <meta property="og:image" content="assets/art/pumps.jpg" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <link rel="icon" type="image/png" href="assets/solana.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <noscript><style>.reveal { opacity: 1 !important; transform: none !important; filter: none !important; }</style></noscript>
+</head>
+<body>
+  <div class="bg-grid" aria-hidden="true"></div>
+  <div class="bg-glow" aria-hidden="true"></div>
+  <div class="scroll-progress" id="progress" aria-hidden="true"></div>
+
+  <header class="nav">
+    <a href="index.html" class="brand">
+      <img src="assets/catboy.png" alt="Catboy logo" class="brand-logo" />
+      <span class="brand-name">CATBOY</span>
+    </a>
+    <nav class="nav-links">
+      <a href="index.html#lore">Lore</a>
+      <a href="saga.html">Saga</a>
+      <a href="nft.html">NFTs</a>
+      <a href="casino.html">Casino</a>
+      <a href="meme.html" class="active">Meme</a>
+      <a href="index.html#tokenomics">Token</a>
+      <a href="merch.html">Merch</a>
+      <a href="index.html#faq">FAQ</a>
+    </nav>
+    <a href="index.html#waitlist" class="btn btn-primary nav-cta">Join Allowlist</a>
+  </header>
+
+  <section class="page-hero">
+    <div class="page-hero-inner">
+      <a href="index.html" class="back-link">&lsaquo; Back to Home</a>
+      <span class="eyebrow" style="display:block;margin-top:1rem;">Meme Engine</span>
+      <h1>Make a <span class="grad">Catboy Meme</span></h1>
+      <p>Pick the art, add your caption, download, and post. The legend spreads one meme at a time.</p>
+    </div>
+  </section>
+
+  <section class="section" style="padding-top:1.5rem;">
+    <div class="meme-wrap">
+      <div class="meme-stage">
+        <canvas id="memeCanvas" width="1080" height="1080" aria-label="Meme preview"></canvas>
+      </div>
+      <div class="meme-controls">
+        <label class="meme-label">Top text</label>
+        <input id="memeTop" type="text" placeholder="ONE CAT" maxlength="60" />
+        <label class="meme-label">Bottom text</label>
+        <input id="memeBottom" type="text" placeholder="NINE LIVES" maxlength="60" />
+
+        <label class="meme-label">Pick art</label>
+        <div class="meme-thumbs" id="memeThumbs"></div>
+
+        <div class="meme-actions">
+          <button id="memeDownload" class="btn btn-primary" type="button">Download Meme</button>
+          <button id="memeClear" class="btn btn-ghost" type="button">Clear Text</button>
+        </div>
+        <p class="muted-note">Tip: short, punchy captions hit hardest. Tag us when you post 🐾</p>
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="footer-brand">
+      <img src="assets/catboy.png" alt="Catboy" class="footer-logo" />
+      <span>CATBOY</span>
+    </div>
+    <p class="footer-copy">© <span id="year"></span> CATBOY · The Legend Evolves on Solana</p>
+  </footer>
+
+  <script src="script.js"></script>
+  <script>
+    (function () {
+      const canvas = document.getElementById("memeCanvas");
+      const ctx = canvas.getContext("2d");
+      const topIn = document.getElementById("memeTop");
+      const botIn = document.getElementById("memeBottom");
+      const thumbs = document.getElementById("memeThumbs");
+
+      const ART = [
+        "assets/art/pumps.jpg", "assets/art/lead.jpg", "assets/art/welcome.jpg",
+        "assets/art/ninelives.jpg", "assets/art/speed.jpg", "assets/art/lastholder.jpg",
+        "assets/art/solanahome.jpg", "assets/art/arcade.jpg", "assets/art/rooftop.jpg",
+        "assets/catboy.png",
+      ];
+
+      let img = new Image();
+      img.crossOrigin = "anonymous";
+
+      function wrap(text, maxWidth) {
+        const words = text.split(/\s+/);
+        const lines = [];
+        let line = "";
+        for (const w of words) {
+          const test = line ? line + " " + w : w;
+          if (ctx.measureText(test).width > maxWidth && line) { lines.push(line); line = w; }
+          else line = test;
+        }
+        if (line) lines.push(line);
+        return lines;
+      }
+
+      function drawText(text, position) {
+        if (!text) return;
+        const W = canvas.width, H = canvas.height;
+        const fontSize = Math.round(W / 11);
+        ctx.font = "900 " + fontSize + "px Impact, 'Arial Black', sans-serif";
+        ctx.textAlign = "center";
+        ctx.lineJoin = "round";
+        ctx.lineWidth = Math.max(4, fontSize / 7);
+        ctx.strokeStyle = "#000";
+        ctx.fillStyle = "#fff";
+        const lines = wrap(text.toUpperCase(), W * 0.92);
+        const lh = fontSize * 1.06;
+        lines.forEach((ln, i) => {
+          let y;
+          if (position === "top") { ctx.textBaseline = "top"; y = H * 0.03 + i * lh; }
+          else { ctx.textBaseline = "bottom"; y = H - (H * 0.03) - (lines.length - 1 - i) * lh; }
+          ctx.strokeText(ln, W / 2, y);
+          ctx.fillText(ln, W / 2, y);
+        });
+      }
+
+      function render() {
+        if (!img.complete || !img.naturalWidth) return;
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        drawText(topIn.value, "top");
+        drawText(botIn.value, "bottom");
+      }
+
+      function setImage(src, el) {
+        img = new Image();
+        img.crossOrigin = "anonymous";
+        img.onload = render;
+        img.src = src;
+        thumbs.querySelectorAll("img").forEach((t) => t.classList.remove("sel"));
+        if (el) el.classList.add("sel");
+      }
+
+      ART.forEach((src, i) => {
+        const t = new Image();
+        t.src = src;
+        t.alt = "Catboy art " + (i + 1);
+        t.loading = "lazy";
+        if (i === 0) t.classList.add("sel");
+        t.addEventListener("click", () => setImage(src, t));
+        thumbs.appendChild(t);
+      });
+
+      topIn.addEventListener("input", render);
+      botIn.addEventListener("input", render);
+
+      document.getElementById("memeClear").addEventListener("click", () => {
+        topIn.value = ""; botIn.value = ""; render();
+      });
+
+      document.getElementById("memeDownload").addEventListener("click", () => {
+        try {
+          const link = document.createElement("a");
+          link.download = "catboy-meme.png";
+          link.href = canvas.toDataURL("image/png");
+          link.click();
+        } catch (e) {
+          alert("Couldn't export the image here. Try on the live site.");
+        }
+      });
+
+      img.onload = render;
+      img.src = ART[0];
+    })();
+  </script>
+</body>
+</html>
