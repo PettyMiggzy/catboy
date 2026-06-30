@@ -43,41 +43,36 @@ Everything degrades gracefully when empty:
 
 Fill these in and the site lights up — no other code changes needed.
 
-### Allowlist via Supabase (recommended)
+### Allowlist via Vercel Postgres (default — all first-party)
 
-The allowlist stores signups in your own Supabase table. The browser-side
-`anonKey` is safe to expose **as long as Row Level Security (RLS) is on with an
-insert-only policy** — visitors can add their email but can't read anyone's.
+Signups (email + optional wallet) are stored in **your own Vercel Postgres**
+database via a serverless function in this repo (`api/allowlist.js`). No
+third-party form service, no wallet-collection ToS issues, and a real database
+you can view and export.
 
-1. Create a free project at [supabase.com](https://supabase.com).
-2. In the **SQL Editor**, run:
+**One-time setup:**
+1. Vercel dashboard → your project → **Storage** → **Create Database** →
+   **Postgres** → connect it to this project. This auto-injects the
+   `POSTGRES_URL` env var.
+2. **Redeploy** (Vercel does this automatically on the next push, or click
+   Redeploy). The table is created on the first signup.
 
-   ```sql
-   create table if not exists allowlist (
-     id uuid primary key default gen_random_uuid(),
-     email text not null,
-     wallet text,
-     created_at timestamptz default now(),
-     unique (email)
-   );
+Until the database is connected, the function returns `503` and the form shows
+a friendly "opens soon" message — so nothing looks broken pre-setup.
 
-   alter table allowlist enable row level security;
+**View / export signups:** Vercel → **Storage** → your DB → **Data**, or run:
+```sql
+SELECT * FROM allowlist ORDER BY created_at DESC;
+```
+Export as CSV there for your mint/airdrop allowlist. Duplicate emails are
+handled gracefully ("already on the list").
 
-   -- Allow anonymous visitors to INSERT only (no read access).
-   create policy "anon can join allowlist"
-     on allowlist for insert
-     to anon
-     with check (true);
-   ```
-
-3. **Settings → API**: copy the **Project URL** and the **anon public** key
-   into `CONFIG.supabase` in `script.js`.
-4. View/export signups any time in **Table Editor → allowlist** (Export CSV)
-   for your mint/airdrop allowlist.
-
-Duplicate emails are handled gracefully ("already on the list"). To also send
-yourself an email per signup, add a Supabase Database Webhook or Edge Function
-later — optional.
+**Alternative backends** (only used if `apiEndpoint` is set to `""`):
+- `CONFIG.supabase` — your own Supabase project (URL + anon key; enable RLS
+  with an insert-only policy).
+- `CONFIG.waitlistEndpoint` — a Formspree/Getform URL. ⚠️ Note: some form
+  services (Formspree) prohibit collecting crypto wallet addresses, which is
+  why the self-hosted Vercel function is the default.
 
 ### Pages
 

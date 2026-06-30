@@ -1,0 +1,9 @@
+{
+  "name": "catboy-site",
+  "version": "1.0.0",
+  "private": true,
+  "description": "CATBOY on Solana — landing site with allowlist serverless function",
+  "dependencies": {
+    "@vercel/postgres": "^0.10.0"
+  }
+}

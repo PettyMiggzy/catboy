@@ -10,17 +10,14 @@ const CONFIG = {
   mintUrl: "",
   // Merch — paste your Fourthwall / Shopify store URL when it's live.
   merchUrl: "",
-  // Allowlist storage. Supabase is the primary backend — fill these in from
-  // your Supabase project (Settings → API). The anon key is safe to expose in
-  // the browser as long as Row Level Security is enabled (see README).
-  supabase: {
-    url: "",       // e.g. "https://abcd1234.supabase.co"
-    anonKey: "",   // the public "anon" key
-    table: "allowlist",
-  },
-  // Optional fallback form service (e.g. Formspree/Getform). Used only if
-  // Supabase isn't configured. Leave empty to show "opening soon".
-  waitlistEndpoint: "",
+  // Allowlist storage — primary backend is our own Vercel serverless function
+  // (api/allowlist.js) writing to Vercel Postgres. Nothing third-party.
+  // Returns 503 until the database is provisioned, so the form shows
+  // "opens soon" gracefully until you finish setup (see README).
+  apiEndpoint: "/api/allowlist",
+  // Optional alternative backends (used only if apiEndpoint is empty):
+  supabase: { url: "", anonKey: "", table: "allowlist" },
+  waitlistEndpoint: "", // Formspree/Getform fallback
 };
 
 // ----- Intro splash -----
@@ -137,6 +134,20 @@ wireLinkButton("[data-merch]", CONFIG.merchUrl, "Store Opening Soon");
 
   const sb = CONFIG.supabase || {};
   const supabaseReady = sb.url && sb.anonKey;
+  const apiReady = !!CONFIG.apiEndpoint;
+
+  // POST to our own Vercel serverless function (api/allowlist.js).
+  async function submitToApi(email, wallet) {
+    const res = await fetch(CONFIG.apiEndpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ email, wallet: wallet || null }),
+    });
+    if (res.ok) return { ok: true };
+    if (res.status === 503) return { ok: false, notReady: true }; // DB not provisioned yet
+    if (res.status === 409) return { ok: true, dup: true };
+    return { ok: false };
+  }
 
   // POST a signup to Supabase's REST (PostgREST) API.
   async function submitToSupabase(email, wallet) {
@@ -176,7 +187,7 @@ wireLinkButton("[data-merch]", CONFIG.merchUrl, "Store Opening Soon");
       setStatus("Please enter your email.", false);
       return;
     }
-    if (!supabaseReady && !CONFIG.waitlistEndpoint) {
+    if (!apiReady && !supabaseReady && !CONFIG.waitlistEndpoint) {
       setStatus("Allowlist opens soon — follow our socials to be first. 😺", true);
       form.reset();
       return;
@@ -185,10 +196,15 @@ wireLinkButton("[data-merch]", CONFIG.merchUrl, "Store Opening Soon");
     const prev = submitBtn.textContent;
     submitBtn.textContent = "Joining…";
     try {
-      const result = supabaseReady
+      const result = apiReady
+        ? await submitToApi(email, wallet)
+        : supabaseReady
         ? await submitToSupabase(email, wallet)
         : await submitToFormspree(form);
-      if (result.ok) {
+      if (result.notReady) {
+        setStatus("Allowlist opens soon — follow our socials to be first. 😺", true);
+        form.reset();
+      } else if (result.ok) {
         setStatus(
           result.dup
             ? "You're already on the list! 🐾"
