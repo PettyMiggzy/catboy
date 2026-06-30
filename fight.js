@@ -11,13 +11,16 @@
   // ---------- roster ----------
   const ROSTER = [
     { id: "catboy", name: "CATBOY", poses: true, color: "#9b4dff", hp: 100, pow: 1.05, spd: 1.15, special: "Nine Lives Fury", blurb: "The legend. Fast, relentless, nine chances." },
-    { id: "bonk",   name: "BONK",     img: "coin_bonk.png",    color: "#f7a600", hp: 115, pow: 1.1,  spd: 0.92, special: "Bonk Hammer", blurb: "Hits like a truck. The OG dog." },
-    { id: "wif",    name: "dogwifhat",img: "coin_wif.png",     color: "#d49a6a", hp: 100, pow: 1.0,  spd: 1.08, special: "Hat Trick", blurb: "Just a dog with a hat. Don't underestimate it." },
-    { id: "popcat", name: "POPCAT",   img: "coin_popcat.png",  color: "#e7b9a0", hp: 92,  spd: 1.22, pow: 0.95, special: "Pop Slam", blurb: "Pop pop pop. Glass cannon." },
-    { id: "pnut",   name: "PNUT",     img: "coin_pnut.png",    color: "#8bc34a", hp: 100, pow: 1.0,  spd: 1.1,  special: "Nut Buster", blurb: "Gone too soon. Fights for the fallen." },
-    { id: "mew",    name: "MEW",      img: "coin_mew.png",     color: "#ff5b8a", hp: 98,  pow: 1.0,  spd: 1.12, special: "Cat Combo", blurb: "A cat in a dog's world. Combo machine." },
-    { id: "moodeng",name: "MOO DENG", img: "coin_moodeng.png", color: "#b58b6a", hp: 125, pow: 1.18, spd: 0.82, special: "Hippo Stomp", blurb: "Heavyweight. Slow but devastating." },
-    { id: "fartcoin",name:"FARTCOIN", img: "coin_fartcoin.png",color: "#9aa0a6", hp: 90,  pow: 1.1,  spd: 1.02, special: "Gas Attack", blurb: "Ranged gas clouds. Stinks to fight." },
+    { id: "sol",    name: "SOLANA",   img: "coin_sol.png",   color: "#9945ff", hp: 125, pow: 1.15, spd: 1.1,  special: "Proof of Stake", blurb: "The chain itself. Balanced and unstoppable." },
+    { id: "jup",    name: "JUPITER",  img: "coin_jup.png",   color: "#c7f94c", hp: 100, pow: 1.0,  spd: 1.22, special: "Best Route", blurb: "The aggregator. Fast — finds every opening." },
+    { id: "pump",   name: "PUMP.FUN", img: "coin_pump.png",  color: "#2ed573", hp: 95,  pow: 1.05, spd: 1.16, special: "Bonding Curve", blurb: "The launchpad. Unpredictable chaos." },
+    { id: "bonk",   name: "BONK",     img: "coin_bonk.png",  color: "#f7a600", hp: 115, pow: 1.12, spd: 0.95, special: "Bonk Hammer", blurb: "The OG dog. Hits like a truck." },
+    { id: "wif",    name: "dogwifhat",img: "coin_wif.png",   color: "#d49a6a", hp: 100, pow: 1.0,  spd: 1.08, special: "Hat Trick", blurb: "Just a dog with a hat. Don't sleep on it." },
+    { id: "pengu",  name: "PENGU",    img: "coin_pengu.png", color: "#50aaff", hp: 105, pow: 1.02, spd: 1.05, special: "Ice Slide", blurb: "Pudgy Penguins. Cool under pressure." },
+    { id: "jto",    name: "JITO",     img: "coin_jto.png",   color: "#00d2b4", hp: 100, pow: 1.05, spd: 1.1,  special: "MEV Strike", blurb: "Liquid staking. Strikes out of nowhere." },
+    { id: "pyth",   name: "PYTH",     img: "coin_pyth.png",  color: "#aa78ff", hp: 90,  pow: 1.1,  spd: 1.05, special: "Price Feed", blurb: "The oracle. Ranged data blasts." },
+    { id: "trump",  name: "TRUMP",    img: "coin_trump.png", color: "#d4af37", hp: 122, pow: 1.18, spd: 0.85, special: "Tariff Slam", blurb: "Official Trump. Heavyweight, huge hits." },
+    { id: "popcat", name: "POPCAT",   img: "coin_popcat.png",color: "#e7b9a0", hp: 90,  pow: 0.95, spd: 1.22, special: "Pop Slam", blurb: "Pop pop pop. Glass cannon." },
   ];
 
   // ---------- assets ----------
@@ -444,7 +447,7 @@
     ctx.fillStyle = "#fff"; ctx.font = "900 40px Orbitron, sans-serif";
     ctx.shadowColor = "#9b4dff"; ctx.shadowBlur = 20;
     ctx.fillText("CHOOSE YOUR FIGHTER", W / 2, 70); ctx.shadowBlur = 0;
-    const cols = 4, cw = 200, ch = 150, gap = 16;
+    const cols = 6, cw = 142, ch = 152, gap = 12;
     const totalW = cols * cw + (cols - 1) * gap;
     const x0 = (W - totalW) / 2, y0 = 100;
     selBoxes = [];
@@ -462,8 +465,8 @@
         if (w > cw - 30) { w = cw - 30; h = w / ar; }
         ctx.drawImage(img, cx + cw / 2 - w / 2, cy + 14, w, h);
       }
-      ctx.fillStyle = "#fff"; ctx.font = "700 16px Orbitron, sans-serif";
-      ctx.fillText(r.name, cx + cw / 2, cy + ch - 14);
+      ctx.fillStyle = "#fff"; ctx.font = "700 12px Orbitron, sans-serif";
+      ctx.fillText(r.name, cx + cw / 2, cy + ch - 13);
     });
     const r = ROSTER[sel.hover];
     ctx.fillStyle = "#cfd0ff"; ctx.font = "600 18px Rajdhani, sans-serif";
@@ -487,8 +490,8 @@
     const k = e.key.toLowerCase();
     if (k === "arrowright" || k === "d") sel.hover = (sel.hover + 1) % ROSTER.length;
     else if (k === "arrowleft" || k === "a") sel.hover = (sel.hover + ROSTER.length - 1) % ROSTER.length;
-    else if (k === "arrowdown" || k === "s") sel.hover = (sel.hover + 4) % ROSTER.length;
-    else if (k === "arrowup" || k === "w") sel.hover = (sel.hover + ROSTER.length - 4) % ROSTER.length;
+    else if (k === "arrowdown" || k === "s") sel.hover = (sel.hover + 6) % ROSTER.length;
+    else if (k === "arrowup" || k === "w") sel.hover = (sel.hover + ROSTER.length - 6) % ROSTER.length;
     else if (k === "enter" || k === " ") startGame(sel.hover);
   });
   function canvasPos(e) {
