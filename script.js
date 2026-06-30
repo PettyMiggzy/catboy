@@ -6,6 +6,13 @@ const CONFIG = {
     x: "",        // e.g. "https://x.com/catboy_sol"
     telegram: "", // e.g. "https://t.me/catboy_sol"
   },
+  // NFT collection — paste your Crossmint / LaunchMyNFT / mint page URL at drop time.
+  mintUrl: "",
+  // Merch — paste your Fourthwall / Shopify store URL when it's live.
+  merchUrl: "",
+  // Waitlist/allowlist — paste a Formspree (or Getform) endpoint to collect signups.
+  // Example: "https://formspree.io/f/xxxxxxx". Leave empty to show "opening soon".
+  waitlistEndpoint: "",
 };
 
 // ----- Intro splash -----
@@ -84,6 +91,74 @@ document.querySelectorAll("[data-social]").forEach((el) => {
     });
   }
 });
+
+// ----- Link-or-"coming soon" buttons (mint, merch) -----
+function wireLinkButton(selector, url, comingSoonLabel) {
+  document.querySelectorAll(selector).forEach((el) => {
+    const original = el.textContent;
+    if (url) {
+      el.setAttribute("href", url);
+      el.setAttribute("target", "_blank");
+      el.setAttribute("rel", "noopener");
+    } else {
+      el.addEventListener("click", (e) => {
+        e.preventDefault();
+        el.textContent = comingSoonLabel;
+        setTimeout(() => (el.textContent = original), 1600);
+      });
+    }
+  });
+}
+wireLinkButton("[data-mint]", CONFIG.mintUrl, "Minting Soon");
+wireLinkButton("[data-merch]", CONFIG.merchUrl, "Store Opening Soon");
+
+// ----- Waitlist / allowlist form -----
+(function () {
+  const form = document.getElementById("waitlistForm");
+  if (!form) return;
+  const status = form.querySelector(".form-status");
+  const submitBtn = form.querySelector("button[type=submit]");
+  const setStatus = (msg, ok) => {
+    if (!status) return;
+    status.textContent = msg;
+    status.style.color = ok ? "var(--cyan)" : "var(--magenta)";
+  };
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const email = form.elements.email.value.trim();
+    if (!email) {
+      setStatus("Please enter your email.", false);
+      return;
+    }
+    if (!CONFIG.waitlistEndpoint) {
+      setStatus("Allowlist opens soon — follow our socials to be first. 😺", true);
+      form.reset();
+      return;
+    }
+    submitBtn.disabled = true;
+    const prev = submitBtn.textContent;
+    submitBtn.textContent = "Joining…";
+    try {
+      const res = await fetch(CONFIG.waitlistEndpoint, {
+        method: "POST",
+        headers: { Accept: "application/json" },
+        body: new FormData(form),
+      });
+      if (res.ok) {
+        setStatus("You're on the list! Welcome to the legend. 🐾", true);
+        form.reset();
+      } else {
+        setStatus("Something went wrong — try again in a moment.", false);
+      }
+    } catch {
+      setStatus("Network error — please try again.", false);
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = prev;
+    }
+  });
+})();
 
 // ----- Scroll reveal (with safety fallbacks so content can never stay hidden) -----
 const revealEls = document.querySelectorAll(".section, .cta");

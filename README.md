@@ -22,18 +22,33 @@ Everything you need to change lives at the top of `script.js`:
 
 ```js
 const CONFIG = {
-  contractAddress: "",          // paste the Solana mint address at launch
+  contractAddress: "",          // Solana mint address at launch
   socials: {
     x: "https://x.com/...",     // your X / Twitter
     telegram: "https://t.me/...", // your Telegram
   },
+  mintUrl: "",                  // NFT mint page (Crossmint / LaunchMyNFT)
+  merchUrl: "",                 // merch store (Fourthwall / Shopify)
+  waitlistEndpoint: "",         // Formspree/Getform endpoint for allowlist
 };
 ```
 
-When `contractAddress` is empty the page shows "Coming soon" and the copy
-button is disabled. When socials are empty the buttons show "Coming Soon"
-instead of linking out. Fill them in and the site lights up — no code changes
-needed elsewhere.
+Everything degrades gracefully when empty:
+- `contractAddress` empty → shows "Coming soon", copy button disabled.
+- `socials` empty → buttons show "Coming Soon" instead of linking.
+- `mintUrl` / `merchUrl` empty → buttons show "Minting Soon" / "Store Opening Soon".
+- `waitlistEndpoint` empty → the allowlist form shows a friendly "opens soon"
+  message. Set it to a [Formspree](https://formspree.io) endpoint (free) and
+  signups (email + optional wallet) start flowing to your inbox — no backend
+  to host.
+
+Fill these in and the site lights up — no other code changes needed.
+
+### Sections
+
+Hero · Lore · Journey · **NFTs** · Tokenomics · **Roadmap** · How to Buy ·
+**Merch** · **FAQ** · **Allowlist** · Socials. An intro splash video
+(`assets/splash.mp4`) plays once per session on load.
 
 ### Replace the artwork
 

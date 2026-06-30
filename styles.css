@@ -261,6 +261,95 @@ body.splash-open { overflow: hidden; }
 .section, .cta { opacity: 0; transform: translateY(24px); transition: opacity 0.7s ease, transform 0.7s ease; }
 .section.in, .cta.in { opacity: 1; transform: none; }
 
+/* ---------- Section intro / shared ---------- */
+.section-intro { max-width: 640px; margin: 1rem auto 0; color: var(--muted); font-size: 1.08rem; }
+.muted-note { color: var(--muted); font-size: 0.9rem; margin-top: 0.8rem; }
+
+/* ---------- NFT ---------- */
+.nft-gallery { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.2rem; margin-bottom: 2rem; }
+.nft-card {
+  position: relative; border-radius: 16px; overflow: hidden;
+  border: 1px solid var(--border); background: var(--card);
+  transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+}
+.nft-card:hover { transform: translateY(-6px); border-color: var(--cyan); box-shadow: 0 12px 40px rgba(25,224,255,0.18); }
+.nft-card img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
+.nft-tag {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  font-family: "Orbitron", sans-serif; font-size: 0.8rem; font-weight: 700;
+  padding: 0.6rem 0.9rem; background: linear-gradient(transparent, rgba(5,3,12,0.92));
+  color: var(--ink); letter-spacing: 0.05em;
+}
+.nft-info { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; margin-bottom: 2rem; }
+.info-pill {
+  display: flex; flex-direction: column; align-items: center; gap: 0.2rem;
+  background: rgba(0,0,0,0.35); border: 1px solid var(--border); border-radius: 12px;
+  padding: 0.8rem 1.4rem; min-width: 120px;
+}
+.info-pill span { color: var(--muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; }
+.info-pill b { font-family: "Orbitron", sans-serif; font-size: 1.05rem; }
+.nft-mint { text-align: center; }
+
+/* ---------- Roadmap ---------- */
+.roadmap { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.2rem; }
+.phase {
+  background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+  padding: 1.6rem 1.3rem; transition: transform 0.2s, border-color 0.2s;
+}
+.phase:hover { transform: translateY(-6px); border-color: var(--purple); box-shadow: 0 12px 40px rgba(155,77,255,0.18); }
+.phase-tag {
+  display: inline-block; font-family: "Orbitron", sans-serif; font-weight: 700; font-size: 0.72rem;
+  letter-spacing: 0.1em; text-transform: uppercase; color: #07030f;
+  background: var(--grad); padding: 0.25rem 0.7rem; border-radius: 999px; margin-bottom: 0.8rem;
+}
+.phase h3 { font-size: 1.1rem; margin-bottom: 0.7rem; }
+.phase ul { list-style: none; display: grid; gap: 0.5rem; }
+.phase li { color: var(--muted); font-size: 0.92rem; padding-left: 1.1rem; position: relative; }
+.phase li::before { content: "▹"; position: absolute; left: 0; color: var(--cyan); }
+
+/* ---------- Merch ---------- */
+.merch-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.2rem; margin-bottom: 2rem; }
+.merch-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+  padding: 1rem; text-align: center; transition: transform 0.2s, border-color 0.2s;
+}
+.merch-card:hover { transform: translateY(-6px); border-color: var(--magenta); }
+.merch-img { border-radius: 12px; overflow: hidden; margin-bottom: 0.9rem; }
+.merch-img img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; opacity: 0.92; }
+.merch-card h3 { font-size: 1rem; margin-bottom: 0.3rem; }
+.merch-soon { color: var(--cyan); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; }
+
+/* ---------- FAQ ---------- */
+.faq { max-width: 760px; margin: 0 auto; display: grid; gap: 0.9rem; }
+.faq-item {
+  background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+  padding: 0 1.3rem; transition: border-color 0.2s;
+}
+.faq-item[open] { border-color: var(--purple); }
+.faq-item summary {
+  cursor: pointer; list-style: none; padding: 1.1rem 0;
+  font-family: "Orbitron", sans-serif; font-weight: 700; font-size: 1rem;
+  display: flex; justify-content: space-between; align-items: center; gap: 1rem;
+}
+.faq-item summary::-webkit-details-marker { display: none; }
+.faq-item summary::after { content: "+"; color: var(--cyan); font-size: 1.4rem; transition: transform 0.2s; }
+.faq-item[open] summary::after { transform: rotate(45deg); }
+.faq-item p { color: var(--muted); padding-bottom: 1.1rem; font-size: 0.98rem; }
+
+/* ---------- Waitlist form ---------- */
+.waitlist-form { max-width: 720px; margin: 0 auto; }
+.form-row { display: flex; gap: 0.8rem; flex-wrap: wrap; }
+.waitlist-form input {
+  flex: 1 1 200px; min-width: 0;
+  background: rgba(0,0,0,0.4); border: 1px solid var(--border); border-radius: 999px;
+  padding: 0.9rem 1.3rem; color: var(--ink); font-family: "Rajdhani", sans-serif; font-size: 1rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.waitlist-form input::placeholder { color: var(--muted); }
+.waitlist-form input:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 16px rgba(25,224,255,0.25); }
+.waitlist-form .btn { flex: 0 0 auto; }
+.form-status { text-align: center; margin-top: 1rem; font-weight: 600; min-height: 1.4rem; }
+
 /* ---------- Responsive ---------- */
 @media (max-width: 900px) {
   .hero-inner { grid-template-columns: 1fr; text-align: center; }
@@ -268,11 +357,15 @@ body.splash-open { overflow: hidden; }
   .hero-art { order: 1; }
   .hero-sub { margin: 0 auto; }
   .hero-actions, .hero-stats { justify-content: center; }
-  .timeline, .token-grid, .steps { grid-template-columns: repeat(2, 1fr); }
+  .timeline, .token-grid, .steps,
+  .nft-gallery, .roadmap, .merch-grid { grid-template-columns: repeat(2, 1fr); }
   .nav-links { display: none; }
 }
 @media (max-width: 540px) {
-  .timeline, .token-grid, .steps { grid-template-columns: 1fr; }
+  .timeline, .token-grid, .steps,
+  .nft-gallery, .roadmap, .merch-grid { grid-template-columns: 1fr; }
   .nav-cta { display: none; }
   .hero-stats { gap: 1.2rem; }
+  .form-row { flex-direction: column; }
+  .waitlist-form .btn { width: 100%; }
 }
