@@ -53,8 +53,9 @@ const CONFIG = {
     if (tryPlay && tryPlay.catch) tryPlay.catch(() => {}); // autoplay may be blocked; user can skip
   }
   if (skip) skip.addEventListener("click", dismiss);
-  // Hard safety: never let the splash trap the user.
-  setTimeout(dismiss, 12000);
+  // The animated overlay runs ~4.8s; reveal the site right after it finishes.
+  // (If the video fires 'ended' sooner, that wins.)
+  setTimeout(dismiss, 5200);
 })();
 
 // ----- Footer year -----
