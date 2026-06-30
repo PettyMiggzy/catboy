@@ -57,7 +57,7 @@
       <!-- Connected state -->
       <div id="connected" class="trench-card" style="display:none;">
         <div class="tok-head">
-          <span class="cc-av" id="wAvatar">🐾</span>
+          <img class="cc-av" id="wAvatar" src="assets/catboy.png" alt="" />
           <div><h3 id="wKind">Connected</h3><span class="muted-note" id="wAddr" style="margin:0;"></span></div>
         </div>
         <div class="stat-rows">
@@ -74,7 +74,7 @@
       <!-- Choice state -->
       <div id="choices" class="wallet-choices">
         <div class="trench-card wallet-opt">
-          <span class="util-icon">🔑</span>
+          <span class="util-icon"><svg class="ic" viewBox="0 0 24 24"><circle cx="8" cy="8" r="4"/><path d="M11 11l8 8m-3-3l2-2m-4 0l2-2"/></svg></span>
           <h3>Bring your own</h3>
           <p class="muted-note">Connect a Solana wallet you already have.</p>
           <div class="meme-actions" id="byoBtns">
@@ -86,7 +86,7 @@
         </div>
 
         <div class="trench-card wallet-opt">
-          <span class="util-icon">✉️</span>
+          <span class="util-icon"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg></span>
           <h3>Go seedless</h3>
           <p class="muted-note">No seed phrase. Sign in with email or Google and get a real Solana wallet in ~60s.</p>
           <div class="meme-actions">
@@ -123,7 +123,6 @@
       $("wKind").textContent = kind;
       $("wAddr").textContent = short(address);
       $("wFull").textContent = address;
-      $("wAvatar").textContent = avatar || "🐾";
       try {
         const bal = await connection.getBalance(new PublicKey(address));
         $("wBal").textContent = (bal / 1e9).toFixed(4) + " SOL";

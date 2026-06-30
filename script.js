@@ -191,7 +191,7 @@ wireLinkButton("[data-game]", CONFIG.gameUrl, "Game Coming Soon");
       return;
     }
     if (!apiReady && !supabaseReady && !CONFIG.waitlistEndpoint) {
-      setStatus("Allowlist opens soon — follow our socials to be first. 😺", true);
+      setStatus("Allowlist opens soon — follow our socials to be first.", true);
       form.reset();
       return;
     }
@@ -205,13 +205,13 @@ wireLinkButton("[data-game]", CONFIG.gameUrl, "Game Coming Soon");
         ? await submitToSupabase(email, wallet)
         : await submitToFormspree(form);
       if (result.notReady) {
-        setStatus("Allowlist opens soon — follow our socials to be first. 😺", true);
+        setStatus("Allowlist opens soon — follow our socials to be first.", true);
         form.reset();
       } else if (result.ok) {
         setStatus(
           result.dup
-            ? "You're already on the list! 🐾"
-            : "You're on the list! Welcome to the legend. 🐾",
+            ? "You're already on the list!"
+            : "You're on the list! Welcome to the legend.",
           true
         );
         form.reset();
