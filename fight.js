@@ -235,6 +235,14 @@
     if (f.onGround && f.state !== "ko" && f.hitstun <= 0) f.vx *= 0.6;
     f.x = Math.max(60, Math.min(W - 60, f.x));
     if (f.state !== "ko") f.bob += dt / 200;
+    // footstep dust while striding
+    if (f.state === "walk" && f.onGround) {
+      f.stepT = (f.stepT || 0) - dt;
+      if (f.stepT <= 0) {
+        f.stepT = 250;
+        for (let k = 0; k < 3; k++) G.sparks.push({ x: f.x - f.facing * (6 + k * 5), y: GROUND - 2, vx: -f.facing * (1 + Math.random()), vy: -Math.random() * 1.5, life: 0.45, c: "#b9a6e0" });
+      }
+    }
   }
 
   function fireSpecial(f, foe, cfg) {
@@ -339,18 +347,24 @@
     ctx.translate(cx, cy);
     if (f.facing < 0) ctx.scale(-1, 1);
     // procedural motion
-    let dy = 0, rot = 0, sc = 1;
-    const bob = Math.sin(f.bob * (f.state === "walk" ? 2.4 : 1.4)) * ((f.def.poses || f.def.char) ? 3 : 7);
+    let dy = 0, rot = 0, sc = 1, scx = 1;
     if (f.state === "ko") { rot = Math.min(1.45, f.st / 600 * 1.45); }
     else if (f.state === "hurt") { rot = -0.18; }
     else if (f.state === "punch" || f.state === "kick") {
-      const p = Math.sin(Math.min(1, f.st / f.dur) * Math.PI); cx; sc = 1 + p * 0.06;
+      const p = Math.sin(Math.min(1, f.st / f.dur) * Math.PI); sc = 1 + p * 0.06;
       ctx.translate(p * (f.state === "kick" ? 34 : 26), 0);
     } else if (f.state === "special") {
       sc = 1 + Math.sin(Math.min(1, f.st / f.dur) * Math.PI) * 0.1;
-    } else { dy = bob; }
-    if (f.state === "block") sc = 0.96;
-    ctx.translate(0, dy); ctx.rotate(rot); ctx.scale(sc, sc);
+    } else if (f.state === "walk") {
+      // bounce-stride so movement reads as walking, not sliding
+      const ph = f.bob * 3.6, hop = Math.abs(Math.sin(ph));
+      dy = -hop * 13;                          // hop up on each step
+      rot = Math.sin(ph) * 0.07 * f.facing;    // rock with the stride
+      sc = 1 + hop * 0.03; scx = 1 - hop * 0.02;
+      if (hop < 0.12) { dy = 0; scx = 1.05; sc = 0.97; } // squash on footfall
+    } else if (f.state === "block") { sc = 0.96; }
+    else { dy = Math.sin(f.bob * 1.4) * ((f.def.poses || f.def.char) ? 3 : 7); } // idle breathe
+    ctx.translate(0, dy); ctx.rotate(rot); ctx.scale(scx * sc, sc);
     // draw centered, feet at 0
     const dw = w, dh = h;
     if (f.flash > 0) { ctx.shadowColor = "#fff"; ctx.shadowBlur = 30; }
