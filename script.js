@@ -227,6 +227,29 @@ wireLinkButton("[data-game]", CONFIG.gameUrl, "Game Coming Soon");
   });
 })();
 
+// ----- Mobile hamburger menu (injected so every page gets it) -----
+(function () {
+  const nav = document.querySelector(".nav");
+  const links = document.querySelector(".nav-links");
+  if (!nav || !links) return;
+  const btn = document.createElement("button");
+  btn.className = "nav-toggle";
+  btn.setAttribute("aria-label", "Menu");
+  btn.setAttribute("aria-expanded", "false");
+  btn.innerHTML = "<span></span><span></span><span></span>";
+  // place the toggle right before the CTA button if present, else at the end
+  const cta = nav.querySelector(".nav-cta");
+  nav.insertBefore(btn, cta || null);
+  const setOpen = (open) => {
+    links.classList.toggle("open", open);
+    btn.classList.toggle("open", open);
+    btn.setAttribute("aria-expanded", open ? "true" : "false");
+  };
+  btn.addEventListener("click", () => setOpen(!links.classList.contains("open")));
+  links.querySelectorAll("a").forEach((a) => a.addEventListener("click", () => setOpen(false)));
+  addEventListener("keydown", (e) => { if (e.key === "Escape") setOpen(false); });
+})();
+
 // ----- Art Wall lightbox -----
 (function () {
   const lb = document.getElementById("lightbox");

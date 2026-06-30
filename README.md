@@ -75,6 +75,33 @@ handled gracefully ("already on the list").
   services (Formspree) prohibit collecting crypto wallet addresses, which is
   why the self-hosted Vercel function is the default.
 
+### Trench Terminal (scanner + 1-tap trade)
+
+`trench.html` — paste a Solana CA for an instant readout, then buy/sell in one tap.
+
+- `lib/rpc.js` — shared server-side RPC helper.
+- `api/bundle.js` — rug/bundle forensics: supply, holder concentration (real
+  wallets only, curve excluded), launch snipers, shared-funder bundle clusters,
+  and a 0–100 risk score. Best-effort; returns partial data, never hard-fails.
+- `api/holders.js` — quick top-10/20 concentration. `api/curve.js` — pump
+  bonding-curve % to graduation.
+- `api/swap.js` — Jupiter quote+swap with a flat 1% **native platformFee** to
+  `REFERRAL_ACCOUNT`; holders of `YOUR_TOKEN_MINT` get a discount (100k = half,
+  1M = free). Falls back to a no-fee swap if the fee account isn't usable.
+  Client signs single-signer (`signAndSendTransaction`).
+- Price/liquidity/volume/mcap come from **DexScreener** client-side (no key).
+
+### Env vars (Trench suite)
+
+```
+SOLANA_RPC            # your Helius/Alchemy/QuickNode key — server only, proxied
+REFERRAL_ACCOUNT      # Jupiter referral wallet that collects the 1% fee
+YOUR_TOKEN_MINT       # $CATBOY mint — holders get the fee discount
+PRIVY_APP_ID          # seedless wallets (public, safe in client)
+SETTLEMENT_SECRET_KEY # pays launcher 50% splits — settlement script ONLY, never on Vercel
+DATABASE_URL          # Neon Postgres (already set) — launch registry
+```
+
 ### Launchpad (non-custodial)
 
 A thin, non-custodial layer over pump.fun infrastructure (BUILD SPEC).

@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CATBOY Trench Terminal — Scan &amp; Trade Any Solana Token</title>
+  <meta name="description" content="Paste any Solana contract for an instant safety + trading readout: price, holder concentration, bundle/sniper forensics, risk score, and 1-tap buy/sell. Holders trade fee-free." />
+  <meta property="og:title" content="CATBOY Trench Terminal" />
+  <meta property="og:description" content="Scan any Solana token for rugs & bundles, then trade in one tap." />
+  <meta property="og:image" content="assets/art/arcade.jpg" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <link rel="icon" type="image/png" href="assets/solana.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <noscript><style>.reveal { opacity: 1 !important; transform: none !important; filter: none !important; }</style></noscript>
+</head>
+<body>
+  <div class="bg-grid" aria-hidden="true"></div>
+  <div class="bg-glow" aria-hidden="true"></div>
+  <div class="scroll-progress" id="progress" aria-hidden="true"></div>
+
+  <header class="nav">
+    <a href="index.html" class="brand">
+      <img src="assets/catboy.png" alt="Catboy logo" class="brand-logo" />
+      <span class="brand-name">CATBOY</span>
+    </a>
+    <nav class="nav-links">
+      <a href="index.html#lore">Lore</a>
+      <a href="saga.html">Saga</a>
+      <a href="trench.html" class="active">Terminal</a>
+      <a href="nft.html">NFTs</a>
+      <a href="launch.html">Launch</a>
+      <a href="casino.html">Casino</a>
+      <a href="meme.html">Meme</a>
+      <a href="merch.html">Merch</a>
+      <a href="index.html#faq">FAQ</a>
+    </nav>
+    <a href="index.html#waitlist" class="btn btn-primary nav-cta">Join Allowlist</a>
+  </header>
+
+  <section class="page-hero">
+    <div class="page-hero-inner">
+      <a href="index.html" class="back-link">&lsaquo; Back to Home</a>
+      <span class="eyebrow" style="display:block;margin-top:1rem;">Trench Terminal</span>
+      <h1>Scan. Score. <span class="grad">Snipe Safely.</span></h1>
+      <p>Paste any Solana contract for an instant safety readout — holder concentration, bundle &amp; sniper forensics, a 0–100 risk score — then buy or sell in one tap. $CATBOY holders trade at a discount (or free).</p>
+    </div>
+  </section>
+
+  <section class="section" style="padding-top:1rem;">
+    <div class="trench-search">
+      <input id="caInput" type="text" placeholder="Paste a Solana token contract address (CA)…" spellcheck="false" />
+      <button id="scanBtn" class="btn btn-primary" type="button">Scan</button>
+    </div>
+    <p class="form-status" id="scanStatus" role="status" aria-live="polite"></p>
+
+    <div id="result" class="trench-grid" style="display:none;">
+      <!-- Overview -->
+      <div class="trench-card">
+        <div class="tok-head">
+          <img id="tokImg" alt="" />
+          <div>
+            <h3 id="tokName">—</h3>
+            <span id="tokSymbol" class="muted-note" style="margin:0;"></span>
+          </div>
+        </div>
+        <div class="stat-rows">
+          <div><span>Price</span><b id="tokPrice">—</b></div>
+          <div><span>Market cap</span><b id="tokMc">—</b></div>
+          <div><span>Liquidity</span><b id="tokLiq">—</b></div>
+          <div><span>24h volume</span><b id="tokVol">—</b></div>
+          <div><span>Bonding curve</span><b id="tokCurve">—</b></div>
+        </div>
+        <a id="dexLink" class="btn btn-ghost btn-sm" target="_blank" rel="noopener" style="margin-top:0.8rem;">Chart on DexScreener ↗</a>
+      </div>
+
+      <!-- Risk -->
+      <div class="trench-card">
+        <h3>Risk Score</h3>
+        <div class="risk-meter"><div id="riskFill" class="risk-fill"></div></div>
+        <div class="risk-line"><span id="riskScore" class="risk-num">—</span><span id="riskLevel" class="risk-level"></span></div>
+        <ul id="riskFlags" class="launch-steps" style="margin-top:0.8rem;"></ul>
+        <div class="conc-rows">
+          <div><span>Top 10 hold</span><b id="cTop10">—</b></div>
+          <div><span>Top 20 hold</span><b id="cTop20">—</b></div>
+          <div><span>Largest wallet</span><b id="cLargest">—</b></div>
+          <div><span>Sniped at launch</span><b id="cSniped">—</b></div>
+          <div><span>Bundles found</span><b id="cBundles">—</b></div>
+        </div>
+      </div>
+
+      <!-- Trade -->
+      <div class="trench-card">
+        <h3>1-Tap Trade</h3>
+        <div id="walletRow2" class="launch-wallet"><button id="connectBtn2" class="btn btn-ghost btn-sm" type="button">Connect Wallet</button><span id="walletAddr2" class="muted-note" style="margin:0;"></span></div>
+        <label class="meme-label">Amount (SOL to buy / tokens to sell)</label>
+        <input id="tradeAmt" type="number" min="0" step="0.01" placeholder="0.1" />
+        <div class="meme-actions">
+          <button id="buyBtn" class="btn btn-primary" type="button">Buy</button>
+          <button id="sellBtn" class="btn btn-ghost" type="button">Sell</button>
+        </div>
+        <p class="form-status" id="tradeStatus" role="status" aria-live="polite"></p>
+        <p class="muted-note">Flat 1% fee · $CATBOY holders pay less (100k = half, 1M = free). Non-custodial — you sign every trade.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="footer-brand">
+      <img src="assets/catboy.png" alt="Catboy" class="footer-logo" />
+      <span>CATBOY</span>
+    </div>
+    <p class="footer-disclaimer">
+      The Trench Terminal provides on-chain data for information only — not financial advice, and
+      forensics are best-effort heuristics, not a guarantee of safety. Trades are non-custodial and
+      signed by you. Crypto is extremely risky and many tokens go to zero. DYOR.
+    </p>
+    <p class="footer-copy">© <span id="year"></span> CATBOY · The Legend Evolves on Solana</p>
+  </footer>
+
+  <script src="script.js"></script>
+  <script type="module">
+    import { Connection, VersionedTransaction, PublicKey } from "https://esm.sh/@solana/web3.js@1.95.3";
+    const connection = new Connection(location.origin + "/api/solrpc", "confirmed");
+    const SOL = "So11111111111111111111111111111111111111112";
+    const $ = (id) => document.getElementById(id);
+
+    let provider = null, pubkey = null, currentMint = null, currentDecimals = 6;
+
+    const fmtUsd = (n) => n == null ? "—" : "$" + Number(n).toLocaleString(undefined, { maximumFractionDigits: n < 1 ? 8 : 2 });
+    const setScan = (m, ok) => { $("scanStatus").textContent = m; $("scanStatus").style.color = ok === false ? "var(--magenta)" : "var(--muted)"; };
+    const setTrade = (m, ok) => { $("tradeStatus").textContent = m; $("tradeStatus").style.color = ok === false ? "var(--magenta)" : ok ? "var(--cyan)" : "var(--muted)"; };
+
+    async function postJSON(url, body) {
+      const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const data = await r.json().catch(() => ({}));
+      return { ok: r.ok, status: r.status, data };
+    }
+
+    async function scan() {
+      const mint = $("caInput").value.trim();
+      if (!mint) return setScan("Paste a contract address.", false);
+      currentMint = mint;
+      setScan("Scanning…");
+      $("result").style.display = "none";
+
+      // 1) DexScreener (public, client-side) — price/liq/vol/mcap/image/chart
+      let dex = null;
+      try {
+        const r = await fetch("https://api.dexscreener.com/latest/dex/tokens/" + mint);
+        const j = await r.json();
+        dex = (j.pairs || []).sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0] || null;
+      } catch {}
+
+      if (dex) {
+        $("tokName").textContent = dex.baseToken?.name || "Token";
+        $("tokSymbol").textContent = "$" + (dex.baseToken?.symbol || "?");
+        $("tokPrice").textContent = fmtUsd(Number(dex.priceUsd));
+        $("tokMc").textContent = fmtUsd(dex.marketCap || dex.fdv);
+        $("tokLiq").textContent = fmtUsd(dex.liquidity?.usd);
+        $("tokVol").textContent = fmtUsd(dex.volume?.h24);
+        $("dexLink").href = dex.url || ("https://dexscreener.com/solana/" + mint);
+        const img = dex.info?.imageUrl;
+        $("tokImg").src = img || "assets/solana.png";
+      } else {
+        $("tokName").textContent = "Unknown / new token";
+        $("tokSymbol").textContent = "";
+        ["tokPrice","tokMc","tokLiq","tokVol"].forEach((id) => $(id).textContent = "—");
+        $("dexLink").href = "https://dexscreener.com/solana/" + mint;
+        $("tokImg").src = "assets/solana.png";
+      }
+      $("result").style.display = "grid";
+
+      // token decimals for selling (via proxied RPC)
+      try { const s = await connection.getTokenSupply(new PublicKey(mint)); currentDecimals = s.value.decimals; } catch {}
+
+      // 2) curve + 3) bundle forensics (need RPC configured)
+      postJSON("/api/curve", { mint }).then(({ data }) => {
+        $("tokCurve").textContent = data?.exists === false ? "Graduated" : (data?.progress != null ? data.progress + "%" : "—");
+      });
+
+      setScan("Running forensics…");
+      const { ok, status, data } = await postJSON("/api/bundle", { mint });
+      if (status === 503) { setScan("Forensics need the RPC configured (set SOLANA_RPC in Vercel). Price data shown above.", false); return; }
+      if (!ok || !data) { setScan("Forensics unavailable right now.", false); return; }
+
+      const r = data.risk || { score: 0, level: "low", flags: [] };
+      $("riskScore").textContent = r.score;
+      $("riskLevel").textContent = (r.level || "").toUpperCase();
+      $("riskLevel").className = "risk-level lvl-" + (r.level || "low");
+      $("riskFill").style.width = r.score + "%";
+      $("riskFill").className = "risk-fill lvl-" + (r.level || "low");
+      $("riskFlags").innerHTML = "";
+      (r.flags || []).forEach((f) => { const li = document.createElement("li"); li.textContent = "⚠ " + f; $("riskFlags").appendChild(li); });
+      $("cTop10").textContent = (data.top10 ?? "—") + "%";
+      $("cTop20").textContent = (data.top20 ?? "—") + "%";
+      $("cLargest").textContent = (data.largest ?? "—") + "%";
+      $("cSniped").textContent = (data.snipedPct ?? "—") + "%";
+      $("cBundles").textContent = (data.clusters?.length ?? 0);
+      setScan("");
+    }
+
+    async function connect() {
+      const p = window.solana;
+      if (!p || !p.isPhantom) return setTrade("Phantom not found (seedless coming soon).", false);
+      try { const resp = await p.connect(); provider = p; pubkey = resp.publicKey; const a = pubkey.toBase58(); $("walletAddr2").textContent = a.slice(0,4)+"…"+a.slice(-4); $("connectBtn2").textContent = "Connected"; setTrade("Wallet connected."); }
+      catch { setTrade("Connection cancelled.", false); }
+    }
+
+    async function trade(side) {
+      if (!currentMint) return setTrade("Scan a token first.", false);
+      if (!provider || !pubkey) return connect();
+      const amt = parseFloat($("tradeAmt").value);
+      if (!amt || amt <= 0) return setTrade("Enter an amount.", false);
+      try {
+        setTrade("Building " + side + "…");
+        const inputMint = side === "buy" ? SOL : currentMint;
+        const outputMint = side === "buy" ? currentMint : SOL;
+        const decimals = side === "buy" ? 9 : currentDecimals;
+        const amount = Math.round(amt * Math.pow(10, decimals));
+        const { ok, status, data } = await postJSON("/api/swap", { userPublicKey: pubkey.toBase58(), inputMint, outputMint, amount, slippageBps: 150 });
+        if (status === 503) return setTrade("Trading needs the RPC configured.", false);
+        if (!ok || !data.tx) return setTrade("Swap unavailable: " + (data.detail || data.error || status), false);
+        const vtx = VersionedTransaction.deserialize(Uint8Array.from(atob(data.tx), (c) => c.charCodeAt(0)));
+        setTrade("Approve in your wallet…");
+        const { signature } = await provider.signAndSendTransaction(vtx); // single-signer (Blowfish-safe)
+        setTrade("");
+        $("tradeStatus").innerHTML = '✅ Sent — <a href="https://solscan.io/tx/' + signature + '" target="_blank" rel="noopener" style="color:var(--cyan)">view ↗</a>' + (data.feeBps === 0 ? " · fee-free (holder)" : "");
+      } catch (e) { setTrade("Trade failed: " + (e.message || e), false); }
+    }
+
+    $("scanBtn").addEventListener("click", scan);
+    $("caInput").addEventListener("keydown", (e) => { if (e.key === "Enter") scan(); });
+    $("connectBtn2").addEventListener("click", connect);
+    $("buyBtn").addEventListener("click", () => trade("buy"));
+    $("sellBtn").addEventListener("click", () => trade("sell"));
+  </script>
+</body>
+</html>

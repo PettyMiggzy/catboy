@@ -4,6 +4,8 @@
   "private": true,
   "description": "CATBOY on Solana — landing site with allowlist serverless function",
   "dependencies": {
-    "@neondatabase/serverless": "^0.10.4"
+    "@neondatabase/serverless": "^0.10.4",
+    "@solana/web3.js": "^1.95.3",
+    "@solana/spl-token": "^0.4.9"
   }
 }
