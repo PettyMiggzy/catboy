@@ -29,18 +29,12 @@ const CONFIG = {
   const skip = document.getElementById("splashSkip");
   if (!splash) return;
 
-  // Show only once per browser session.
-  if (sessionStorage.getItem("catboy_splash_seen")) {
-    splash.remove();
-    return;
-  }
-
+  // Plays on every fresh load of the home page.
   document.body.classList.add("splash-open");
   let done = false;
   const dismiss = () => {
     if (done) return;
     done = true;
-    sessionStorage.setItem("catboy_splash_seen", "1");
     splash.classList.add("hide");
     document.body.classList.remove("splash-open");
     setTimeout(() => splash.remove(), 900);
