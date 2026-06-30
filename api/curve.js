@@ -1,7 +1,8 @@
 // Bonding-curve progress (% toward graduation) for pump.fun tokens (BUILD SPEC Part 2).
 // Best-effort: returns partial data, never hard-fails.
 
-import web3 from "@solana/web3.js";
+import * as web3ns from "@solana/web3.js";
+const web3 = web3ns.default || web3ns;
 const { PublicKey } = web3;
 
 const PUMP_PROGRAM = "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P";

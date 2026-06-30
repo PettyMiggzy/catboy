@@ -5,7 +5,8 @@
 // via signAndSendTransaction. Falls back to a plain (no-fee) swap if the fee account
 // isn't usable, so trading never hard-fails.
 
-import web3 from "@solana/web3.js";
+import * as web3ns from "@solana/web3.js";
+const web3 = web3ns.default || web3ns;
 const { PublicKey } = web3;
 
 const TOKEN_PROGRAM = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");

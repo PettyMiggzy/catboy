@@ -4,7 +4,8 @@
 //   GET /api/tokenimg?img=<url>     -> proxies a direct image
 // Redirects to wsrv.nl for resize + cache + CORS. Never hard-fails the UI.
 
-import web3 from "@solana/web3.js";
+import * as web3ns from "@solana/web3.js";
+const web3 = web3ns.default || web3ns;
 const { PublicKey } = web3;
 
 async function rpc(method, params = []) {
