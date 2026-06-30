@@ -12,7 +12,7 @@ const CONFIG = {
   merchUrl: "",
   // Waitlist/allowlist — paste a Formspree (or Getform) endpoint to collect signups.
   // Example: "https://formspree.io/f/xxxxxxx". Leave empty to show "opening soon".
-  waitlistEndpoint: "",
+  waitlistEndpoint: "https://formspree.io/f/xrewazwa",
 };
 
 // ----- Intro splash -----
