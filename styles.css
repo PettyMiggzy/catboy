@@ -473,6 +473,14 @@ body.splash-open { overflow: hidden; }
 .flt-search { flex: 1 1 220px; min-width: 0; background: rgba(0,0,0,0.45); border: 1px solid var(--border); border-radius: 999px; padding: 0.45rem 1rem; color: var(--ink); font-family: "Rajdhani", sans-serif; font-size: 0.9rem; }
 .flt-search:focus, .term-filters input:focus { outline: none; border-color: var(--cyan); }
 
+/* Wallet page */
+.wallet-wrap { max-width: 760px; margin: 0 auto; }
+.wallet-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.wallet-opt { text-align: center; }
+.wallet-opt .util-icon { font-size: 2rem; display: block; margin-bottom: 0.4rem; }
+.wallet-opt .meme-actions { justify-content: center; }
+@media (max-width: 640px) { .wallet-choices { grid-template-columns: 1fr; } }
+
 /* Terminal v2 — tabbed card grid + Photon detail */
 .term-feedwrap { max-width: 1400px; margin: 0 auto; padding: 0.6rem clamp(0.8rem,3vw,1.5rem) 2rem; }
 .feed-tabs { display: flex; gap: 0.5rem; overflow-x: auto; padding-bottom: 0.6rem; }

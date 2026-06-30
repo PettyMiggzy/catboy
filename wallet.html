@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CATBOY Wallet — Bring Your Own or Go Seedless</title>
+  <meta name="description" content="Connect your Solana wallet (Phantom, Solflare, Backpack) or create a seedless wallet with just your email — no seed phrase, no extension." />
+  <meta property="og:title" content="CATBOY Wallet" />
+  <meta property="og:description" content="Bring your own wallet or go seedless with email. Non-custodial." />
+  <meta property="og:image" content="assets/catboy.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <link rel="icon" type="image/png" href="assets/solana.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <noscript><style>.reveal { opacity: 1 !important; transform: none !important; filter: none !important; }</style></noscript>
+</head>
+<body>
+  <div class="bg-grid" aria-hidden="true"></div>
+  <div class="bg-glow" aria-hidden="true"></div>
+  <div class="scroll-progress" id="progress" aria-hidden="true"></div>
+
+  <header class="nav">
+    <a href="index.html" class="brand">
+      <img src="assets/catboy.png" alt="Catboy logo" class="brand-logo" />
+      <span class="brand-name">CATBOY</span>
+    </a>
+    <nav class="nav-links">
+      <a href="index.html#lore">Lore</a>
+      <a href="saga.html">Saga</a>
+      <a href="trench.html">Terminal</a>
+      <a href="nft.html">NFTs</a>
+      <a href="launch.html">Launch</a>
+      <a href="casino.html">Casino</a>
+      <a href="meme.html">Meme</a>
+      <a href="wallet.html" class="active">Wallet</a>
+      <a href="merch.html">Merch</a>
+      <a href="index.html#faq">FAQ</a>
+    </nav>
+    <a href="index.html#waitlist" class="btn btn-primary nav-cta">Join Allowlist</a>
+  </header>
+
+  <section class="page-hero">
+    <div class="page-hero-inner">
+      <a href="index.html" class="back-link">&lsaquo; Back to Home</a>
+      <span class="eyebrow" style="display:block;margin-top:1rem;">Wallet</span>
+      <h1>Your Catboy <span class="grad">Wallet</span></h1>
+      <p>Bring your own Solana wallet, or create one with just your email — no seed phrase, no extension. Either way it's <b>non-custodial</b>: only you control it.</p>
+    </div>
+  </section>
+
+  <section class="section" style="padding-top:1rem;">
+    <div class="wallet-wrap">
+      <!-- Connected state -->
+      <div id="connected" class="trench-card" style="display:none;">
+        <div class="tok-head">
+          <span class="cc-av" id="wAvatar">🐾</span>
+          <div><h3 id="wKind">Connected</h3><span class="muted-note" id="wAddr" style="margin:0;"></span></div>
+        </div>
+        <div class="stat-rows">
+          <div><span>Address</span><b id="wFull" style="font-size:0.8rem;word-break:break-all;text-align:right;">—</b></div>
+          <div><span>SOL balance</span><b id="wBal">—</b></div>
+        </div>
+        <div class="meme-actions">
+          <button id="wCopy" class="btn btn-ghost btn-sm" type="button">Copy address</button>
+          <button id="wDisc" class="btn btn-ghost btn-sm" type="button">Disconnect</button>
+          <a href="trench.html" class="btn btn-primary btn-sm">Open Terminal</a>
+        </div>
+      </div>
+
+      <!-- Choice state -->
+      <div id="choices" class="wallet-choices">
+        <div class="trench-card wallet-opt">
+          <span class="util-icon">🔑</span>
+          <h3>Bring your own</h3>
+          <p class="muted-note">Connect a Solana wallet you already have.</p>
+          <div class="meme-actions" id="byoBtns">
+            <button class="btn btn-primary" data-wallet="phantom" type="button">Phantom</button>
+            <button class="btn btn-ghost" data-wallet="solflare" type="button">Solflare</button>
+            <button class="btn btn-ghost" data-wallet="backpack" type="button">Backpack</button>
+          </div>
+          <p class="form-status" id="byoStatus" role="status" aria-live="polite"></p>
+        </div>
+
+        <div class="trench-card wallet-opt">
+          <span class="util-icon">✉️</span>
+          <h3>Go seedless</h3>
+          <p class="muted-note">No seed phrase. Sign in with email or Google and get a real Solana wallet in ~60s.</p>
+          <div class="meme-actions">
+            <button id="seedlessBtn" class="btn btn-primary" type="button">Create / Sign in</button>
+          </div>
+          <p class="form-status" id="seedlessStatus" role="status" aria-live="polite"></p>
+        </div>
+      </div>
+
+      <p class="muted-note" style="text-align:center;margin-top:1.5rem;">
+        Non-custodial — Catboy never holds your keys or funds. You sign every transaction yourself.
+      </p>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="footer-brand"><img src="assets/catboy.png" alt="Catboy" class="footer-logo" /><span>CATBOY</span></div>
+    <p class="footer-disclaimer">Wallets are non-custodial. Keep your recovery details safe. Nothing here is financial advice. Crypto is volatile — DYOR.</p>
+    <p class="footer-copy">© <span id="year"></span> CATBOY · The Legend Evolves on Solana</p>
+  </footer>
+
+  <script src="script.js"></script>
+  <script type="module">
+    import { Connection, PublicKey } from "https://esm.sh/@solana/web3.js@1.95.3";
+    const connection = new Connection(location.origin + "/api/solrpc", "confirmed");
+    const $ = (id) => document.getElementById(id);
+
+    const PRIVY_APP_ID = "cmr0n0oxk004o0cl8bx16n9pl";
+
+    function short(a) { return a.slice(0, 4) + "…" + a.slice(-4); }
+    async function showConnected(kind, address, avatar) {
+      $("choices").style.display = "none";
+      $("connected").style.display = "block";
+      $("wKind").textContent = kind;
+      $("wAddr").textContent = short(address);
+      $("wFull").textContent = address;
+      $("wAvatar").textContent = avatar || "🐾";
+      try {
+        const bal = await connection.getBalance(new PublicKey(address));
+        $("wBal").textContent = (bal / 1e9).toFixed(4) + " SOL";
+      } catch { $("wBal").textContent = "—"; }
+      localStorage.setItem("catboy_wallet", JSON.stringify({ kind, address }));
+    }
+    function disconnect() {
+      localStorage.removeItem("catboy_wallet");
+      $("connected").style.display = "none";
+      $("choices").style.display = "grid";
+    }
+
+    // ---- Bring your own ----
+    const providers = {
+      phantom: () => window.solana && window.solana.isPhantom ? window.solana : null,
+      solflare: () => window.solflare && window.solflare.isSolflare ? window.solflare : (window.solflare || null),
+      backpack: () => window.backpack || (window.xnft && window.xnft.solana) || null,
+    };
+    document.querySelectorAll("[data-wallet]").forEach((btn) => btn.addEventListener("click", async () => {
+      const key = btn.dataset.wallet;
+      const p = providers[key]();
+      if (!p) { $("byoStatus").textContent = key[0].toUpperCase() + key.slice(1) + " not found — install it or pick another."; $("byoStatus").style.color = "var(--magenta)"; return; }
+      try {
+        const r = await p.connect();
+        const addr = (r && r.publicKey ? r.publicKey : p.publicKey).toString();
+        showConnected(key[0].toUpperCase() + key.slice(1), addr, "🔑");
+      } catch { $("byoStatus").textContent = "Connection cancelled."; $("byoStatus").style.color = "var(--magenta)"; }
+    }));
+
+    // ---- Seedless (Privy, lazy-loaded only when clicked) ----
+    $("seedlessBtn").addEventListener("click", async () => {
+      const s = $("seedlessStatus");
+      s.style.color = "var(--muted)"; s.textContent = "Loading secure sign-in…";
+      try {
+        const React = (await import("https://esm.sh/react@18.3.1")).default;
+        const { createRoot } = await import("https://esm.sh/react-dom@18.3.1/client");
+        const Privy = await import("https://esm.sh/@privy-io/react-auth@2?deps=react@18.3.1,react-dom@18.3.1");
+        const { PrivyProvider, usePrivy, useSolanaWallets } = Privy;
+
+        let mount = document.getElementById("privyMount");
+        if (!mount) { mount = document.createElement("div"); mount.id = "privyMount"; document.body.appendChild(mount); }
+
+        function Inner() {
+          const { ready, authenticated, login, logout, user } = usePrivy();
+          const { wallets } = useSolanaWallets();
+          React.useEffect(() => {
+            if (!ready) return;
+            if (!authenticated) { login(); return; }
+            const w = wallets && wallets[0];
+            if (w) { showConnected("Seedless", w.address, "✉️"); s.textContent = ""; }
+          }, [ready, authenticated, wallets]);
+          return null;
+        }
+        const el = React.createElement(
+          PrivyProvider,
+          { appId: PRIVY_APP_ID, config: { loginMethods: ["email", "google"], embeddedWallets: { createOnLogin: "users-without-wallets" }, appearance: { theme: "dark", accentColor: "#9b4dff" } } },
+          React.createElement(Inner)
+        );
+        createRoot(mount).render(el);
+      } catch (e) {
+        s.style.color = "var(--magenta)";
+        s.textContent = "Seedless sign-in failed to load. Make sure this domain is added in your Privy dashboard (Allowed Origins). Detail: " + (e.message || e);
+      }
+    });
+
+    // Restore a previous bring-your-own session display (address only).
+    try {
+      const saved = JSON.parse(localStorage.getItem("catboy_wallet") || "null");
+      if (saved && saved.address) showConnected(saved.kind, saved.address, saved.kind === "Seedless" ? "✉️" : "🔑");
+    } catch {}
+
+    $("wDisc").addEventListener("click", disconnect);
+    $("wCopy").addEventListener("click", async () => {
+      const saved = JSON.parse(localStorage.getItem("catboy_wallet") || "null");
+      if (saved) { try { await navigator.clipboard.writeText(saved.address); $("wCopy").textContent = "Copied!"; setTimeout(() => ($("wCopy").textContent = "Copy address"), 1500); } catch {} }
+    });
+  </script>
+</body>
+</html>
