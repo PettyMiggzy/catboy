@@ -49,10 +49,14 @@
   </script>
   <script type="module">
     const fail = (e) => { console.error(e); document.getElementById("fallback").style.display = "grid"; document.getElementById("load").classList.add("gone"); };
-    let THREE, OrbitControls;
+    let THREE, OrbitControls, EffectComposer, RenderPass, UnrealBloomPass, Reflector;
     try {
       THREE = await import("three");
-      ({ OrbitControls } = await import("./assets/vendor/OrbitControls.js"));
+      ({ OrbitControls } = await import("./assets/vendor/jsm/controls/OrbitControls.js"));
+      ({ EffectComposer } = await import("./assets/vendor/jsm/postprocessing/EffectComposer.js"));
+      ({ RenderPass } = await import("./assets/vendor/jsm/postprocessing/RenderPass.js"));
+      ({ UnrealBloomPass } = await import("./assets/vendor/jsm/postprocessing/UnrealBloomPass.js"));
+      ({ Reflector } = await import("./assets/vendor/jsm/objects/Reflector.js"));
     } catch (e) { fail(e); }
 
     if (THREE) try {
@@ -72,6 +76,8 @@
       renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
       renderer.setSize(innerWidth, innerHeight);
       renderer.outputColorSpace = THREE.SRGBColorSpace;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.15;
 
       const scene = new THREE.Scene();
       scene.background = new THREE.Color(0x07040f);
@@ -92,12 +98,18 @@
       const fill = new THREE.PointLight(0x19e0ff, 1.2, 200); fill.position.set(-30, 30, -10); scene.add(fill);
       const fill2 = new THREE.PointLight(0xff3df0, 1.0, 200); fill2.position.set(30, 24, 30); scene.add(fill2);
 
-      // ground + grid
-      const ground = new THREE.Mesh(new THREE.PlaneGeometry(600, 600),
-        new THREE.MeshStandardMaterial({ color: 0x0a0716, metalness: 0.6, roughness: 0.4 }));
-      ground.rotation.x = -Math.PI / 2; scene.add(ground);
-      const grid = new THREE.GridHelper(600, 120, 0x9b4dff, 0x271a4a);
-      grid.material.transparent = true; grid.material.opacity = 0.4; scene.add(grid);
+      // wet reflective street (Reflector) — the "broke Matrix" look
+      const mirror = new Reflector(new THREE.PlaneGeometry(800, 800), {
+        textureWidth: Math.min(1024, innerWidth) * 1.5, textureHeight: Math.min(1024, innerHeight) * 1.5,
+        color: 0x4a4660,
+      });
+      mirror.rotation.x = -Math.PI / 2; mirror.position.y = 0.01; scene.add(mirror);
+      // dark wet sheen over the reflection so it's subtle, not a clean mirror
+      const wet = new THREE.Mesh(new THREE.PlaneGeometry(800, 800),
+        new THREE.MeshStandardMaterial({ color: 0x06040e, metalness: 0.9, roughness: 0.55, transparent: true, opacity: 0.62 }));
+      wet.rotation.x = -Math.PI / 2; wet.position.y = 0.02; scene.add(wet);
+      const grid = new THREE.GridHelper(800, 160, 0x9b4dff, 0x1d1438);
+      grid.material.transparent = true; grid.material.opacity = 0.18; grid.position.y = 0.03; scene.add(grid);
 
       // window texture for generic buildings
       function windowTex(tint) {
@@ -205,6 +217,36 @@
         scene.add(car); cars.push(car);
       }
 
+      // rain — thin neon streaks (broke-Matrix drizzle)
+      const RN = 2600;
+      const rainGeo = new THREE.BufferGeometry();
+      const rp = new Float32Array(RN * 6), rspd = new Float32Array(RN);
+      for (let i = 0; i < RN; i++) {
+        const x = (Math.random() - 0.5) * 320, z = (Math.random() - 0.5) * 320, y = Math.random() * 160;
+        const len = 2.2 + Math.random() * 3.5;
+        rp[i * 6] = x; rp[i * 6 + 1] = y; rp[i * 6 + 2] = z;
+        rp[i * 6 + 3] = x; rp[i * 6 + 4] = y - len; rp[i * 6 + 5] = z;
+        rspd[i] = 0.7 + Math.random() * 1.4;
+      }
+      rainGeo.setAttribute("position", new THREE.BufferAttribute(rp, 3));
+      const rain = new THREE.LineSegments(rainGeo, new THREE.LineBasicMaterial({ color: 0x8fe6ff, transparent: true, opacity: 0.28, blending: THREE.AdditiveBlending }));
+      scene.add(rain);
+      function stepRain(dt) {
+        const p = rainGeo.attributes.position.array;
+        for (let i = 0; i < RN; i++) {
+          const d = rspd[i] * dt * 60;
+          p[i * 6 + 1] -= d; p[i * 6 + 4] -= d;
+          if (p[i * 6 + 4] < 0) { const ny = 120 + Math.random() * 40, len = p[i * 6 + 1] - p[i * 6 + 4]; p[i * 6 + 1] = ny; p[i * 6 + 4] = ny - len; }
+        }
+        rainGeo.attributes.position.needsUpdate = true;
+      }
+
+      // bloom post-processing — the neon glow
+      const composer = new EffectComposer(renderer);
+      composer.addPass(new RenderPass(scene, camera));
+      const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.9, 0.7, 0.18);
+      composer.addPass(bloom);
+
       // interaction
       const ray = new THREE.Raycaster(), pointer = new THREE.Vector2();
       let hovered = null;
@@ -220,7 +262,7 @@
         setPointer(e); const o = pick(); if (o) { document.getElementById("load").classList.remove("gone"); location.href = o.userData.url; }
       });
 
-      addEventListener("resize", () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+      addEventListener("resize", () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight); });
 
       const clock = new THREE.Clock();
       function animate() {
@@ -241,8 +283,9 @@
         if (hovered) { hovered.userData.mat.emissiveIntensity = 1.4 + Math.sin(t * 6) * 0.3; const s = hovered.userData.sign; s.scale.set(18, 5.6, 1); }
         // cars
         cars.forEach((c) => { c.userData.a += c.userData.sp * 0.01; c.position.set(Math.cos(c.userData.a) * c.userData.rad, c.userData.y, Math.sin(c.userData.a) * c.userData.rad); c.rotation.y = -c.userData.a; });
-        catSign.material.rotation = 0; beacon.rotation.y = t * 0.2;
-        renderer.render(scene, camera);
+        beacon.rotation.y = t * 0.2;
+        stepRain(1 / 60);
+        composer.render();
       }
       animate();
       setTimeout(() => document.getElementById("load").classList.add("gone"), 400);
