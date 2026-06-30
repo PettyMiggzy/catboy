@@ -1,12 +1,8 @@
-// Bonding-curve progress (% toward graduation) for pump.fun tokens (BUILD SPEC Part 2).
-// Best-effort: returns partial data, never hard-fails.
-
-import * as web3ns from "@solana/web3.js";
-const web3 = web3ns.default || web3ns;
-const { PublicKey } = web3;
+// Bonding-curve progress — diagnostic build: dynamic import + real error reporting.
 
 const PUMP_PROGRAM = "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P";
 const PUMP_INIT_REAL_TOKEN = 793100000000000n;
+
 async function rpc(method, params = []) {
   const url = process.env.SOLANA_RPC;
   if (!url) throw new Error("rpc_not_configured");
@@ -26,26 +22,21 @@ export default async function handler(req, res) {
   if (!mint) return res.status(400).json({ error: "missing_mint" });
 
   try {
+    const web3 = await import("@solana/web3.js").then((m) => m.default || m);
+    const { PublicKey } = web3;
     const pda = PublicKey.findProgramAddressSync(
       [Buffer.from("bonding-curve"), new PublicKey(mint).toBuffer()],
       new PublicKey(PUMP_PROGRAM)
     )[0].toBase58();
-
     const acc = await rpc("getAccountInfo", [pda, { encoding: "base64" }]);
-    if (!acc || !acc.value) {
-      // No curve account => not a pump token, or already graduated to a DEX.
-      return res.status(200).json({ exists: false, graduated: true, progress: 100 });
-    }
-
+    if (!acc || !acc.value) return res.status(200).json({ exists: false, graduated: true, progress: 100 });
     const data = Buffer.from(acc.value.data[0], "base64");
-    // layout: [8 disc][u64 virtTok][u64 virtSol][u64 realTok][u64 realSol][u64 totalSupply][bool complete]
     const realToken = data.readBigUInt64LE(24);
     const complete = data.readUInt8(48) === 1;
     let progress = Number(((PUMP_INIT_REAL_TOKEN - realToken) * 10000n) / PUMP_INIT_REAL_TOKEN) / 100;
     progress = Math.max(0, Math.min(100, progress));
-
     return res.status(200).json({ exists: true, complete, progress: +progress.toFixed(2) });
   } catch (e) {
-    return res.status(200).json({ error: "partial", detail: String(e.message || e) });
+    return res.status(500).json({ error: "crash", detail: String((e && e.stack) || (e && e.message) || e).slice(0, 400) });
   }
 }
