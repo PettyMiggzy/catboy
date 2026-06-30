@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CATBOY Launchpad — Deploy a Solana Token, Earn 50% of Fees</title>
+  <meta name="description" content="Launch your own Solana token in-browser on the Catboy Launchpad. Non-custodial, powered by pump.fun. Launchers earn 50% of trading fees forever." />
+  <meta property="og:title" content="CATBOY Launchpad" />
+  <meta property="og:description" content="Deploy a Solana token in your browser. Non-custodial. Earn 50% of trading fees." />
+  <meta property="og:image" content="assets/art/arcade.jpg" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <link rel="icon" type="image/png" href="assets/solana.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <noscript><style>.reveal { opacity: 1 !important; transform: none !important; filter: none !important; }</style></noscript>
+</head>
+<body>
+  <div class="bg-grid" aria-hidden="true"></div>
+  <div class="bg-glow" aria-hidden="true"></div>
+  <div class="scroll-progress" id="progress" aria-hidden="true"></div>
+
+  <header class="nav">
+    <a href="index.html" class="brand">
+      <img src="assets/catboy.png" alt="Catboy logo" class="brand-logo" />
+      <span class="brand-name">CATBOY</span>
+    </a>
+    <nav class="nav-links">
+      <a href="index.html#lore">Lore</a>
+      <a href="saga.html">Saga</a>
+      <a href="nft.html">NFTs</a>
+      <a href="launch.html" class="active">Launch</a>
+      <a href="casino.html">Casino</a>
+      <a href="meme.html">Meme</a>
+      <a href="merch.html">Merch</a>
+      <a href="index.html#faq">FAQ</a>
+    </nav>
+    <a href="index.html#waitlist" class="btn btn-primary nav-cta">Join Allowlist</a>
+  </header>
+
+  <section class="page-hero">
+    <div class="page-hero-inner">
+      <a href="index.html" class="back-link">&lsaquo; Back to Home</a>
+      <span class="eyebrow" style="display:block;margin-top:1rem;">Launchpad</span>
+      <h1>Launch Your <span class="grad">Legend</span></h1>
+      <p>Deploy a Solana token in your browser — non-custodial, powered by pump.fun. You keep your keys, and launchers earn <b>50% of trading fees, forever</b>.</p>
+    </div>
+  </section>
+
+  <section class="section" style="padding-top:1.5rem;">
+    <div class="meme-wrap">
+      <!-- FORM -->
+      <div class="meme-controls" style="order:1;">
+        <div id="walletRow" class="launch-wallet">
+          <button id="connectBtn" class="btn btn-primary" type="button">Connect Wallet</button>
+          <span id="walletAddr" class="muted-note" style="margin:0;"></span>
+        </div>
+
+        <label class="meme-label">Token name</label>
+        <input id="tName" type="text" placeholder="Catboy Inu" maxlength="32" />
+        <label class="meme-label">Symbol (ticker)</label>
+        <input id="tSymbol" type="text" placeholder="CINU" maxlength="10" />
+        <label class="meme-label">Description</label>
+        <input id="tDesc" type="text" placeholder="The next legend on Solana" maxlength="180" />
+        <label class="meme-label">Token image</label>
+        <input id="tImage" type="file" accept="image/*" />
+
+        <div class="launch-2col">
+          <div>
+            <label class="meme-label">Twitter (optional)</label>
+            <input id="tTwitter" type="text" placeholder="https://x.com/..." />
+          </div>
+          <div>
+            <label class="meme-label">Telegram (optional)</label>
+            <input id="tTelegram" type="text" placeholder="https://t.me/..." />
+          </div>
+        </div>
+        <label class="meme-label">Website (optional)</label>
+        <input id="tWebsite" type="text" placeholder="https://..." />
+        <label class="meme-label">Dev buy in SOL (optional)</label>
+        <input id="tDevBuy" type="number" min="0" step="0.01" placeholder="0" />
+
+        <div class="meme-actions">
+          <button id="launchBtn" class="btn btn-primary" type="button" disabled>Connect wallet to launch</button>
+        </div>
+        <p class="muted-note" id="launchStatus" role="status" aria-live="polite"></p>
+        <p class="muted-note" id="notReadyNote" style="display:none;">⚠️ Launchpad backend isn't configured yet (RPC/keys pending). The form is live but deploys are disabled until setup is complete.</p>
+      </div>
+
+      <!-- INFO PANEL -->
+      <div class="meme-stage" style="order:2; align-content:start;">
+        <div class="launch-info">
+          <h3>How it works</h3>
+          <ol class="launch-steps">
+            <li><b>Connect</b> — bring your Phantom (seedless sign-in coming soon).</li>
+            <li><b>Fill details</b> — name, ticker, image, socials.</li>
+            <li><b>Sign once</b> — your wallet + a fresh mint key co-sign one legible deploy tx.</li>
+            <li><b>Live instantly</b> — your token trades on pump.fun.</li>
+          </ol>
+          <h3 style="margin-top:1.2rem;">The deal</h3>
+          <ul class="launch-steps">
+            <li>🔑 <b>Non-custodial</b> — we never touch your keys or funds.</li>
+            <li>💸 <b>50% of trading fees</b> go to you, the launcher, forever.</li>
+            <li>🔥 Catboy's cut buys back &amp; burns $CATBOY.</li>
+          </ul>
+          <div id="feedWrap" style="margin-top:1.2rem; display:none;">
+            <h3>Recent launches</h3>
+            <ul id="feedList" class="launch-steps"></ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="footer-brand">
+      <img src="assets/catboy.png" alt="Catboy" class="footer-logo" />
+      <span>CATBOY</span>
+    </div>
+    <p class="footer-disclaimer">
+      The Catboy Launchpad is non-custodial software for deploying tokens on Solana. You are solely
+      responsible for the tokens you create and any taxes, disclosures, or laws that apply. Nothing
+      here is financial advice. Crypto is volatile and many tokens go to zero. Use at your own risk.
+    </p>
+    <p class="footer-copy">© <span id="year"></span> CATBOY · The Legend Evolves on Solana</p>
+  </footer>
+
+  <script src="script.js"></script>
+  <script type="module">
+    import {
+      Connection, Keypair, VersionedTransaction,
+    } from "https://esm.sh/@solana/web3.js@1.95.3";
+
+    // Always talk to Solana through our secure proxy — the RPC key never ships (§1).
+    const connection = new Connection(location.origin + "/api/solrpc", "confirmed");
+
+    const $ = (id) => document.getElementById(id);
+    const status = $("launchStatus");
+    const setStatus = (m, ok) => { status.textContent = m; status.style.color = ok === false ? "var(--magenta)" : ok ? "var(--cyan)" : "var(--muted)"; };
+
+    let provider = null, pubkey = null;
+
+    function getPhantom() {
+      const p = window.solana;
+      return p && p.isPhantom ? p : null;
+    }
+
+    async function connect() {
+      const p = getPhantom();
+      if (!p) { setStatus("Phantom not found. Install Phantom (seedless sign-in coming soon).", false); return; }
+      try {
+        const resp = await p.connect();
+        provider = p; pubkey = resp.publicKey;
+        const a = pubkey.toBase58();
+        $("walletAddr").textContent = a.slice(0, 4) + "…" + a.slice(-4);
+        $("connectBtn").textContent = "Connected";
+        $("launchBtn").disabled = false;
+        $("launchBtn").textContent = "Launch Token";
+        setStatus("Wallet connected.", true);
+      } catch (e) { setStatus("Connection cancelled.", false); }
+    }
+
+    function fileToDataUrl(file) {
+      return new Promise((res, rej) => {
+        const fr = new FileReader();
+        fr.onload = () => res(fr.result);
+        fr.onerror = rej;
+        fr.readAsDataURL(file);
+      });
+    }
+
+    async function postJSON(url, body) {
+      const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || ("http_" + r.status));
+      return data;
+    }
+
+    async function launch() {
+      if (!provider || !pubkey) return connect();
+      const name = $("tName").value.trim();
+      const symbol = $("tSymbol").value.trim();
+      const file = $("tImage").files[0];
+      if (!name || !symbol) return setStatus("Name and symbol are required.", false);
+      if (!file) return setStatus("Please add a token image.", false);
+
+      const btn = $("launchBtn");
+      btn.disabled = true;
+      try {
+        // 1) Metadata -> pump.fun IPFS
+        setStatus("Uploading metadata…");
+        const image = await fileToDataUrl(file);
+        const meta = await postJSON("/api/launch", {
+          action: "metadata", image, name, symbol,
+          description: $("tDesc").value.trim(),
+          twitter: $("tTwitter").value.trim(),
+          telegram: $("tTelegram").value.trim(),
+          website: $("tWebsite").value.trim(),
+        });
+
+        // 2) Mint keypair is generated client-side and NEVER leaves the browser (§3)
+        const mint = Keypair.generate();
+
+        // 3) Ask the backend (PumpPortal) to build the deploy tx
+        setStatus("Building deploy transaction…");
+        const { tx } = await postJSON("/api/launch", {
+          action: "create",
+          publicKey: pubkey.toBase58(),
+          mint: mint.publicKey.toBase58(),
+          name, symbol, uri: meta.metadataUri,
+          devBuySol: $("tDevBuy").value || 0,
+        });
+
+        // 4) Deserialize the serialized VersionedTransaction
+        const raw = Uint8Array.from(atob(tx), (c) => c.charCodeAt(0));
+        const vtx = VersionedTransaction.deserialize(raw);
+
+        // 5) Simulate before asking the user to sign (§7, sigVerify:false)
+        setStatus("Simulating…");
+        try {
+          const sim = await connection.simulateTransaction(vtx, { sigVerify: false });
+          if (sim.value && sim.value.err) {
+            // continue anyway, but warn — sims can fail on brand-new mints
+            console.warn("simulation error", sim.value.err);
+          }
+        } catch (e) { console.warn("simulate failed", e); }
+
+        // 6) MULTI-SIGNER (§3): partial-sign with the mint keypair…
+        vtx.sign([mint]);
+        // …then the user wallet signs (signTransaction, NOT signAndSend) and we self-submit.
+        setStatus("Approve in your wallet…");
+        const signed = await provider.signTransaction(vtx);
+
+        // 7) Self-submit via the proxied connection
+        setStatus("Sending…");
+        const sig = await connection.sendRawTransaction(signed.serialize(), { skipPreflight: true });
+
+        setStatus("");
+        status.innerHTML =
+          '🎉 Launched! <a href="https://solscan.io/tx/' + sig + '" target="_blank" rel="noopener" style="color:var(--cyan)">View tx ↗</a> · ' +
+          '<a href="https://pump.fun/' + mint.publicKey.toBase58() + '" target="_blank" rel="noopener" style="color:var(--cyan)">View coin ↗</a>';
+        loadFeed();
+      } catch (e) {
+        const msg = String(e.message || e);
+        if (msg.includes("rpc_not_configured") || msg.includes("503")) {
+          setStatus("Launchpad isn't fully configured yet (RPC pending). Try again once setup is done.", false);
+          $("notReadyNote").style.display = "block";
+        } else {
+          setStatus("Launch failed: " + msg, false);
+        }
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function loadFeed() {
+      try {
+        const { launches } = await postJSON("/api/launch", { action: "feed" });
+        if (!launches || !launches.length) return;
+        const list = $("feedList");
+        list.innerHTML = "";
+        launches.slice(0, 8).forEach((l) => {
+          const li = document.createElement("li");
+          li.innerHTML = '<a href="https://pump.fun/' + l.mint + '" target="_blank" rel="noopener" style="color:var(--cyan)">' +
+            (l.name || "Token") + " ($" + (l.symbol || "?") + ")</a>";
+          list.appendChild(li);
+        });
+        $("feedWrap").style.display = "block";
+      } catch (e) { /* feed optional */ }
+    }
+
+    $("connectBtn").addEventListener("click", connect);
+    $("launchBtn").addEventListener("click", launch);
+    loadFeed();
+  </script>
+</body>
+</html>

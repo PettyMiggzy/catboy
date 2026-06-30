@@ -75,6 +75,36 @@ handled gracefully ("already on the list").
   services (Formspree) prohibit collecting crypto wallet addresses, which is
   why the self-hosted Vercel function is the default.
 
+### Launchpad (non-custodial)
+
+A thin, non-custodial layer over pump.fun infrastructure (BUILD SPEC).
+
+- `api/solrpc.js` — secure RPC proxy. Set `SOLANA_RPC` (your Helius/Alchemy/
+  QuickNode key) in Vercel env; the browser only calls `/api/solrpc` so the key
+  never ships. **Do this first.**
+- `api/launch.js` — 3 actions: `metadata` (→ pump.fun IPFS), `create`
+  (→ PumpPortal `trade-local`, returns the serialized deploy tx + records the
+  mint→dev_wallet mapping), `feed` (recent launches). Registry uses the existing
+  Neon Postgres (`DATABASE_URL`).
+- `launch.html` — in-browser deploy: the mint keypair is generated client-side
+  and never leaves the browser; the deploy tx is multi-signer (mint keypair +
+  user wallet via `signTransaction`, then self-submitted). Simulates before
+  signing. Bring-your-own Phantom for now; seedless onboarding is a next phase.
+
+**Env vars to set in Vercel:** `SOLANA_RPC` (required to enable deploys).
+Until it's set, the RPC proxy returns 503 and the page shows a "not configured"
+note.
+
+**Not yet built (need keys + a non-Vercel host):**
+- Trading terminal with Jupiter `platformFee` → referral account (the fee source).
+- Settlement script (cron/Railway, holds `REFERRAL_ACCOUNT` + `SETTLEMENT_SECRET_KEY`)
+  that pays each launcher their 50% off-chain. **Never deploy this on Vercel.**
+- Seedless wallets (Phantom Connect / Privy).
+
+**Design rules enforced:** non-custodial only; no approve/delegate/setAuthority;
+no raw multi-recipient SOL transfers in user-signed txs (anti-Blowfish); fees via
+Jupiter `platformFee`, single-recipient payments split off-chain.
+
 ### Pages
 
 - `index.html` — home: hero, lore, journey, **art wall** (lightbox gallery),

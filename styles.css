@@ -449,6 +449,31 @@ body.splash-open { overflow: hidden; }
 .meme-thumbs img.sel { border-color: var(--cyan); opacity: 1; box-shadow: 0 0 12px rgba(25,224,255,0.4); }
 .meme-actions { display: flex; gap: 0.7rem; flex-wrap: wrap; margin-top: 0.8rem; }
 
+/* ---------- Launchpad ---------- */
+.launch-wallet { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
+.launch-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+.meme-controls input[type=number],
+.meme-controls input[type=file] {
+  background: rgba(0,0,0,0.4); border: 1px solid var(--border); border-radius: 10px;
+  padding: 0.7rem 0.9rem; color: var(--ink); font-family: "Rajdhani", sans-serif; font-size: 0.95rem; width: 100%;
+}
+.meme-controls input[type=file]::file-selector-button {
+  background: var(--card); border: 1px solid var(--border); color: var(--ink); border-radius: 8px;
+  padding: 0.35rem 0.8rem; margin-right: 0.7rem; cursor: pointer; font-family: "Orbitron", sans-serif; font-size: 0.72rem;
+}
+.launch-info { width: 100%; }
+.launch-info h3 { font-family: "Orbitron", sans-serif; font-size: 1rem; margin-bottom: 0.6rem; }
+.launch-info b { color: var(--ink); }
+.launch-steps { list-style: none; display: grid; gap: 0.5rem; }
+.launch-steps li { color: var(--muted); font-size: 0.92rem; }
+.launch-info ol.launch-steps { counter-reset: ls; }
+.launch-info ol.launch-steps li { padding-left: 1.6rem; position: relative; }
+.launch-info ol.launch-steps li::before {
+  content: counter(ls); counter-increment: ls; position: absolute; left: 0; top: 0;
+  color: #07030f; background: var(--grad); width: 1.2rem; height: 1.2rem; border-radius: 50%;
+  display: grid; place-items: center; font-family: "Orbitron", sans-serif; font-weight: 700; font-size: 0.7rem;
+}
+
 /* ---------- Saga (alternating timeline) ---------- */
 .saga { display: grid; gap: clamp(3rem, 7vw, 5.5rem); }
 .saga-row { display: grid; grid-template-columns: 1fr 1fr; gap: 2.5rem; align-items: center; }
@@ -549,6 +574,7 @@ body.splash-open { overflow: hidden; }
   .lives-layout { grid-template-columns: 1fr; }
   .saga-row, .saga-row:nth-child(even) .saga-art { grid-template-columns: 1fr; order: 0; }
   .meme-wrap { grid-template-columns: 1fr; }
+  .launch-2col { grid-template-columns: 1fr; }
   .nav-links { display: none; }
 }
 @media (max-width: 540px) {
