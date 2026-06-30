@@ -79,7 +79,7 @@
       <div class="dg-side">
         <div class="trench-card">
           <div class="tok-head">
-            <img id="tokImg" alt="" />
+            <img id="tokImg" alt="" onerror="this.onerror=null;this.src='assets/solana.png'" />
             <div><h3 id="tokName">—</h3><span id="tokSymbol" class="muted-note" style="margin:0;"></span></div>
           </div>
           <div class="stat-rows">
@@ -175,7 +175,7 @@
         let d; try { d = JSON.parse(ev.data); } catch { return; }
         if (!d || !d.mint) return;
         if (d.txType === "create") {
-          news.set(d.mint, { mint: d.mint, name: d.name, symbol: d.symbol, mcap: d.marketCapSol || 0, created: Date.now() });
+          news.set(d.mint, { mint: d.mint, name: d.name, symbol: d.symbol, uri: d.uri, mcap: d.marketCapSol || 0, created: Date.now() });
           trackTrades(d.mint); sweep();
         } else if ((d.txType === "buy" || d.txType === "sell") && news.has(d.mint)) {
           if (d.marketCapSol) news.get(d.mint).mcap = d.marketCapSol;
@@ -212,7 +212,10 @@
       const b = document.createElement("button");
       b.className = "coin-card";
       const sym = t.symbol ? "$" + t.symbol : t.mint.slice(0, 4) + "…" + t.mint.slice(-4);
-      const av = t.icon ? '<img src="' + t.icon + '" onerror="this.style.visibility=\'hidden\'" />' : '<span class="cc-av">' + (t.symbol ? t.symbol[0] : "?").toUpperCase() + '</span>';
+      const imgSrc = t.icon || (t.uri ? "/api/tokenimg?uri=" + encodeURIComponent(t.uri) : "");
+      const av = imgSrc
+        ? '<img class="cc-pic" src="' + imgSrc + '" loading="lazy" onerror="this.onerror=null;this.src=\'assets/solana.png\'" />'
+        : '<span class="cc-av">' + (t.symbol ? t.symbol[0] : "?").toUpperCase() + '</span>';
       b.innerHTML =
         '<div class="cc-top">' + av + '<div class="cc-id"><span class="cc-sym">' + sym + '</span><span class="cc-name">' + ((t.name || "").slice(0, 18) || "—") + '</span></div></div>' +
         '<div class="cc-stats"><span>' + (t.mcap ? t.mcap.toFixed(1) + "◎" : (t.mcapUsd ? fmtUsd(t.mcapUsd) : "—")) + '</span>' + (t.created ? '<span class="cc-age">' + ago(t.created) + '</span>' : '') + '</div>';
