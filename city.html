@@ -328,26 +328,47 @@
           x.fillStyle = col; x.font = "700 44px Rajdhani, sans-serif"; x.fillText("NINE LIVES SLOTS · WIN REAL NFTs ›", 512, 214);
         }
       }
-      function makeBillboard(px, pz, ry, h, kind) {
+      // billboards are neon-framed holo-screens on a mast that yaw to always face
+      // the viewer (readable from every orbit angle) — no more blank backs.
+      const faceCam = [];
+      const KIND_COL = { ad: 0x19e0ff, jackpot: 0xffd84d, casino: 0xffd84d, mint: 0xff3df0, flip: 0x19e0ff, arcade: 0x14f195 };
+      function makeBillboard(px, pz, h, kind, scale) {
         const cv = document.createElement("canvas"); cv.width = 1024; cv.height = 256; const x = cv.getContext("2d");
-        const tex = new THREE.CanvasTexture(cv); tex.wrapS = THREE.RepeatWrapping;
-        const bb = new THREE.Mesh(new THREE.PlaneGeometry(16, 4), new THREE.MeshBasicMaterial({ map: tex, transparent: true }));
-        bb.position.set(px, h, pz); bb.rotation.y = ry; scene.add(bb);
-        if (kind === "ad") { drawAd(x); tex.needsUpdate = true; bb.userData = { url: TG_URL }; adMeshes.push(bb); }
-        else if (kind === "jackpot") { bb.userData = { url: "casino.html", name: "JACKPOT" }; promoMeshes.push(bb); billboards.push({ x, cv, tex, jackpot: true }); }
-        else if (kind && PROMOS[kind]) { bb.userData = { url: PROMOS[kind].url, name: PROMOS[kind].head }; promoMeshes.push(bb); billboards.push({ x, cv, tex, kind, promo: PROMOS[kind] }); }
-        else billboards.push({ x, cv, tex, off: Math.random() * 1000, col: tints[(Math.random() * tints.length) | 0] });
+        const tex = new THREE.CanvasTexture(cv);
+        const s = scale || 1, W = 16 * s, H = 4 * s;
+        const colHex = KIND_COL[kind] || tints[(Math.random() * tints.length) | 0];
+        const col = new THREE.Color(typeof colHex === "string" ? colHex : colHex);
+        // fixed mast to the ground so the screen reads as mounted, not floating
+        const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.4, h, 8),
+          new THREE.MeshStandardMaterial({ color: 0x0b0820, metalness: 0.8, roughness: 0.35, emissive: col, emissiveIntensity: 0.12 }));
+        mast.position.set(px, h / 2, pz); scene.add(mast);
+        // yaw pivot at panel height — everything on it turns to face the camera
+        const pivot = new THREE.Group(); pivot.position.set(px, h, pz); scene.add(pivot);
+        const frame = new THREE.Mesh(new THREE.PlaneGeometry(W + 0.9, H + 0.9), new THREE.MeshBasicMaterial({ color: col }));
+        frame.position.z = -0.06; pivot.add(frame);
+        const back = new THREE.Mesh(new THREE.PlaneGeometry(W + 0.45, H + 0.45), new THREE.MeshBasicMaterial({ color: 0x05030c }));
+        back.position.z = -0.03; pivot.add(back);
+        const panel = new THREE.Mesh(new THREE.PlaneGeometry(W, H), new THREE.MeshBasicMaterial({ map: tex, transparent: true }));
+        pivot.add(panel);
+        // little glow bar under the screen for that jumbotron pop
+        const bar = new THREE.Mesh(new THREE.PlaneGeometry(W + 0.9, 0.28), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.85 }));
+        bar.position.set(0, -H / 2 - 0.5, 0); pivot.add(bar);
+        faceCam.push(pivot);
+
+        if (kind === "ad") { drawAd(x); tex.needsUpdate = true; panel.userData = { url: TG_URL }; adMeshes.push(panel); }
+        else if (kind === "jackpot") { panel.userData = { url: "casino.html", name: "JACKPOT" }; promoMeshes.push(panel); billboards.push({ x, cv, tex, jackpot: true }); }
+        else if (kind && PROMOS[kind]) { panel.userData = { url: PROMOS[kind].url, name: PROMOS[kind].head }; promoMeshes.push(panel); billboards.push({ x, cv, tex, kind, promo: PROMOS[kind] }); }
+        else billboards.push({ x, cv, tex, off: Math.random() * 1000, col: "#" + col.getHexString() });
       }
-      // marquees
-      makeBillboard(-44, 12, Math.PI / 2, 30); makeBillboard(46, -6, -Math.PI / 2, 38); makeBillboard(8, -50, 0, 34); makeBillboard(-20, 48, Math.PI, 28);
-      makeBillboard(60, 44, -Math.PI / 2, 20); makeBillboard(-58, -50, Math.PI / 2, 26);
+      // live jackpot ticker — the hero screen, big and central over the strip
+      makeBillboard(0, 40, 34, "jackpot", 1.5);
       // themed on-site promos (clickable → enter the activity)
-      makeBillboard(30, -46, 0.35, 26, "casino"); makeBillboard(-34, -40, -0.4, 30, "mint");
-      makeBillboard(-52, 30, Math.PI / 2, 18, "flip"); makeBillboard(52, -34, -Math.PI / 2, 32, "arcade");
-      // live jackpot ticker (big, front-and-center over the strip)
-      makeBillboard(0, 44, 0, 42, "jackpot");
+      makeBillboard(34, -40, 26, "casino", 1.15); makeBillboard(-38, -36, 30, "mint", 1.15);
+      makeBillboard(-50, 26, 20, "flip"); makeBillboard(50, 30, 24, "arcade");
       // "advertise here" slots (open Telegram)
-      makeBillboard(44, 30, -Math.PI / 2, 22, "ad"); makeBillboard(-46, -26, Math.PI / 2, 24, "ad"); makeBillboard(-8, 54, Math.PI, 19, "ad"); makeBillboard(40, 52, -Math.PI / 2, 16, "ad");
+      makeBillboard(44, -8, 22, "ad"); makeBillboard(-46, -6, 24, "ad"); makeBillboard(-16, 52, 19, "ad"); makeBillboard(20, 54, 18, "ad");
+      // ambient $CATBOY marquees
+      makeBillboard(-58, 46, 28); makeBillboard(60, -46, 30); makeBillboard(-62, -30, 22);
       const MARQUEE = "  $CATBOY   •   THE LEGEND EVOLVES   •   NOW ON SOLANA   •   NINE LIVES   ";
       function drawBillboards(t) {
         billboards.forEach((b) => {
@@ -596,6 +617,7 @@
         if (hovered) { hovered.userData.mat.emissiveIntensity = 1.4 + Math.sin(t * 6) * 0.3; hovered.userData.sign.scale.set(18, 5.6, 1); }
         // life
         stepVehicles(dt, t); stepPeds(dt, t); stepPlaza(dt, t); stepQueue(t); stepRain(dt); drawBillboards(t);
+        faceCam.forEach((p) => { p.rotation.y = Math.atan2(camera.position.x - p.position.x, camera.position.z - p.position.z); });
         air.forEach((c) => { c.userData.a += c.userData.sp * 0.01; c.position.set(Math.cos(c.userData.a) * c.userData.rad, c.userData.y, Math.sin(c.userData.a) * c.userData.rad); c.rotation.y = -c.userData.a; });
         beacon.rotation.y = t * 0.2; holo.position.y = 12 + Math.sin(t * 1.5) * 0.6; holo.material.opacity = 0.6 + Math.sin(t * 8) * 0.08;
         // lightning
