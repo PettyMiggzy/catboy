@@ -38,13 +38,13 @@ services:
         type: SECRET
       - key: SPACES_REGION
         scope: RUN_TIME
-        value: "nyc3"
+        value: "sfo2"
       - key: SPACES_BUCKET
         scope: RUN_TIME
-        value: "catboy-assets"
+        value: "catboychronic"
       - key: SPACES_ENDPOINT
         scope: RUN_TIME
-        value: "https://nyc3.digitaloceanspaces.com"
+        value: "https://sfo2.digitaloceanspaces.com"
       - key: SPACES_CDN
         scope: RUN_TIME
-        value: "https://catboy-assets.nyc3.cdn.digitaloceanspaces.com"
+        value: "https://catboychronic.sfo2.cdn.digitaloceanspaces.com"

@@ -11,7 +11,7 @@
 set -euo pipefail
 : "${SPACES_KEY:?set SPACES_KEY}"; : "${SPACES_SECRET:?set SPACES_SECRET}"
 : "${DO_API_TOKEN:?set DO_API_TOKEN}"; : "${VENICE_KEY:?set VENICE_KEY}"
-REGION="${REGION:-nyc3}"; BUCKET="${BUCKET:-catboy-assets}"
+REGION="${REGION:-sfo2}"; BUCKET="${BUCKET:-catboychronic}"
 ADMIN_TOKEN="${ADMIN_TOKEN:-$(openssl rand -hex 24)}"
 EP="https://$REGION.digitaloceanspaces.com"
 
