@@ -1,0 +1,50 @@
+# DigitalOcean App Platform spec — auto-deploys the Catboy backend on every push.
+# One-time: DO panel -> Apps -> Create App -> GitHub (this repo, branch main) ->
+# it detects this spec. Fill the SECRET env vars, deploy. After that every
+# `git push` to main auto-redeploys. See DEPLOY.md.
+name: catboy-backend
+region: nyc
+services:
+  - name: api
+    github:
+      repo: PettyMiggzy/catboy
+      branch: main
+      deploy_on_push: true
+    source_dir: server
+    environment_slug: node-js
+    run_command: npm start
+    http_port: 8080
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    health_check:
+      http_path: /health
+    routes:
+      - path: /
+    envs:
+      - key: VENICE_KEY
+        scope: RUN_TIME
+        type: SECRET
+      - key: ADMIN_TOKEN
+        scope: RUN_TIME
+        type: SECRET
+      - key: ALLOWED_ORIGIN
+        scope: RUN_TIME
+        value: "https://catboy-ecru.vercel.app"
+      - key: SPACES_KEY
+        scope: RUN_TIME
+        type: SECRET
+      - key: SPACES_SECRET
+        scope: RUN_TIME
+        type: SECRET
+      - key: SPACES_REGION
+        scope: RUN_TIME
+        value: "nyc3"
+      - key: SPACES_BUCKET
+        scope: RUN_TIME
+        value: "catboy-assets"
+      - key: SPACES_ENDPOINT
+        scope: RUN_TIME
+        value: "https://nyc3.digitaloceanspaces.com"
+      - key: SPACES_CDN
+        scope: RUN_TIME
+        value: "https://catboy-assets.nyc3.cdn.digitaloceanspaces.com"

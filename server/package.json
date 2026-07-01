@@ -1,0 +1,14 @@
+{
+  "name": "catboy-backend",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Catboy backend — Venice AI proxy + Spaces uploads + leaderboards",
+  "main": "index.js",
+  "scripts": { "start": "node index.js" },
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.637.0",
+    "cors": "^2.8.5",
+    "express": "^4.19.2"
+  }
+}
