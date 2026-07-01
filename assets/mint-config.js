@@ -4,9 +4,13 @@ window.CATBOY_MINT = {
   enabled: false,            // flip to true once the candy machine is live
   candyMachineId: "",        // sugar -> cache.json "candyMachine"
   collectionMint: "",        // sugar -> cache.json "collectionMint"
-  treasury: "",              // wallet that receives mint payments (solPayment destination)
   rpc: "/api/solrpc",        // same-origin RPC proxy (already live)
   total: 100,                // collection size
+  // Payment model: the candy guard mints with NO solPayment (free on-chain);
+  // the pack price is charged client-side and split 90/10 to the wallets in
+  // wallets.js (treasury / overhead) in the SAME transaction. Deploy the
+  // candy machine WITHOUT a solPayment guard so this split is authoritative.
+  treasury: (window.CATBOY_WALLETS && window.CATBOY_WALLETS.treasury) || "",
 
   // Tiered "loot box" packs — different price, different odds of each rarity.
   // Odds are percentages and must add up to 100 per pack. At launch each pack

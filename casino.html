@@ -198,6 +198,7 @@
     <p class="footer-credit">A <a href="https://t.me/kingpetty317" target="_blank" rel="noopener">King Petty</a> Build</p>
   </footer>
 
+  <script src="assets/wallets.js"></script>
   <script src="script.js"></script>
   <script>
   (function () {
@@ -334,8 +335,26 @@
     $("spinBtn").onclick = spin;
     $("autoBtn").onclick = async () => { for (let i = 0; i < 10 && credits >= 1; i++) { await spin(); await new Promise((r) => setTimeout(r, 250)); } };
 
-    // free credits (demo — no wallet or money needed until launch)
-    $("buyBtn").onclick = () => {
+    // credit purchase — free demo now; real 90/10 split payment at launch
+    const CREDIT_PACK = { credits: 100, sol: 0.1 };   // launch pricing
+    async function payWithSplit(totalSol) {
+      const p = (window.solana && window.solana.isPhantom) ? window.solana : (window.solflare || window.backpack || null);
+      if (!p) throw new Error("no wallet");
+      const r = await p.connect(); const from = (r && r.publicKey ? r.publicKey : p.publicKey);
+      const web3 = await import("https://esm.sh/@solana/web3.js@1.95.3");
+      const conn = new web3.Connection(location.origin + "/api/solrpc", "confirmed");
+      const tx = new web3.Transaction();
+      window.CATBOY_PAY.splitSol(totalSol).forEach((l) => { if (l.lamports > 0) tx.add(web3.SystemProgram.transfer({ fromPubkey: new web3.PublicKey(from), toPubkey: new web3.PublicKey(l.to), lamports: l.lamports })); });
+      tx.feePayer = new web3.PublicKey(from); tx.recentBlockhash = (await conn.getLatestBlockhash()).blockhash;
+      const sig = await p.signAndSendTransaction(tx);
+      await conn.confirmTransaction(sig.signature || sig, "confirmed");
+    }
+    $("buyBtn").onclick = async () => {
+      if (window.CATBOY_LAUNCHED) {
+        try { flash("Approve the " + CREDIT_PACK.sol + " SOL payment…"); await payWithSplit(CREDIT_PACK.sol); setCredits(credits + CREDIT_PACK.credits); flash("+" + CREDIT_PACK.credits + " credits! 90% to treasury, 10% to ops. Good luck 🐾"); }
+        catch (e) { flash("Payment cancelled."); }
+        return;
+      }
       setCredits(credits + 50);
       flash("+50 free credits added! Everything's free until launch — play all you want.");
     };

@@ -86,6 +86,7 @@
     <p class="footer-credit">A <a href="https://t.me/kingpetty317" target="_blank" rel="noopener">King Petty</a> Build</p>
   </footer>
 
+  <script src="assets/wallets.js"></script>
   <script src="assets/mint-config.js"></script>
   <script src="script.js"></script>
   <script type="module">
@@ -254,23 +255,24 @@
         const { createUmi } = await import("https://esm.sh/@metaplex-foundation/umi-bundle-defaults@0.9.2");
         const { mplCandyMachine, fetchCandyMachine, mintV2 } = await import("https://esm.sh/@metaplex-foundation/mpl-candy-machine@6.0.1");
         const { walletAdapterIdentity } = await import("https://esm.sh/@metaplex-foundation/umi-signer-wallet-adapters@0.9.2");
-        const { generateSigner, transactionBuilder, some, publicKey } = await import("https://esm.sh/@metaplex-foundation/umi@0.9.2");
-        const { setComputeUnitLimit } = await import("https://esm.sh/@metaplex-foundation/mpl-toolbox@0.9.4");
+        const { generateSigner, transactionBuilder, some, publicKey, lamports } = await import("https://esm.sh/@metaplex-foundation/umi@0.9.2");
+        const { setComputeUnitLimit, transferSol } = await import("https://esm.sh/@metaplex-foundation/mpl-toolbox@0.9.4");
         const { TokenStandard } = await import("https://esm.sh/@metaplex-foundation/mpl-token-metadata@3.2.1");
         const umi = createUmi(location.origin + C.rpc).use(mplCandyMachine()).use(walletAdapterIdentity(wallet));
         const cm = await fetchCandyMachine(umi, publicKey(C.candyMachineId));
         const nftMint = generateSigner(umi);
+        // hard-coded 90/10 revenue split (treasury / overhead), charged in-tx
+        const legs = window.CATBOY_PAY.splitSol(sel.priceSol);
         status.textContent = "Approve the " + sel.priceSol + " SOL mint in your wallet…";
-        await transactionBuilder()
-          .add(setComputeUnitLimit(umi, { units: 800000 }))
-          .add(mintV2(umi, {
-            candyMachine: cm.publicKey, nftMint,
-            collectionMint: publicKey(C.collectionMint), collectionUpdateAuthority: cm.authority,
-            tokenStandard: TokenStandard.NonFungible, candyGuard: cm.mintAuthority,
-            group: sel.guardGroup ? some(sel.guardGroup) : undefined,
-            mintArgs: { solPayment: some({ destination: publicKey(C.treasury) }) },
-          }))
-          .sendAndConfirm(umi);
+        let tx = transactionBuilder().add(setComputeUnitLimit(umi, { units: 800000 }));
+        legs.forEach((l) => { if (l.lamports > 0) tx = tx.add(transferSol(umi, { destination: publicKey(l.to), amount: lamports(l.lamports) })); });
+        tx = tx.add(mintV2(umi, {
+          candyMachine: cm.publicKey, nftMint,
+          collectionMint: publicKey(C.collectionMint), collectionUpdateAuthority: cm.authority,
+          tokenStandard: TokenStandard.NonFungible, candyGuard: cm.mintAuthority,
+          group: sel.guardGroup ? some(sel.guardGroup) : undefined,
+        }));
+        await tx.sendAndConfirm(umi);
         status.style.color = "var(--cyan)"; status.textContent = "Minted from " + sel.name + "! Check your wallet.";
       } catch (e) { status.style.color = "var(--magenta)"; status.textContent = "Mint failed: " + (e.message || e); }
     }
