@@ -43,32 +43,39 @@
   <section class="page-hero" style="padding-bottom:0.5rem;">
     <div class="page-hero-inner">
       <a href="market.html" class="back-link">&lsaquo; Back to Marketplace</a>
-      <span class="eyebrow" style="display:block;margin-top:1rem;">Mint</span>
-      <h1>Mint a <span class="grad">Catboy</span></h1>
-      <p>Random reveal from the 100-piece Nine Lives Collection. One cat, nine lives — which one's yours?</p>
+      <span class="eyebrow" style="display:block;margin-top:1rem;">Loot Box Mint <span class="demo-pill" style="margin-left:.5rem;">FREE DEMO</span></span>
+      <h1>Open a <span class="grad">Catboy Pack</span></h1>
+      <p>Three packs, three price points, wildly different odds. Cheap pack = mostly floor cats with a lotto shot at glory. Whale pack = fat Epic/Legendary odds. Pick your risk, rip it open. <b>Free to open right now</b> — real SOL packs go live at launch.</p>
     </div>
   </section>
 
+  <!-- PACK SELECTOR -->
   <section class="section" style="padding-top:1rem;">
-    <div class="mint-wrap">
-      <div class="mint-card">
-        <img src="assets/nft/collection/003.jpg" alt="Catboy NFT" class="mint-art" id="mintArt" />
-        <div class="mint-body">
-          <div class="stat-rows">
-            <div><span>Price</span><b id="mPrice">— SOL</b></div>
-            <div><span>Minted</span><b id="mSupply">— / —</b></div>
-            <div><span>Network</span><b>Solana</b></div>
-          </div>
-          <div class="mint-qty">
-            <button class="btn btn-ghost btn-sm" id="qMinus" type="button">−</button>
-            <span id="qVal">1</span>
-            <button class="btn btn-ghost btn-sm" id="qPlus" type="button">+</button>
-          </div>
-          <button class="btn btn-primary" id="mintBtn" type="button" style="width:100%;">Connect Wallet</button>
-          <p class="form-status" id="mintStatus" role="status" aria-live="polite"></p>
-          <p class="muted-note" style="text-align:center;">Non-custodial — you sign every mint yourself. Nothing here is financial advice.</p>
-        </div>
+    <div class="pack-grid" id="packGrid"></div>
+  </section>
+
+  <!-- OPEN STAGE -->
+  <section class="section" style="padding-top:0;">
+    <div class="open-stage">
+      <div class="reveal-frame" id="revealFrame">
+        <img src="assets/nft/collection/003.jpg" alt="Catboy NFT" class="reveal-img" id="revealImg" />
+        <span class="win-burst reveal-burst" id="revealBurst" hidden>LEGENDARY</span>
       </div>
+      <div class="open-meta">
+        <span class="nft-badge" id="revealBadge" hidden></span>
+        <h3 id="revealName">Rip a pack to reveal your cat</h3>
+        <p class="muted-note" id="revealTraits" style="margin:.2rem 0 0;"></p>
+      </div>
+      <div class="open-controls">
+        <div class="open-price">
+          <span id="openPackName">Nine Lives Pack</span>
+          <b id="openPackPrice">FREE DEMO</b>
+        </div>
+        <button class="btn btn-primary slot-spin" id="openBtn" type="button" style="width:100%;">Open Pack · FREE</button>
+      </div>
+      <p class="form-status" id="mintStatus" role="status" aria-live="polite"></p>
+      <div class="pulls" id="pulls" aria-label="Your recent pulls"></div>
+      <p class="muted-note" style="text-align:center;">Demo pulls are for fun and preview real rarity odds. At launch, packs mint on Solana for the prices shown — you sign every mint yourself, non-custodial. Not financial advice.</p>
     </div>
   </section>
 
@@ -83,86 +90,139 @@
   <script type="module">
     const C = window.CATBOY_MINT || {};
     const $ = (id) => document.getElementById(id);
-    const btn = $("mintBtn"), status = $("mintStatus");
-    let qty = 1, wallet = null;
+    const status = $("mintStatus"), openBtn = $("openBtn");
+    const P = "assets/nft/collection/";
+    const TIERS = ["Legendary", "Epic", "Rare", "Common"];
+    const TIER_COL = { Legendary: "#ffd84d", Epic: "#ff3df0", Rare: "#19e0ff", Common: "#b9b2cf" };
+    const PACKS = C.packs || [];
+    let sel = PACKS[1] || PACKS[0] || null;   // default: middle pack
+    let items = [], opening = false, wallet = null;
 
-    $("mPrice").textContent = (C.priceSol ?? 0) + " SOL";
-    $("mSupply").textContent = "0 / " + (C.total ?? 100);
+    fetch(P + "manifest.json").then((r) => r.json()).then((d) => { items = d; }).catch(() => {});
 
-    // rotate preview art
-    const previews = ["001", "016", "003", "041", "004", "025"];
-    let pi = 0; setInterval(() => { pi = (pi + 1) % previews.length; $("mintArt").src = "assets/nft/collection/" + previews[pi] + ".jpg"; }, 2500);
-
-    $("qMinus").onclick = () => { qty = Math.max(1, qty - 1); $("qVal").textContent = qty; };
-    $("qPlus").onclick = () => { qty = Math.min(10, qty + 1); $("qVal").textContent = qty; };
-
-    function getProvider() {
-      return (window.solana && window.solana.isPhantom) ? window.solana : (window.solflare || window.backpack || (window.xnft && window.xnft.solana) || null);
+    // ---- render pack cards ----
+    function oddsBars(o) {
+      return TIERS.map((t) => {
+        const v = o[t] || 0;
+        return `<div class="odds-row"><span class="odds-lbl" style="color:${TIER_COL[t]}">${t}</span>
+          <span class="odds-bar"><span class="odds-fill" style="width:${v}%;background:${TIER_COL[t]};box-shadow:0 0 8px ${TIER_COL[t]}"></span></span>
+          <span class="odds-pct">${v}%</span></div>`;
+      }).join("");
     }
-    async function connect() {
-      const p = getProvider();
-      if (!p) { status.style.color = "var(--magenta)"; status.textContent = "No Solana wallet found — install Phantom or use the Wallet page."; return null; }
-      const r = await p.connect(); wallet = p;
-      const a = (r && r.publicKey ? r.publicKey : p.publicKey).toString();
-      btn.textContent = C.enabled ? ("Mint " + qty + " · " + (C.priceSol * qty).toFixed(2) + " SOL") : "Mint (opens at launch)";
-      status.style.color = "var(--cyan)"; status.textContent = "Connected " + a.slice(0, 4) + "…" + a.slice(-4);
-      return a;
-    }
+    $("packGrid").innerHTML = PACKS.map((p) => `
+      <button class="pack-card${sel && p.id === sel.id ? " sel" : ""}" data-id="${p.id}" type="button">
+        <div class="pack-emoji">${p.emoji}</div>
+        <div class="pack-name">${p.name}</div>
+        <div class="pack-price">${p.priceSol} SOL <span class="pack-free">free demo</span></div>
+        <p class="pack-blurb">${p.blurb}</p>
+        <div class="odds">${oddsBars(p.odds)}</div>
+      </button>`).join("");
 
-    async function updateSupply() {
-      if (!C.enabled || !C.candyMachineId) return;
-      try {
-        const { createUmi } = await import("https://esm.sh/@metaplex-foundation/umi-bundle-defaults@0.9.2");
-        const { mplCandyMachine, fetchCandyMachine } = await import("https://esm.sh/@metaplex-foundation/mpl-candy-machine@6.0.1");
-        const { publicKey } = await import("https://esm.sh/@metaplex-foundation/umi@0.9.2");
-        const umi = createUmi(location.origin + C.rpc).use(mplCandyMachine());
-        const cm = await fetchCandyMachine(umi, publicKey(C.candyMachineId));
-        $("mSupply").textContent = Number(cm.itemsRedeemed) + " / " + Number(cm.data.itemsAvailable);
-      } catch (e) { console.warn("supply read failed", e); }
+    function selectPack(id) {
+      sel = PACKS.find((p) => p.id === id) || sel;
+      document.querySelectorAll(".pack-card").forEach((c) => c.classList.toggle("sel", c.dataset.id === sel.id));
+      $("openPackName").textContent = sel.name;
+      $("openPackPrice").textContent = "FREE DEMO";
+      openBtn.textContent = "Open " + sel.name + " · FREE";
     }
+    document.querySelectorAll(".pack-card").forEach((c) => c.onclick = () => selectPack(c.dataset.id));
+    if (sel) selectPack(sel.id);
 
-    async function doMint() {
-      if (!C.enabled || !C.candyMachineId) {
-        status.style.color = "var(--cyan)";
-        status.textContent = "Mint opens at token launch — join the allowlist for guaranteed access.";
-        return;
+    // ---- weighted demo reveal ----
+    function rollTier(odds) {
+      const r = Math.random() * 100; let acc = 0;
+      for (const t of TIERS) { acc += odds[t] || 0; if (r < acc) return t; }
+      return "Common";
+    }
+    function pullFrom(tier) {
+      const pool = items.filter((n) => n.tier === tier);
+      if (!pool.length) return items[(Math.random() * items.length) | 0] || { name: "Catboy", tier, file: "001.jpg", traits: {} };
+      return pool[(Math.random() * pool.length) | 0];
+    }
+    const randFile = () => (items.length ? items[(Math.random() * items.length) | 0].file : "003.jpg");
+
+    async function openPack() {
+      if (opening || !sel) return;
+      if (!items.length) { status.style.color = "var(--magenta)"; status.textContent = "Collection still loading — one sec."; return; }
+      opening = true; openBtn.disabled = true;
+      $("revealBadge").hidden = true; $("revealBurst").hidden = true; $("revealName").textContent = "Opening…"; $("revealTraits").textContent = "";
+      $("revealFrame").classList.remove("legendary", "epic"); status.textContent = "";
+
+      const tier = rollTier(sel.odds), prize = pullFrom(tier);
+      const img = $("revealImg");
+      // spin the reel — cycle random art, decelerating
+      await new Promise((res) => {
+        let n = 0; const total = 22;
+        const tick = () => { img.src = P + randFile(); n++; if (n >= total) return res(); setTimeout(tick, 60 + n * 9); };
+        tick();
+      });
+      img.src = P + prize.file;
+
+      const badge = $("revealBadge");
+      badge.textContent = tier; badge.className = "nft-badge b-" + tier; badge.hidden = false;
+      $("revealName").textContent = prize.name;
+      const tr = prize.traits ? Object.values(prize.traits).slice(0, 4).join(" · ") : "";
+      $("revealTraits").textContent = tr;
+      if (tier === "Legendary" || tier === "Epic") {
+        const burst = $("revealBurst"); burst.textContent = tier.toUpperCase() + "!"; burst.style.color = TIER_COL[tier]; burst.hidden = false;
+        $("revealFrame").classList.add(tier.toLowerCase());
       }
-      if (!wallet) { if (!(await connect())) return; }
+      const flavor = { Legendary: "GODLIKE PULL. Frame it, king. 👑", Epic: "Big pull — you’re so back.", Rare: "Solid. Not floor, respectable.", Common: "Floor cat. It happens. Rip another." }[tier];
+      status.style.color = "var(--cyan)"; status.textContent = flavor;
+      pushPull(prize, tier);
+      opening = false; openBtn.disabled = false;
+    }
+
+    // ---- your recent pulls (localStorage) ----
+    function pushPull(n, tier) {
+      let arr = []; try { arr = JSON.parse(localStorage.getItem("catboy_pulls") || "[]"); } catch {}
+      arr.unshift({ file: n.file, tier, name: n.name }); arr = arr.slice(0, 12);
+      localStorage.setItem("catboy_pulls", JSON.stringify(arr)); renderPulls(arr);
+    }
+    function renderPulls(arr) {
+      if (!arr.length) { $("pulls").innerHTML = ""; return; }
+      $("pulls").innerHTML = '<span class="pulls-lbl">Your pulls</span>' + arr.map((p) =>
+        `<img src="${P + p.file}" class="pull-thumb b-${p.tier}" title="${p.name} · ${p.tier}" alt="${p.name}">`).join("");
+    }
+    try { renderPulls(JSON.parse(localStorage.getItem("catboy_pulls") || "[]")); } catch {}
+
+    openBtn.addEventListener("click", () => {
+      if (C.enabled && C.candyMachineId) return doRealMint();   // real SOL mint at launch
+      openPack();                                                // free demo reveal
+    });
+
+    // ---- real on-chain mint (activates at launch when C.enabled) ----
+    function getProvider() { return (window.solana && window.solana.isPhantom) ? window.solana : (window.solflare || window.backpack || (window.xnft && window.xnft.solana) || null); }
+    async function doRealMint() {
+      if (!sel) return;
+      const p = getProvider();
+      if (!p) { status.style.color = "var(--magenta)"; status.textContent = "No Solana wallet found — install Phantom or use the Wallet page."; return; }
       try {
-        status.style.color = "var(--muted)"; status.textContent = "Preparing mint…";
+        if (!wallet) { await p.connect(); wallet = p; }
+        status.style.color = "var(--muted)"; status.textContent = "Preparing " + sel.name + "…";
         const { createUmi } = await import("https://esm.sh/@metaplex-foundation/umi-bundle-defaults@0.9.2");
         const { mplCandyMachine, fetchCandyMachine, mintV2 } = await import("https://esm.sh/@metaplex-foundation/mpl-candy-machine@6.0.1");
         const { walletAdapterIdentity } = await import("https://esm.sh/@metaplex-foundation/umi-signer-wallet-adapters@0.9.2");
         const { generateSigner, transactionBuilder, some, publicKey } = await import("https://esm.sh/@metaplex-foundation/umi@0.9.2");
         const { setComputeUnitLimit } = await import("https://esm.sh/@metaplex-foundation/mpl-toolbox@0.9.4");
         const { TokenStandard } = await import("https://esm.sh/@metaplex-foundation/mpl-token-metadata@3.2.1");
-
         const umi = createUmi(location.origin + C.rpc).use(mplCandyMachine()).use(walletAdapterIdentity(wallet));
         const cm = await fetchCandyMachine(umi, publicKey(C.candyMachineId));
-        for (let i = 0; i < qty; i++) {
-          status.textContent = "Minting " + (i + 1) + " of " + qty + " — approve in your wallet…";
-          const nftMint = generateSigner(umi);
-          await transactionBuilder()
-            .add(setComputeUnitLimit(umi, { units: 800000 }))
-            .add(mintV2(umi, {
-              candyMachine: cm.publicKey,
-              nftMint,
-              collectionMint: publicKey(C.collectionMint),
-              collectionUpdateAuthority: cm.authority,
-              tokenStandard: TokenStandard.NonFungible,
-              candyGuard: cm.mintAuthority,
-              mintArgs: { solPayment: some({ destination: publicKey(C.treasury) }) },
-            }))
-            .sendAndConfirm(umi);
-        }
-        status.style.color = "var(--cyan)"; status.textContent = "Minted " + qty + " Catboy" + (qty > 1 ? "s" : "") + "! Check your wallet. 🐾".replace("🐾", "");
-        updateSupply();
+        const nftMint = generateSigner(umi);
+        status.textContent = "Approve the " + sel.priceSol + " SOL mint in your wallet…";
+        await transactionBuilder()
+          .add(setComputeUnitLimit(umi, { units: 800000 }))
+          .add(mintV2(umi, {
+            candyMachine: cm.publicKey, nftMint,
+            collectionMint: publicKey(C.collectionMint), collectionUpdateAuthority: cm.authority,
+            tokenStandard: TokenStandard.NonFungible, candyGuard: cm.mintAuthority,
+            group: sel.guardGroup ? some(sel.guardGroup) : undefined,
+            mintArgs: { solPayment: some({ destination: publicKey(C.treasury) }) },
+          }))
+          .sendAndConfirm(umi);
+        status.style.color = "var(--cyan)"; status.textContent = "Minted from " + sel.name + "! Check your wallet.";
       } catch (e) { status.style.color = "var(--magenta)"; status.textContent = "Mint failed: " + (e.message || e); }
     }
-
-    btn.addEventListener("click", async () => { if (!wallet) { await connect(); } else { doMint(); } });
-    if (!C.enabled) { btn.textContent = "Connect Wallet"; }
-    updateSupply();
   </script>
 </body>
 </html>
