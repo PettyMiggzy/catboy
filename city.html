@@ -41,7 +41,7 @@
   <div class="ui" id="title"><h1>CATBOY CITY</h1><p>Click a tower to enter · drag to look</p></div>
   <div class="ui" id="hover"></div>
   <div class="ui" id="hint">Drag to orbit · scroll / pinch to zoom</div>
-  <div id="bar"><button id="streetBtn" type="button">Street view</button><a href="index.html">Enter classic site &rsaquo;</a></div>
+  <div id="bar"><button id="streetBtn" type="button">Walk</button><button id="driveBtn" type="button">Drive</button><button id="skyBtn" type="button" style="display:none;">Sky view</button><a href="index.html">Enter classic site &rsaquo;</a></div>
   <div id="fallback"><div><h1 style="font-family:Orbitron">3D not supported here</h1><p style="margin:1rem 0">Your device/browser couldn't start WebGL.</p><a href="index.html">Enter the classic site &rsaquo;</a></div></div>
 
   <script type="importmap">
@@ -73,8 +73,8 @@
       const tints = ["#9945ff", "#14f195", "#19e0ff", "#a86bff", "#00e0a8"]; // Solana Tron palette
 
       const canvas = document.getElementById("c");
-      const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-      renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+      const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
+      renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
       renderer.setSize(innerWidth, innerHeight);
       renderer.outputColorSpace = THREE.SRGBColorSpace;
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -101,7 +101,7 @@
 
       // wet reflective street
       const mirror = new Reflector(new THREE.PlaneGeometry(900, 900), {
-        textureWidth: 1536, textureHeight: 1536, color: 0x6a6588,
+        textureWidth: 512, textureHeight: 512, color: 0x6a6588,
       });
       mirror.rotation.x = -Math.PI / 2; mirror.position.y = 0.01; scene.add(mirror);
 
@@ -601,7 +601,7 @@
       // bloom
       const composer = new EffectComposer(renderer);
       composer.addPass(new RenderPass(scene, camera));
-      const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.72, 0.62, 0.26); composer.addPass(bloom);
+      const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.72, 0.62, 0.26); composer.addPass(bloom);
 
       // interaction (nav)
       const ray = new THREE.Raycaster(), pointer = new THREE.Vector2();
@@ -619,49 +619,89 @@
         const a = ray.intersectObjects(adMeshes, false)[0]; if (a) window.open(a.object.userData.url, "_blank");
       });
 
-      // street view + WASD
+      // ---- sky / walk / drive modes ----
       const kb = {};
       addEventListener("keydown", (e) => kb[e.key.toLowerCase()] = true);
       addEventListener("keyup", (e) => kb[e.key.toLowerCase()] = false);
-      let street = false;
-      document.getElementById("streetBtn").addEventListener("click", () => {
-        street = !street;
-        controls.autoRotate = !street;
-        if (street) { camera.position.set(STEP * 1.6 + 2.2, 3.5, 72); controls.target.set(STEP * 1.6 + 2.2, 5, 0); controls.minDistance = 1; controls.maxPolarAngle = Math.PI * 0.62; document.querySelector("#hint").textContent = "WASD to walk · drag to look · scroll to zoom"; document.getElementById("streetBtn").textContent = "Sky view"; }
-        else { camera.position.set(0, 48, 104); controls.target.set(0, 16, 0); controls.minDistance = 4; controls.maxPolarAngle = Math.PI * 0.49; document.querySelector("#hint").textContent = "Drag to orbit · scroll / pinch to zoom"; document.getElementById("streetBtn").textContent = "Street view"; }
-      });
+      const hintEl = document.querySelector("#hint"), streetBtn = document.getElementById("streetBtn"),
+        driveBtn = document.getElementById("driveBtn"), skyBtn = document.getElementById("skyBtn");
+      // player car (only shown while driving)
+      const playerCar = makeCar("car", 0x19e0ff); playerCar.visible = false; scene.add(playerCar);
+      let mode = "sky", heading = Math.PI, speed = 0;
+      const clamp = (v, l) => Math.max(-l, Math.min(l, v));
+      function setMode(m) {
+        mode = m; controls.autoRotate = (m === "sky"); controls.enabled = (m !== "drive");
+        playerCar.visible = (m === "drive");
+        streetBtn.style.display = (m === "walk") ? "none" : "";
+        driveBtn.style.display = (m === "drive") ? "none" : "";
+        skyBtn.style.display = (m === "sky") ? "none" : "";
+        if (m === "sky") { camera.position.set(0, 48, 104); controls.target.set(0, 16, 0); controls.minDistance = 4; controls.maxDistance = 190; controls.maxPolarAngle = Math.PI * 0.49; hintEl.textContent = "Drag to orbit · scroll / pinch to zoom"; }
+        else if (m === "walk") { camera.position.set(6, 3.4, 80); controls.target.set(6, 4, 0); controls.minDistance = 1; controls.maxPolarAngle = Math.PI * 0.62; hintEl.textContent = "WASD / arrows to walk · Shift to run · drag to look"; }
+        else if (m === "drive") { heading = Math.PI; speed = 0; playerCar.position.set(6, 0, 80); playerCar.rotation.y = heading; hintEl.textContent = "W/S to drive · A/D to steer · Shift to boost"; }
+      }
+      streetBtn.addEventListener("click", () => setMode("walk"));
+      driveBtn.addEventListener("click", () => setMode("drive"));
+      skyBtn.addEventListener("click", () => setMode("sky"));
+
       const fwd = new THREE.Vector3(), rightV = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0), move = new THREE.Vector3();
-      function walk() {
+      function walk(dt) {
         move.set(0, 0, 0); camera.getWorldDirection(fwd); fwd.y = 0; fwd.normalize(); rightV.crossVectors(fwd, up).normalize();
         if (kb["w"] || kb["arrowup"]) move.add(fwd); if (kb["s"] || kb["arrowdown"]) move.sub(fwd);
         if (kb["d"] || kb["arrowright"]) move.add(rightV); if (kb["a"] || kb["arrowleft"]) move.sub(rightV);
-        if (move.lengthSq() > 0) { move.normalize().multiplyScalar(0.9); camera.position.add(move); controls.target.add(move); const lim = ROAD_HALF; camera.position.x = Math.max(-lim, Math.min(lim, camera.position.x)); camera.position.z = Math.max(-lim, Math.min(lim, camera.position.z)); camera.position.y = 3.2; }
+        if (move.lengthSq() > 0) {
+          const spd = (kb["shift"] ? 26 : 13) * dt;
+          move.normalize().multiplyScalar(spd); camera.position.add(move); controls.target.add(move);
+          const lim = ROAD_HALF; camera.position.x = clamp(camera.position.x, lim); camera.position.z = clamp(camera.position.z, lim); camera.position.y = 3.4;
+        }
+      }
+      function drive(dt) {
+        const accel = 46, maxV = 62;
+        if (kb["w"] || kb["arrowup"]) speed += accel * dt;
+        else if (kb["s"] || kb["arrowdown"]) speed -= accel * dt;
+        else speed *= (1 - 1.6 * dt);
+        const boost = kb["shift"] ? 1.7 : 1;
+        speed = Math.max(-maxV * 0.4, Math.min(maxV * boost, speed));
+        if (Math.abs(speed) > 0.4) {
+          const steer = ((kb["a"] || kb["arrowleft"]) ? 1 : 0) - ((kb["d"] || kb["arrowright"]) ? 1 : 0);
+          heading += steer * 1.7 * dt * Math.sign(speed);
+        }
+        playerCar.position.x = clamp(playerCar.position.x + Math.sin(heading) * speed * dt, ROAD_HALF - 2);
+        playerCar.position.z = clamp(playerCar.position.z + Math.cos(heading) * speed * dt, ROAD_HALF - 2);
+        playerCar.rotation.y = heading;
+        // chase camera
+        camera.position.set(playerCar.position.x - Math.sin(heading) * 9, 4.4, playerCar.position.z - Math.cos(heading) * 9);
+        controls.target.set(playerCar.position.x + Math.sin(heading) * 8, 2.4, playerCar.position.z + Math.cos(heading) * 8);
       }
 
       addEventListener("resize", () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight); });
 
-      let last = performance.now(), lflash = 0, nextBolt = 3;
+      let last = performance.now(), lflash = 0, nextBolt = 3, drawAcc = 0, hoverAcc = 0;
       function animate(now) {
         requestAnimationFrame(animate);
         const dt = Math.min(0.05, (now - last) / 1000); last = now; const t = now / 1000;
-        if (street) walk();
+        if (mode === "walk") walk(dt); else if (mode === "drive") drive(dt);
         controls.update();
-        // nav hover
-        const o = pick();
-        if (o !== hovered) {
-          if (hovered) { hovered.userData.mat.emissiveIntensity = hovered.userData.base; hovered.userData.sign.scale.set(16, 5, 1); }
-          hovered = o;
-          if (hovered) { hoverEl.textContent = "Enter " + hovered.userData.name; hoverEl.style.color = "#" + hovered.material.emissive.getHexString(); hoverEl.style.opacity = 1; document.body.style.cursor = "pointer"; }
-          else { hoverEl.style.opacity = 0; document.body.style.cursor = "default"; }
+        // nav hover — throttled raycast (not while driving)
+        hoverAcc += dt;
+        if (mode !== "drive" && hoverAcc > 0.09) {
+          hoverAcc = 0;
+          const o = pick();
+          if (o !== hovered) {
+            if (hovered) { hovered.userData.mat.emissiveIntensity = hovered.userData.base; hovered.userData.sign.scale.set(16, 5, 1); }
+            hovered = o;
+            if (hovered) { hoverEl.textContent = "Enter " + hovered.userData.name; hoverEl.style.color = "#" + hovered.material.emissive.getHexString(); hoverEl.style.opacity = 1; document.body.style.cursor = "pointer"; }
+            else { hoverEl.style.opacity = 0; document.body.style.cursor = "default"; }
+          }
+          if (!hovered) { const bh = ray.intersectObjects(promoMeshes, false)[0] || ray.intersectObjects(adMeshes, false)[0]; document.body.style.cursor = bh ? "pointer" : "default"; }
         }
-        if (!hovered) { const bh = ray.intersectObjects(promoMeshes, false)[0] || ray.intersectObjects(adMeshes, false)[0]; document.body.style.cursor = bh ? "pointer" : "default"; }
         if (hovered) { hovered.userData.mat.emissiveIntensity = 1.4 + Math.sin(t * 6) * 0.3; hovered.userData.sign.scale.set(18, 5.6, 1); }
         // life
-        stepVehicles(dt, t); stepPeds(dt, t); stepPlaza(dt, t); stepQueue(t); stepRain(dt); drawBillboards(t);
+        stepVehicles(dt, t); stepPeds(dt, t); stepPlaza(dt, t); stepQueue(t); stepRain(dt);
+        // canvas screens are expensive to re-upload — refresh them at ~20fps, not every frame
+        drawAcc += dt; if (drawAcc > 0.05) { drawAcc = 0; drawBillboards(t); drawJumbo(t); }
         faceCam.forEach((p) => { p.rotation.y = Math.atan2(camera.position.x - p.position.x, camera.position.z - p.position.z); });
         air.forEach((c) => { c.userData.a += c.userData.sp * 0.01; c.position.set(Math.cos(c.userData.a) * c.userData.rad, c.userData.y, Math.sin(c.userData.a) * c.userData.rad); c.rotation.y = -c.userData.a; });
         beacon.rotation.y = t * 0.2; holo.position.y = 12 + Math.sin(t * 1.5) * 0.6; holo.material.opacity = 0.6 + Math.sin(t * 8) * 0.08;
-        drawJumbo(t);
         rooftopLights.forEach((r) => { r.m.visible = Math.sin(t * 3 + r.ph) > 0; });
         searchlights.forEach((s) => { s.g.rotation.y += s.sp * s.dir * dt; });
         // lightning
