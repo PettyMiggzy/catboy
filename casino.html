@@ -62,12 +62,21 @@
       <span class="muted-note" id="casNote" style="margin:0;">Everything's free to play right now — no wallet or money needed. Real $CATBOY credits arrive near launch.</span>
     </div>
 
+    <!-- DAILY BONUS -->
+    <div class="daily-bonus" id="dailyBonus">
+      <div class="db-info"><span class="db-fire" id="dbFire">🔥</span>
+        <div><b id="dbTitle">Daily Bonus</b><span class="db-sub" id="dbSub">Claim free credits every day — your streak makes the reward bigger.</span></div>
+      </div>
+      <button class="btn btn-primary btn-sm" id="dbBtn" type="button">Claim +25</button>
+    </div>
+
     <!-- TABS -->
     <div class="cas-tabs">
       <button class="cas-tab active" data-tab="slots" type="button">Nine Lives Slots</button>
       <button class="cas-tab" data-tab="flip" type="button">Coin Flip</button>
       <button class="cas-tab" data-tab="scratch" type="button">Scratch Cards</button>
       <button class="cas-tab" data-tab="lottery" type="button">Burn Lottery</button>
+      <button class="cas-tab" data-tab="board" type="button">Leaderboard</button>
     </div>
 
     <!-- SLOTS -->
@@ -146,6 +155,27 @@
       <div class="nft-mint"><a href="index.html#waitlist" class="btn btn-primary">Get Early Access</a>
         <p class="muted-note">The live burn lottery opens after the token launch.</p></div>
     </div>
+
+    <!-- LEADERBOARD -->
+    <div class="cas-panel" id="tab-board" style="display:none;">
+      <div class="section-head" style="margin-top:0;">
+        <span class="eyebrow">Hall of Fame</span>
+        <h2>The <span class="grad">Leaderboard</span></h2>
+        <p class="section-intro">Most NFTs won and biggest single hauls. Your runs count locally now — the <b>global board goes live at launch</b> on the Catboy backend.</p>
+      </div>
+      <div class="you-stats" id="youStats"></div>
+      <div class="board-grid">
+        <div class="board">
+          <h3>😻 Most NFTs Won</h3>
+          <ol class="board-list" id="boardNfts"></ol>
+        </div>
+        <div class="board">
+          <h3>💰 Biggest Single Win</h3>
+          <ol class="board-list" id="boardWins"></ol>
+        </div>
+      </div>
+      <p class="muted-note" style="text-align:center;">The house always keeps an edge — odds are weighted so most plays lose. Play for fun, not funds.</p>
+    </div>
   </section>
 
   <!-- NFT WIN MODAL -->
@@ -182,6 +212,47 @@
       setCredits(credits + 50);
       flash("+50 free credits on the house — it's all free demo until launch.");
       return true;
+    }
+
+    // ---- player stats + leaderboard (localStorage now; global backend at launch) ----
+    const YOU = "You";
+    function getStats() { try { return JSON.parse(localStorage.getItem("catboy_stats") || "null") || { nfts: 0, biggest: 0, spins: 0 }; } catch { return { nfts: 0, biggest: 0, spins: 0 }; } }
+    function setStats(s) { localStorage.setItem("catboy_stats", JSON.stringify(s)); }
+    function recordNftWin() { const s = getStats(); s.nfts = (s.nfts || 0) + 1; setStats(s); renderBoard(); }
+    function recordCreditWin(n) { const s = getStats(); if (n > (s.biggest || 0)) { s.biggest = n; setStats(s); } renderBoard(); }
+    function recordSpin() { const s = getStats(); s.spins = (s.spins || 0) + 1; setStats(s); }
+    const SEED_NFTS = [{ n: "0xWhale", v: 41 }, { n: "catlover.sol", v: 33 }, { n: "trenchgod", v: 28 }, { n: "ninelives", v: 22 }, { n: "paperhandz", v: 17 }, { n: "degenkitty", v: 12 }, { n: "moonboi", v: 9 }, { n: "floorsweep", v: 6 }];
+    const SEED_WINS = [{ n: "jackpotjoe", v: 520 }, { n: "0xWhale", v: 410 }, { n: "spinszn", v: 305 }, { n: "luckypaw", v: 240 }, { n: "catmander", v: 180 }, { n: "allin.sol", v: 140 }, { n: "rugproof", v: 95 }, { n: "smolcap", v: 60 }];
+    function renderBoard() {
+      const s = getStats(); const ys = $("youStats"); if (!ys) return;
+      ys.innerHTML = `<div class="ys"><b>${s.nfts || 0}</b><span>NFTs won</span></div><div class="ys"><b>${s.biggest || 0}</b><span>Biggest win</span></div><div class="ys"><b>${s.spins || 0}</b><span>Total spins</span></div>`;
+      const nfts = SEED_NFTS.concat([{ n: YOU, v: s.nfts || 0, you: true }]).sort((a, b) => b.v - a.v);
+      const wins = SEED_WINS.concat([{ n: YOU, v: s.biggest || 0, you: true }]).sort((a, b) => b.v - a.v);
+      const row = (e, i, unit) => `<li class="${e.you ? "you" : ""}"><span class="rk">${i + 1}</span><span class="pn">${e.n}</span><span class="pv">${e.v}${unit}</span></li>`;
+      $("boardNfts").innerHTML = nfts.slice(0, 10).map((e, i) => row(e, i, "")).join("");
+      $("boardWins").innerHTML = wins.slice(0, 10).map((e, i) => row(e, i, " cr")).join("");
+    }
+
+    // ---- daily bonus / streak ----
+    const dayNum = () => Math.floor(Date.now() / 86400000);
+    const getDaily = () => { try { return JSON.parse(localStorage.getItem("catboy_daily") || "null") || { last: -1, streak: 0 }; } catch { return { last: -1, streak: 0 }; } };
+    const dailyReward = (streak) => 20 + Math.min(streak, 7) * 5;   // 25 → 55
+    function refreshDaily() {
+      const d = getDaily(), today = dayNum(), claimable = d.last !== today;
+      const nextStreak = (d.last === today - 1) ? d.streak + 1 : 1;
+      $("dbBtn").disabled = !claimable;
+      $("dbBtn").textContent = claimable ? ("Claim +" + dailyReward(nextStreak)) : "Claimed ✓";
+      $("dailyBonus").classList.toggle("claimed", !claimable);
+      $("dbTitle").textContent = "Daily Bonus" + (d.streak > 0 ? " · " + d.streak + "🔥" : "");
+      $("dbSub").textContent = claimable ? "Day " + nextStreak + " streak — bigger reward each day in a row." : "Come back tomorrow to grow your streak.";
+    }
+    function claimDaily() {
+      const d = getDaily(), today = dayNum(); if (d.last === today) return;
+      const streak = (d.last === today - 1) ? d.streak + 1 : 1, reward = dailyReward(streak);
+      setCredits(credits + reward);
+      localStorage.setItem("catboy_daily", JSON.stringify({ last: today, streak }));
+      flash("Daily bonus claimed! +" + reward + " credits · " + streak + "-day streak 🔥");
+      refreshDaily();
     }
 
     // ---- symbols ----
@@ -229,7 +300,7 @@
     async function spin() {
       if (spinning) return;
       ensureCredits(1);
-      spinning = true; setCredits(credits - 1);
+      spinning = true; setCredits(credits - 1); recordSpin();
       $("spinBtn").disabled = true; $("slotResult").textContent = "Spinning…"; $("slotResult").className = "slot-result";
       const result = [pick(), pick(), pick()];
       await Promise.all([reelSpin(reels[0], result[0], 700), reelSpin(reels[1], result[1], 1050), reelSpin(reels[2], result[2], 1400)]);
@@ -242,7 +313,7 @@
       if (r[0] === r[1] && r[1] === r[2]) {
         const s = SYM[r[0]];
         if (s.pay.nft) { res.textContent = "JACKPOT — " + s.name + "!"; res.className = "slot-result win big"; nftWin(s.pay.nft); }
-        else { setCredits(credits + s.pay.credits); res.textContent = "Win! 3× " + s.name + " · +" + s.pay.credits + " credits"; res.className = "slot-result win"; }
+        else { setCredits(credits + s.pay.credits); recordCreditWin(s.pay.credits); res.textContent = "Win! 3× " + s.name + " · +" + s.pay.credits + " credits"; res.className = "slot-result win"; }
       } else { res.textContent = "No match — spin again"; res.className = "slot-result"; }
     }
 
@@ -253,6 +324,7 @@
       const b = $("winBadge"); b.textContent = tier; b.className = "nft-badge b-" + tier;
       $("winNote").textContent = "You won a " + tier + " Catboy NFT! This is a free-demo win — real NFTs are airdropped to winners once the token launches.";
       $("winModal").hidden = false;
+      recordNftWin();
       // record for the city jackpot ticker
       try { localStorage.setItem("catboy_last_win", JSON.stringify({ name: n.name, tier, file: n.file, t: Date.now() })); } catch {}
     }
@@ -275,6 +347,7 @@
       document.querySelectorAll(".cas-panel").forEach((p) => p.style.display = "none");
       const el = $("tab-" + name); if (el) el.style.display = "block";
       if (name === "scratch" && scActive && !scRevealed) paintFoil();
+      if (name === "board") renderBoard();
     }
     document.querySelectorAll(".cas-tab").forEach((t) => t.onclick = () => showTab(t.dataset.tab));
 
@@ -332,7 +405,7 @@
       if (scOutcome) {
         const s = SYM[scOutcome];
         if (s.pay.nft) { res.textContent = "JACKPOT — " + s.name + "!"; res.className = "slot-result win big"; nftWin(s.pay.nft); }
-        else { setCredits(credits + s.pay.credits); res.textContent = "Win! 3× " + s.name + " · +" + s.pay.credits + " credits"; res.className = "slot-result win"; }
+        else { setCredits(credits + s.pay.credits); recordCreditWin(s.pay.credits); res.textContent = "Win! 3× " + s.name + " · +" + s.pay.credits + " credits"; res.className = "slot-result win"; }
       } else { res.textContent = "No match — try another card"; res.className = "slot-result"; }
     }
     foil.addEventListener("pointerdown", (e) => { scScratching = true; scErase(e); });
@@ -355,15 +428,19 @@
       const landed = win ? side : (side === "cat" ? "sol" : "cat");
       setTimeout(() => {
         coin.classList.remove("flipping"); $("flipFace").src = landed === "cat" ? "assets/catboy.png" : "assets/solana.png";
-        if (win) { setCredits(credits + bet * 2); $("flipResult").textContent = "WIN! +" + bet + " credits"; $("flipResult").style.color = "var(--cyan)"; }
+        if (win) { setCredits(credits + bet * 2); recordCreditWin(bet); $("flipResult").textContent = "WIN! +" + bet + " credits"; $("flipResult").style.color = "var(--cyan)"; }
         else { $("flipResult").textContent = "Lost " + bet + " — flip again"; $("flipResult").style.color = "var(--muted)"; }
         spinning = false;
       }, 1100);
     };
 
+    // daily bonus + leaderboard init
+    $("dbBtn").onclick = claimDaily;
+    refreshDaily(); renderBoard();
+
     // deep-link: casino.html#scratch etc. (used by the city kiosks)
     const hash = (location.hash || "").replace("#", "");
-    if (["slots", "flip", "scratch", "lottery"].includes(hash)) showTab(hash);
+    if (["slots", "flip", "scratch", "lottery", "board"].includes(hash)) showTab(hash);
   })();
   </script>
 </body>

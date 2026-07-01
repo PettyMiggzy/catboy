@@ -72,6 +72,7 @@
           <b id="openPackPrice">FREE DEMO</b>
         </div>
         <button class="btn btn-primary slot-spin" id="openBtn" type="button" style="width:100%;">Open Pack · FREE</button>
+        <p class="pity" id="pityLabel"></p>
       </div>
       <p class="form-status" id="mintStatus" role="status" aria-live="polite"></p>
       <div class="pulls" id="pulls" aria-label="Your recent pulls"></div>
@@ -128,11 +129,51 @@
     document.querySelectorAll(".pack-card").forEach((c) => c.onclick = () => selectPack(c.dataset.id));
     if (sel) selectPack(sel.id);
 
-    // ---- weighted demo reveal ----
-    function rollTier(odds) {
+    // ---- pity: dry-streak protection since your last Epic+ ----
+    const PITY_MAX = 30;   // guaranteed Epic+ at this many dry opens
+    const getPity = () => { const n = parseInt(localStorage.getItem("catboy_pity") || "0", 10); return isNaN(n) ? 0 : n; };
+    const setPity = (n) => localStorage.setItem("catboy_pity", n);
+    function updatePity(n) {
+      const el = $("pityLabel"); if (!el) return;
+      const left = Math.max(0, PITY_MAX - n);
+      el.innerHTML = n === 0 ? "🍀 Fresh streak — odds as shown." : `🌵 <b>${n}</b> opens since your last Epic+ · guaranteed Epic+ in <b>${left}</b>`;
+    }
+
+    // ---- weighted demo reveal (pity nudges Epic+ the longer you go dry) ----
+    function rollTier(odds, pity) {
+      if (pity >= PITY_MAX) return Math.random() < 0.5 ? "Legendary" : "Epic";   // hard pity
+      const o = Object.assign({}, odds);
+      if (pity >= 20) { const bonus = (pity - 19) * 2; o.Epic += bonus; o.Common = Math.max(0, o.Common - bonus); }   // soft pity
       const r = Math.random() * 100; let acc = 0;
-      for (const t of TIERS) { acc += odds[t] || 0; if (r < acc) return t; }
+      for (const t of TIERS) { acc += o[t] || 0; if (r < acc) return t; }
       return "Common";
+    }
+
+    // ---- celebration: confetti + fanfare on Epic+ ----
+    let confCv = null, confCtx = null;
+    function confetti(colorSet) {
+      if (!confCv) { confCv = document.createElement("canvas"); confCv.style.cssText = "position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:300"; document.body.appendChild(confCv); confCtx = confCv.getContext("2d"); }
+      confCv.width = innerWidth; confCv.height = innerHeight;
+      const parts = []; const cx = innerWidth / 2, cy = innerHeight * 0.42;
+      for (let i = 0; i < 140; i++) { const a = Math.random() * Math.PI * 2, sp = 4 + Math.random() * 9;
+        parts.push({ x: cx, y: cy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 4, r: 3 + Math.random() * 5, c: colorSet[(Math.random() * colorSet.length) | 0], rot: Math.random() * 6, vr: (Math.random() - 0.5) * 0.4, life: 1 }); }
+      const t0 = performance.now();
+      (function frame(now) {
+        const dt = Math.min(40, now - t0); confCtx.clearRect(0, 0, confCv.width, confCv.height);
+        let alive = false;
+        parts.forEach((p) => { p.vy += 0.22; p.x += p.vx; p.y += p.vy; p.vx *= 0.99; p.rot += p.vr; p.life -= 0.012;
+          if (p.life > 0 && p.y < confCv.height + 20) { alive = true; confCtx.save(); confCtx.globalAlpha = Math.max(0, p.life); confCtx.translate(p.x, p.y); confCtx.rotate(p.rot); confCtx.fillStyle = p.c; confCtx.fillRect(-p.r, -p.r * 0.6, p.r * 2, p.r * 1.2); confCtx.restore(); } });
+        if (alive) requestAnimationFrame(frame); else confCtx.clearRect(0, 0, confCv.width, confCv.height);
+      })(t0);
+    }
+    let actx = null;
+    function fanfare(tier) {
+      try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === "suspended") actx.resume();
+        const notes = tier === "Legendary" ? [523, 659, 784, 1047, 1319] : [523, 659, 784];
+        notes.forEach((f, i) => { const o = actx.createOscillator(), g = actx.createGain(); o.type = "triangle"; o.frequency.value = f;
+          const t = actx.currentTime + i * 0.11; g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.18, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
+          o.connect(g).connect(actx.destination); o.start(t); o.stop(t + 0.3); });
+      } catch {}
     }
     function pullFrom(tier) {
       const pool = items.filter((n) => n.tier === tier);
@@ -148,7 +189,10 @@
       $("revealBadge").hidden = true; $("revealBurst").hidden = true; $("revealName").textContent = "Opening…"; $("revealTraits").textContent = "";
       $("revealFrame").classList.remove("legendary", "epic"); status.textContent = "";
 
-      const tier = rollTier(sel.odds), prize = pullFrom(tier);
+      let pity = getPity();
+      const tier = rollTier(sel.odds, pity), prize = pullFrom(tier);
+      pity = (tier === "Epic" || tier === "Legendary") ? 0 : pity + 1;
+      setPity(pity);
       const img = $("revealImg");
       // spin the reel — cycle random art, decelerating
       await new Promise((res) => {
@@ -166,10 +210,16 @@
       if (tier === "Legendary" || tier === "Epic") {
         const burst = $("revealBurst"); burst.textContent = tier.toUpperCase() + "!"; burst.style.color = TIER_COL[tier]; burst.hidden = false;
         $("revealFrame").classList.add(tier.toLowerCase());
+        confetti(tier === "Legendary" ? ["#ffd84d", "#fff2b0", "#ffb020", "#14f195"] : ["#ff3df0", "#d24dff", "#19e0ff", "#fff"]);
+        fanfare(tier);
+        if (navigator.vibrate) navigator.vibrate(tier === "Legendary" ? [40, 40, 80] : [40]);
+        // count Epic+ pulls toward the casino leaderboard (shared stat)
+        try { const s = JSON.parse(localStorage.getItem("catboy_stats") || "null") || { nfts: 0, biggest: 0, spins: 0 }; s.nfts = (s.nfts || 0) + 1; localStorage.setItem("catboy_stats", JSON.stringify(s)); } catch {}
       }
       const flavor = { Legendary: "GODLIKE PULL. Frame it, king. 👑", Epic: "Big pull — you’re so back.", Rare: "Solid. Not floor, respectable.", Common: "Floor cat. It happens. Rip another." }[tier];
       status.style.color = "var(--cyan)"; status.textContent = flavor;
       pushPull(prize, tier);
+      updatePity(pity);
       opening = false; openBtn.disabled = false;
     }
 
@@ -185,6 +235,7 @@
         `<img src="${P + p.file}" class="pull-thumb b-${p.tier}" title="${p.name} · ${p.tier}" alt="${p.name}">`).join("");
     }
     try { renderPulls(JSON.parse(localStorage.getItem("catboy_pulls") || "[]")); } catch {}
+    updatePity(getPity());
 
     openBtn.addEventListener("click", () => {
       if (C.enabled && C.candyMachineId) return doRealMint();   // real SOL mint at launch

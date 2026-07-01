@@ -488,6 +488,38 @@
         });
       }
 
+      // ---- plaza life: shoppers milling around the kiosks + a queue at the ATM ----
+      const KIOSK_POS = [{ x: 15, z: 15 }, { x: -19, z: 9 }, { x: 7, z: -21 }];
+      function makePlazaPed() {
+        const g = new THREE.Group(); const col = tints[(Math.random() * tints.length) | 0];
+        const body = new THREE.Mesh(pedBody, new THREE.MeshStandardMaterial({ color: 0x141022, emissive: new THREE.Color(col), emissiveIntensity: 0.25, roughness: 0.7 }));
+        body.position.y = 0.75; g.add(body);
+        const head = new THREE.Mesh(pedHead, new THREE.MeshStandardMaterial({ color: 0xe8d9c0, roughness: 0.6 })); head.position.y = 1.4; g.add(head);
+        scene.add(g); return g;
+      }
+      const plazaPeds = [];
+      KIOSK_POS.forEach((k) => {
+        const n = 2 + (Math.random() * 2 | 0);
+        for (let i = 0; i < n; i++) { const g = makePlazaPed(); g.userData = { hx: k.x, hz: k.z, tx: k.x, tz: k.z, ph: Math.random() * 6, retime: Math.random() * 3 }; g.position.set(k.x + (Math.random() - 0.5) * 6, 0, k.z + (Math.random() - 0.5) * 6); plazaPeds.push(g); }
+      });
+      function stepPlaza(dt, t) {
+        plazaPeds.forEach((p) => {
+          const u = p.userData; u.retime -= dt;
+          if (u.retime <= 0) { u.tx = u.hx + (Math.random() - 0.5) * 8; u.tz = u.hz + (Math.random() - 0.5) * 8; u.retime = 2.5 + Math.random() * 3.5; }
+          const dx = u.tx - p.position.x, dz = u.tz - p.position.z, d = Math.hypot(dx, dz);
+          if (d > 0.2) { const s = Math.min(d, 2.3 * dt); p.position.x += dx / d * s; p.position.z += dz / d * s; p.rotation.y = Math.atan2(dx, dz); p.position.y = Math.abs(Math.sin(t * 6 + u.ph)) * 0.14; }
+          else p.position.y = 0;
+        });
+      }
+      // ATM queue — a short line waiting at the first kiosk
+      const atm = KIOSK_POS[0], aL = Math.hypot(atm.x, atm.z), qd = { x: -atm.x / aL, z: -atm.z / aL };
+      const queuePeds = [];
+      for (let i = 0; i < 4; i++) { const g = makePlazaPed(); g.userData = { base: 2.6 + i * 1.25, ph: Math.random() * 6, i }; queuePeds.push(g); }
+      function stepQueue(t) {
+        queuePeds.forEach((p) => { const u = p.userData; const dist = u.base + Math.sin(t * 1.1 - u.i * 0.6) * 0.14;
+          p.position.set(atm.x + qd.x * dist, Math.abs(Math.sin(t * 3 + u.ph)) * 0.05, atm.z + qd.z * dist); p.rotation.y = Math.atan2(-qd.x, -qd.z); });
+      }
+
       // flying cars (air)
       const air = [];
       for (let i = 0; i < 14; i++) {
@@ -563,7 +595,7 @@
         if (!hovered) { const bh = ray.intersectObjects(promoMeshes, false)[0] || ray.intersectObjects(adMeshes, false)[0]; document.body.style.cursor = bh ? "pointer" : "default"; }
         if (hovered) { hovered.userData.mat.emissiveIntensity = 1.4 + Math.sin(t * 6) * 0.3; hovered.userData.sign.scale.set(18, 5.6, 1); }
         // life
-        stepVehicles(dt, t); stepPeds(dt, t); stepRain(dt); drawBillboards(t);
+        stepVehicles(dt, t); stepPeds(dt, t); stepPlaza(dt, t); stepQueue(t); stepRain(dt); drawBillboards(t);
         air.forEach((c) => { c.userData.a += c.userData.sp * 0.01; c.position.set(Math.cos(c.userData.a) * c.userData.rad, c.userData.y, Math.sin(c.userData.a) * c.userData.rad); c.rotation.y = -c.userData.a; });
         beacon.rotation.y = t * 0.2; holo.position.y = 12 + Math.sin(t * 1.5) * 0.6; holo.material.opacity = 0.6 + Math.sin(t * 8) * 0.08;
         // lightning
