@@ -228,6 +228,8 @@
       const b = $("winBadge"); b.textContent = tier; b.className = "nft-badge b-" + tier;
       $("winNote").textContent = "You won a " + tier + " Catboy NFT! At launch it's airdropped to your wallet automatically.";
       $("winModal").hidden = false;
+      // record for the city jackpot ticker
+      try { localStorage.setItem("catboy_last_win", JSON.stringify({ name: n.name, tier, file: n.file, t: Date.now() })); } catch {}
     }
     const closeWin = () => $("winModal").hidden = true;
     $("winClose").onclick = closeWin; $("winBg").onclick = closeWin;
