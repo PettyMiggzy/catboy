@@ -31,6 +31,8 @@
     #load .ring { width: 64px; height: 64px; border-radius: 50%; border: 3px solid rgba(155,77,255,.2); border-top-color: #19e0ff; animation: spin 1s linear infinite; }
     #load p { position: absolute; bottom: 38%; font-family: "Orbitron", sans-serif; letter-spacing: .2em; color: #9b8fd6; font-size: .8rem; }
     @keyframes spin { to { transform: rotate(360deg); } }
+    #minimap { position: fixed; top: 16px; right: 16px; z-index: 6; width: 160px; height: 160px; display: none;
+      border-radius: 12px; border: 1px solid rgba(155,77,255,.5); background: rgba(6,4,18,.72); box-shadow: 0 0 24px rgba(25,224,255,.25); }
     #fallback { position: fixed; inset: 0; z-index: 20; display: none; place-items: center; text-align: center; padding: 2rem; background: #05030c; }
     #fallback a { color: #19e0ff; }
   </style>
@@ -42,6 +44,7 @@
   <div class="ui" id="hover"></div>
   <div class="ui" id="hint">Drag to orbit · scroll / pinch to zoom</div>
   <div id="bar"><button id="streetBtn" type="button">Walk</button><button id="driveBtn" type="button">Drive</button><button id="skyBtn" type="button" style="display:none;">Sky view</button><a href="index.html">Enter classic site &rsaquo;</a></div>
+  <canvas id="minimap" width="180" height="180"></canvas>
   <div id="fallback"><div><h1 style="font-family:Orbitron">3D not supported here</h1><p style="margin:1rem 0">Your device/browser couldn't start WebGL.</p><a href="index.html">Enter the classic site &rsaquo;</a></div></div>
 
   <script type="importmap">
@@ -145,6 +148,30 @@
       // glowing Tron grid over the streets (Solana purple + teal)
       const tron = new THREE.GridHelper(2 * EXT, Math.round(2 * EXT / 12), 0x14f195, 0x9945ff);
       tron.material.transparent = true; tron.material.opacity = 0.32; tron.position.y = 0.07; scene.add(tron);
+
+      // --- instanced neon street lamps at every road corner (2 draw calls total) ---
+      const lampSeen = new Set(), lampSpots = [];
+      for (let k = -4; k <= 4; k++) for (let m = -4; m <= 4; m++) {
+        const cx = k * 36, cz = m * 36, o = ROADW / 2 + 2.4;
+        [[cx + o, cz + o], [cx - o, cz + o], [cx + o, cz - o], [cx - o, cz - o]].forEach(([x, z]) => {
+          const key = x.toFixed(0) + "," + z.toFixed(0); if (!lampSeen.has(key)) { lampSeen.add(key); lampSpots.push([x, z]); }
+        });
+      }
+      (function () {
+        const dummy = new THREE.Object3D();
+        const posts = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.16, 0.24, 8, 6), new THREE.MeshStandardMaterial({ color: 0x0b0820, metalness: 0.85, roughness: 0.4 }), lampSpots.length);
+        const arms = new THREE.InstancedMesh(new THREE.BoxGeometry(1.5, 0.18, 0.18), new THREE.MeshStandardMaterial({ color: 0x0b0820, metalness: 0.85, roughness: 0.4 }), lampSpots.length);
+        const heads = new THREE.InstancedMesh(new THREE.SphereGeometry(0.42, 8, 8), new THREE.MeshBasicMaterial(), lampSpots.length);
+        lampSpots.forEach(([x, z], i) => {
+          dummy.position.set(x, 4, z); dummy.rotation.set(0, 0, 0); dummy.updateMatrix(); posts.setMatrixAt(i, dummy.matrix);
+          dummy.position.set(x + (x < 0 ? 0.7 : -0.7), 7.9, z); dummy.updateMatrix(); arms.setMatrixAt(i, dummy.matrix);
+          dummy.position.set(x + (x < 0 ? 1.3 : -1.3), 7.8, z); dummy.updateMatrix(); heads.setMatrixAt(i, dummy.matrix);
+          heads.setColorAt(i, new THREE.Color(tints[(Math.random() * tints.length) | 0]));
+        });
+        posts.instanceMatrix.needsUpdate = arms.instanceMatrix.needsUpdate = heads.instanceMatrix.needsUpdate = true;
+        if (heads.instanceColor) heads.instanceColor.needsUpdate = true;
+        scene.add(posts, arms, heads);
+      })();
 
       // environment map so glass towers reflect the neon city
       const pmrem = new THREE.PMREMGenerator(renderer);
@@ -629,9 +656,14 @@
       const playerCar = makeCar("car", 0x19e0ff); playerCar.visible = false; scene.add(playerCar);
       let mode = "sky", heading = Math.PI, speed = 0;
       const clamp = (v, l) => Math.max(-l, Math.min(l, v));
+      // you can travel on any road corridor or the central plaza; buildings block you
+      const near36 = (v) => Math.abs(v - Math.round(v / 36) * 36);
+      const LANEHALF = ROADW / 2 + SIDEW;   // 12.5
+      const drivable = (x, z) => near36(x) < LANEHALF || near36(z) < LANEHALF || Math.hypot(x, z) < 34;
       function setMode(m) {
         mode = m; controls.autoRotate = (m === "sky"); controls.enabled = (m !== "drive");
         playerCar.visible = (m === "drive");
+        document.getElementById("minimap").style.display = (m === "sky") ? "none" : "block";
         streetBtn.style.display = (m === "walk") ? "none" : "";
         driveBtn.style.display = (m === "drive") ? "none" : "";
         skyBtn.style.display = (m === "sky") ? "none" : "";
@@ -650,8 +682,11 @@
         if (kb["d"] || kb["arrowright"]) move.add(rightV); if (kb["a"] || kb["arrowleft"]) move.sub(rightV);
         if (move.lengthSq() > 0) {
           const spd = (kb["shift"] ? 26 : 13) * dt;
-          move.normalize().multiplyScalar(spd); camera.position.add(move); controls.target.add(move);
-          const lim = ROAD_HALF; camera.position.x = clamp(camera.position.x, lim); camera.position.z = clamp(camera.position.z, lim); camera.position.y = 3.4;
+          move.normalize().multiplyScalar(spd);
+          const cx = camera.position.x, cz = camera.position.z; let dx = move.x, dz = move.z;
+          if (!drivable(cx + dx, cz + dz)) { if (drivable(cx + dx, cz)) dz = 0; else if (drivable(cx, cz + dz)) dx = 0; else { dx = 0; dz = 0; } }
+          camera.position.x = clamp(cx + dx, ROAD_HALF); camera.position.z = clamp(cz + dz, ROAD_HALF);
+          controls.target.x += dx; controls.target.z += dz; camera.position.y = 3.4;
         }
       }
       function drive(dt) {
@@ -665,12 +700,38 @@
           const steer = ((kb["a"] || kb["arrowleft"]) ? 1 : 0) - ((kb["d"] || kb["arrowright"]) ? 1 : 0);
           heading += steer * 1.7 * dt * Math.sign(speed);
         }
-        playerCar.position.x = clamp(playerCar.position.x + Math.sin(heading) * speed * dt, ROAD_HALF - 2);
-        playerCar.position.z = clamp(playerCar.position.z + Math.cos(heading) * speed * dt, ROAD_HALF - 2);
+        // traffic bump — slow hard if you clip another car
+        const px = playerCar.position.x, pz = playerCar.position.z;
+        for (let i = 0; i < vehicles.length; i++) { const v = vehicles[i]; const ddx = v.position.x - px, ddz = v.position.z - pz; if (ddx * ddx + ddz * ddz < 10) { speed *= 0.25; break; } }
+        // move with building collision (slide along walls, stop if boxed in)
+        const nx = px + Math.sin(heading) * speed * dt, nz = pz + Math.cos(heading) * speed * dt;
+        if (drivable(nx, nz)) { playerCar.position.x = clamp(nx, ROAD_HALF - 2); playerCar.position.z = clamp(nz, ROAD_HALF - 2); }
+        else if (drivable(nx, pz)) { playerCar.position.x = clamp(nx, ROAD_HALF - 2); speed *= 0.7; }
+        else if (drivable(px, nz)) { playerCar.position.z = clamp(nz, ROAD_HALF - 2); speed *= 0.7; }
+        else { speed *= 0.2; }
         playerCar.rotation.y = heading;
         // chase camera
         camera.position.set(playerCar.position.x - Math.sin(heading) * 9, 4.4, playerCar.position.z - Math.cos(heading) * 9);
         controls.target.set(playerCar.position.x + Math.sin(heading) * 8, 2.4, playerCar.position.z + Math.cos(heading) * 8);
+      }
+
+      // ---- minimap (walk/drive) ----
+      const miniCv = document.getElementById("minimap"), miniX = miniCv.getContext("2d");
+      const MM = miniCv.width, w2m = (v) => MM / 2 + v * (MM / (2 * EXT));
+      const towerDots = NAV.map((n, k) => { const ang = (k / NAV.length) * Math.PI * 2; return { x: Math.cos(ang) * 30, z: Math.sin(ang) * 30, col: "#" + n.color.toString(16).padStart(6, "0") }; });
+      const _md = new THREE.Vector3();
+      function drawMinimap() {
+        const x = miniX; x.clearRect(0, 0, MM, MM);
+        x.strokeStyle = "rgba(120,90,200,0.45)"; x.lineWidth = 3;
+        ROADS.forEach((r) => { const p = w2m(r); x.beginPath(); x.moveTo(p, 0); x.lineTo(p, MM); x.moveTo(0, p); x.lineTo(MM, p); x.stroke(); });
+        x.fillStyle = "#14f195"; KIOSK_POS.forEach((k) => x.fillRect(w2m(k.x) - 2, w2m(k.z) - 2, 4, 4));
+        towerDots.forEach((d) => { x.fillStyle = d.col; x.beginPath(); x.arc(w2m(d.x), w2m(d.z), 3.5, 0, 7); x.fill(); });
+        let px, pz, ph;
+        if (mode === "drive") { px = playerCar.position.x; pz = playerCar.position.z; ph = heading; }
+        else { px = camera.position.x; pz = camera.position.z; camera.getWorldDirection(_md); ph = Math.atan2(_md.x, _md.z); }
+        x.save(); x.translate(w2m(px), w2m(pz)); x.rotate(Math.PI - ph);
+        x.fillStyle = "#fff"; x.shadowColor = "#19e0ff"; x.shadowBlur = 8;
+        x.beginPath(); x.moveTo(0, -7); x.lineTo(5, 6); x.lineTo(-5, 6); x.closePath(); x.fill(); x.restore();
       }
 
       addEventListener("resize", () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight); });
@@ -698,7 +759,7 @@
         // life
         stepVehicles(dt, t); stepPeds(dt, t); stepPlaza(dt, t); stepQueue(t); stepRain(dt);
         // canvas screens are expensive to re-upload — refresh them at ~20fps, not every frame
-        drawAcc += dt; if (drawAcc > 0.05) { drawAcc = 0; drawBillboards(t); drawJumbo(t); }
+        drawAcc += dt; if (drawAcc > 0.05) { drawAcc = 0; drawBillboards(t); drawJumbo(t); if (mode !== "sky") drawMinimap(); }
         faceCam.forEach((p) => { p.rotation.y = Math.atan2(camera.position.x - p.position.x, camera.position.z - p.position.z); });
         air.forEach((c) => { c.userData.a += c.userData.sp * 0.01; c.position.set(Math.cos(c.userData.a) * c.userData.rad, c.userData.y, Math.sin(c.userData.a) * c.userData.rad); c.rotation.y = -c.userData.a; });
         beacon.rotation.y = t * 0.2; holo.position.y = 12 + Math.sin(t * 1.5) * 0.6; holo.material.opacity = 0.6 + Math.sin(t * 8) * 0.08;
