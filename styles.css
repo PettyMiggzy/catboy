@@ -1157,3 +1157,6 @@ body.splash-open { overflow: hidden; }
 .sc-cell { display: flex; align-items: center; justify-content: center; border-radius: 12px; background: radial-gradient(circle at 50% 40%, rgba(255,255,255,0.06), rgba(0,0,0,0.5)); border: 1px solid rgba(255,255,255,0.08); box-shadow: inset 0 6px 18px rgba(0,0,0,0.7); }
 .sc-cell .sym { width: 78%; height: 78%; }
 .sc-foil { position: absolute; inset: 0; width: 100%; height: 100%; cursor: crosshair; touch-action: none; transition: opacity 0.4s; border-radius: 16px; }
+
+/* ---------- Free-demo pill ---------- */
+.demo-pill { font-family: "Orbitron", sans-serif; font-size: 0.62rem; letter-spacing: 0.12em; font-weight: 700; padding: 0.3rem 0.7rem; border-radius: 999px; color: var(--sol-green, #14f195); border: 1px solid #14f195; background: rgba(20,241,149,0.1); box-shadow: 0 0 16px rgba(20,241,149,0.25); text-transform: uppercase; }

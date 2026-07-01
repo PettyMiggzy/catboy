@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>CATBOY Casino — Nine Lives Slots &amp; Games on Solana</title>
-  <meta name="description" content="The Catboy Casino: spin the Nine Lives Slots to win real Catboy NFTs, flip coins, and burn $CATBOY. Buy credits, spin for ~$0.05, chase the Legendary jackpot." />
+  <meta name="description" content="The Catboy Casino: spin the Nine Lives Slots to win Catboy NFTs, flip coins, and scratch cards. Free demo — play all you want, no wallet or money needed until launch." />
   <meta property="og:title" content="CATBOY Casino — Nine Lives Slots" />
   <meta property="og:description" content="Spin to win Catboy NFTs. Higher the tier, harder the win. Buy credits and pull the lever." />
   <meta property="og:image" content="assets/nft/collection/001.jpg" />
@@ -48,17 +48,18 @@
       <a href="index.html" class="back-link">&lsaquo; Back to Home</a>
       <span class="eyebrow" style="display:block;margin-top:1rem;">Insert Credit</span>
       <h1>Catboy <span class="grad">Casino</span></h1>
-      <p>Spin the <b>Nine Lives Slots</b> to win real Catboy NFTs. Buy credits, pull the lever, chase the Legendary jackpot. Higher the tier, harder the win — not every spin pays.</p>
+      <p>Spin the <b>Nine Lives Slots</b> to win Catboy NFTs. <b>Free to play</b> — grab credits on the house, pull the lever, chase the Legendary jackpot. Higher the tier, harder the win — not every spin pays. Real $CATBOY stakes go live near launch.</p>
     </div>
   </section>
 
   <!-- CREDITS BAR -->
   <section class="section" style="padding-top:0.5rem;">
     <div class="cas-credits">
+      <span class="demo-pill">FREE DEMO</span>
       <div class="cas-bal"><span>Credits</span><b id="credits">0</b></div>
-      <div class="cas-bal"><span>Per spin</span><b>1 · $0.05</b></div>
-      <button class="btn btn-primary btn-sm" id="buyBtn" type="button">Buy Credits</button>
-      <span class="muted-note" id="casNote" style="margin:0;"></span>
+      <div class="cas-bal"><span>Per spin</span><b>1 · FREE</b></div>
+      <button class="btn btn-primary btn-sm" id="buyBtn" type="button">Get Free Credits</button>
+      <span class="muted-note" id="casNote" style="margin:0;">Everything's free to play right now — no wallet or money needed. Real $CATBOY credits arrive near launch.</span>
     </div>
 
     <!-- TABS -->
@@ -171,10 +172,17 @@
   <script>
   (function () {
     const $ = (id) => document.getElementById(id);
-    // ---- credits (demo; real purchase wires to backend/on-chain at launch) ----
-    let credits = parseInt(localStorage.getItem("catboy_credits") || "10", 10);
+    // ---- credits (FREE DEMO; real purchase wires to backend/on-chain at launch) ----
+    let credits = parseInt(localStorage.getItem("catboy_credits") || "50", 10);
     const setCredits = (n) => { credits = Math.max(0, n); localStorage.setItem("catboy_credits", credits); $("credits").textContent = credits; };
     setCredits(credits);
+    // free demo: never let players get stuck — top up on the house when they run low
+    function ensureCredits(n) {
+      if (credits >= n) return true;
+      setCredits(credits + 50);
+      flash("+50 free credits on the house — it's all free demo until launch.");
+      return true;
+    }
 
     // ---- symbols ----
     const P = "assets/nft/collection/";
@@ -220,7 +228,7 @@
 
     async function spin() {
       if (spinning) return;
-      if (credits < 1) { flash("Out of credits — buy more to keep spinning."); return; }
+      ensureCredits(1);
       spinning = true; setCredits(credits - 1);
       $("spinBtn").disabled = true; $("slotResult").textContent = "Spinning…"; $("slotResult").className = "slot-result";
       const result = [pick(), pick(), pick()];
@@ -243,7 +251,7 @@
       const n = pool.length ? pool[(Math.random() * pool.length) | 0] : { name: "Catboy", tier, file: "001.jpg" };
       $("winImg").src = P + n.file; $("winName").textContent = n.name;
       const b = $("winBadge"); b.textContent = tier; b.className = "nft-badge b-" + tier;
-      $("winNote").textContent = "You won a " + tier + " Catboy NFT! At launch it's airdropped to your wallet automatically.";
+      $("winNote").textContent = "You won a " + tier + " Catboy NFT! This is a free-demo win — real NFTs are airdropped to winners once the token launches.";
       $("winModal").hidden = false;
       // record for the city jackpot ticker
       try { localStorage.setItem("catboy_last_win", JSON.stringify({ name: n.name, tier, file: n.file, t: Date.now() })); } catch {}
@@ -254,12 +262,10 @@
     $("spinBtn").onclick = spin;
     $("autoBtn").onclick = async () => { for (let i = 0; i < 10 && credits >= 1; i++) { await spin(); await new Promise((r) => setTimeout(r, 250)); } };
 
-    // buy credits (demo)
-    $("buyBtn").onclick = async () => {
-      const p = (window.solana && window.solana.isPhantom) ? window.solana : (window.solflare || window.backpack || null);
-      if (p) { try { await p.connect(); } catch {} }
-      setCredits(credits + 20);
-      flash("+20 demo credits added. Real credits (0.05 SOL / $CATBOY each) go live at launch.");
+    // free credits (demo — no wallet or money needed until launch)
+    $("buyBtn").onclick = () => {
+      setCredits(credits + 50);
+      flash("+50 free credits added! Everything's free until launch — play all you want.");
     };
     function flash(m) { $("casNote").textContent = m; }
 
@@ -297,7 +303,7 @@
 
     function newCard() {
       if (scActive && !scRevealed) return;
-      if (credits < SCOST) { flash("Not enough credits — buy more to play scratch cards."); return; }
+      ensureCredits(SCOST);
       setCredits(credits - SCOST);
       scOutcome = scratchOutcome();
       let syms;
@@ -342,7 +348,7 @@
     document.querySelectorAll("[data-bet]").forEach((b) => b.onclick = () => { bet = +b.dataset.bet; $("flipBet").textContent = bet; });
     $("flipBtn").onclick = () => {
       if (spinning) return;
-      if (credits < bet) { $("flipResult").textContent = "Not enough credits."; $("flipResult").style.color = "var(--magenta)"; return; }
+      ensureCredits(bet);
       spinning = true; setCredits(credits - bet);
       const coin = $("flipCoin"); coin.classList.add("flipping");
       const win = Math.random() < 0.48; // house edge
