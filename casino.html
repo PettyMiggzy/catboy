@@ -65,6 +65,7 @@
     <div class="cas-tabs">
       <button class="cas-tab active" data-tab="slots" type="button">Nine Lives Slots</button>
       <button class="cas-tab" data-tab="flip" type="button">Coin Flip</button>
+      <button class="cas-tab" data-tab="scratch" type="button">Scratch Cards</button>
       <button class="cas-tab" data-tab="lottery" type="button">Burn Lottery</button>
     </div>
 
@@ -109,6 +110,22 @@
           </div>
           <button class="btn btn-primary" id="flipBtn" type="button" style="width:100%;">FLIP</button>
           <p class="flip-result" id="flipResult"></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCRATCH CARDS -->
+    <div class="cas-panel" id="tab-scratch" style="display:none;">
+      <div class="scratch-wrap">
+        <div class="scratch-card" id="scratchCard">
+          <div class="sc-cells" id="scCells"></div>
+          <canvas class="sc-foil" id="scFoil"></canvas>
+        </div>
+        <p class="muted-note" style="text-align:center;">Match all three to win. Scratch the foil with your finger or mouse — most cards lose, but a rare <b>Gold Cat</b> or <b>Catboy</b> pays a real NFT.</p>
+        <div class="slot-result" id="scResult">Buy a card and start scratching</div>
+        <div class="slot-controls">
+          <button class="btn btn-ghost btn-sm" id="scRevealBtn" type="button">Reveal All</button>
+          <button class="btn btn-primary slot-spin" id="scNewBtn" type="button">New Card · 3 credits</button>
         </div>
       </div>
     </div>
@@ -247,11 +264,77 @@
     function flash(m) { $("casNote").textContent = m; }
 
     // tabs
-    document.querySelectorAll(".cas-tab").forEach((t) => t.onclick = () => {
-      document.querySelectorAll(".cas-tab").forEach((x) => x.classList.remove("active")); t.classList.add("active");
+    function showTab(name) {
+      document.querySelectorAll(".cas-tab").forEach((x) => x.classList.toggle("active", x.dataset.tab === name));
       document.querySelectorAll(".cas-panel").forEach((p) => p.style.display = "none");
-      $("tab-" + t.dataset.tab).style.display = "block";
-    });
+      const el = $("tab-" + name); if (el) el.style.display = "block";
+      if (name === "scratch" && scActive && !scRevealed) paintFoil();
+    }
+    document.querySelectorAll(".cas-tab").forEach((t) => t.onclick = () => showTab(t.dataset.tab));
+
+    // ---- scratch cards ----
+    const SCOST = 3;
+    // cumulative win table (most cards lose; NFTs are rare) — credit EV < cost, NFTs are the draw
+    const SWINS = [
+      { sym: "fish",  p: 0.16 }, { sym: "paw", p: 0.10 }, { sym: "sol", p: 0.06 },
+      { sym: "seven", p: 0.03 }, { sym: "gold", p: 0.012 }, { sym: "cat", p: 0.004 },
+    ];
+    function scratchOutcome() { const r = Math.random(); let acc = 0; for (const w of SWINS) { acc += w.p; if (r < acc) return w.sym; } return null; }
+    const foil = $("scFoil"), fctx = foil.getContext("2d"), cells = $("scCells");
+    let scActive = false, scRevealed = true, scScratching = false, scOutcome = "pending";
+
+    function paintFoil() {
+      const r = $("scratchCard").getBoundingClientRect();
+      foil.width = Math.max(60, r.width | 0); foil.height = Math.max(60, r.height | 0);
+      const g = fctx.createLinearGradient(0, 0, foil.width, foil.height);
+      g.addColorStop(0, "#3a2a66"); g.addColorStop(0.5, "#6a4bb0"); g.addColorStop(1, "#2a1c4a");
+      fctx.globalCompositeOperation = "source-over"; fctx.fillStyle = g; fctx.fillRect(0, 0, foil.width, foil.height);
+      fctx.fillStyle = "rgba(255,255,255,0.10)"; for (let i = -foil.height; i < foil.width; i += 22) { fctx.fillRect(i, 0, 8, foil.height); }
+      fctx.fillStyle = "#eae6ff"; fctx.textAlign = "center"; fctx.textBaseline = "middle";
+      fctx.font = "700 " + Math.max(16, foil.width / 16) + "px Orbitron, sans-serif";
+      fctx.fillText("SCRATCH HERE", foil.width / 2, foil.height / 2);
+    }
+
+    function newCard() {
+      if (scActive && !scRevealed) return;
+      if (credits < SCOST) { flash("Not enough credits — buy more to play scratch cards."); return; }
+      setCredits(credits - SCOST);
+      scOutcome = scratchOutcome();
+      let syms;
+      if (scOutcome) syms = [scOutcome, scOutcome, scOutcome];
+      else { do { syms = [pick(), pick(), pick()]; } while (syms[0] === syms[1] && syms[1] === syms[2]); }
+      cells.innerHTML = syms.map((k) => `<div class="sc-cell">${symHTML(k)}</div>`).join("");
+      $("scResult").textContent = "Scratch to reveal…"; $("scResult").className = "slot-result";
+      scActive = true; scRevealed = false; paintFoil(); foil.style.pointerEvents = "auto"; foil.style.opacity = "1";
+    }
+
+    function scPct() {
+      const d = fctx.getImageData(0, 0, foil.width, foil.height).data; let clear = 0, total = 0;
+      for (let i = 3; i < d.length; i += 4 * 20) { total++; if (d[i] === 0) clear++; }
+      return clear / total;
+    }
+    function scErase(e) {
+      if (!scActive || scRevealed || !scScratching) return; e.preventDefault();
+      const r = foil.getBoundingClientRect(), t = e.touches ? e.touches[0] : e;
+      const x = (t.clientX - r.left) * (foil.width / r.width), y = (t.clientY - r.top) * (foil.height / r.height);
+      fctx.globalCompositeOperation = "destination-out"; fctx.beginPath(); fctx.arc(x, y, foil.width / 18, 0, 7); fctx.fill();
+      if (scPct() > 0.5) revealCard();
+    }
+    function revealCard() {
+      if (scRevealed) return; scRevealed = true; foil.style.pointerEvents = "none"; foil.style.opacity = "0";
+      const res = $("scResult");
+      if (scOutcome) {
+        const s = SYM[scOutcome];
+        if (s.pay.nft) { res.textContent = "JACKPOT — " + s.name + "!"; res.className = "slot-result win big"; nftWin(s.pay.nft); }
+        else { setCredits(credits + s.pay.credits); res.textContent = "Win! 3× " + s.name + " · +" + s.pay.credits + " credits"; res.className = "slot-result win"; }
+      } else { res.textContent = "No match — try another card"; res.className = "slot-result"; }
+    }
+    foil.addEventListener("pointerdown", (e) => { scScratching = true; scErase(e); });
+    addEventListener("pointerup", () => scScratching = false);
+    foil.addEventListener("pointermove", scErase);
+    foil.addEventListener("touchmove", scErase, { passive: false });
+    $("scNewBtn").onclick = newCard;
+    $("scRevealBtn").onclick = () => { if (scActive && !scRevealed) { fctx.globalCompositeOperation = "destination-out"; fctx.fillRect(0, 0, foil.width, foil.height); revealCard(); } };
 
     // ---- coin flip ----
     let side = "cat", bet = 1;
@@ -271,6 +354,10 @@
         spinning = false;
       }, 1100);
     };
+
+    // deep-link: casino.html#scratch etc. (used by the city kiosks)
+    const hash = (location.hash || "").replace("#", "");
+    if (["slots", "flip", "scratch", "lottery"].includes(hash)) showTab(hash);
   })();
   </script>
 </body>
