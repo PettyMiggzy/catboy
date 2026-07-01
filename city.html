@@ -70,7 +70,7 @@
         { name: "MERCH",    sub: "shop",     url: "merch.html",   color: 0x19e0ff },
         { name: "WALLET",   sub: "connect",  url: "wallet.html",  color: 0x7fd4ff },
       ];
-      const tints = ["#19e0ff", "#ff3df0", "#9b4dff", "#ffd84d", "#7fd4ff"];
+      const tints = ["#9945ff", "#14f195", "#19e0ff", "#a86bff", "#00e0a8"]; // Solana Tron palette
 
       const canvas = document.getElementById("c");
       const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -96,7 +96,7 @@
       scene.add(new THREE.AmbientLight(0x4a3b7a, 1.0));
       const key = new THREE.DirectionalLight(0x9b4dff, 0.7); key.position.set(20, 60, 20); scene.add(key);
       const fillA = new THREE.PointLight(0x19e0ff, 1.1, 240); fillA.position.set(-40, 34, -10); scene.add(fillA);
-      const fillB = new THREE.PointLight(0xff3df0, 0.9, 240); fillB.position.set(40, 26, 30); scene.add(fillB);
+      const fillB = new THREE.PointLight(0x14f195, 0.9, 240); fillB.position.set(40, 26, 30); scene.add(fillB);
       const lightning = new THREE.PointLight(0xbfe0ff, 0, 400); lightning.position.set(0, 130, 0); scene.add(lightning);
 
       // wet reflective street
@@ -104,11 +104,47 @@
         textureWidth: 1024, textureHeight: 1024, color: 0x46435e,
       });
       mirror.rotation.x = -Math.PI / 2; mirror.position.y = 0.01; scene.add(mirror);
-      const wet = new THREE.Mesh(new THREE.PlaneGeometry(900, 900),
-        new THREE.MeshStandardMaterial({ color: 0x06040e, metalness: 0.9, roughness: 0.5, transparent: true, opacity: 0.6 }));
-      wet.rotation.x = -Math.PI / 2; wet.position.y = 0.02; scene.add(wet);
-      const grid = new THREE.GridHelper(900, 180, 0x9b4dff, 0x1d1438);
-      grid.material.transparent = true; grid.material.opacity = 0.16; grid.position.y = 0.03; scene.add(grid);
+
+      // --- street grid: asphalt roads, lane lines, sidewalks, crosswalks ---
+      const ROADW = 15, SIDEW = 5, EXT = 174;
+      const ROADS = []; for (let k = -4; k <= 4; k++) ROADS.push(k * 36);
+      function roadTexture() {
+        const S = 2048, cv = document.createElement("canvas"); cv.width = cv.height = S; const x = cv.getContext("2d");
+        const p2 = S / (2 * EXT), c = (v) => (v + EXT) * p2;
+        const RW = ROADW * p2, SW = SIDEW * p2;
+        x.fillStyle = "#0c0b14"; x.fillRect(0, 0, S, S);              // base pavement
+        // block pavement squares (subtle) between roads
+        x.fillStyle = "#14121e";
+        for (let a = -3; a <= 3; a++) for (let b = -3; b <= 3; b++) { const bx = c(a * 36 + 18), by = c(b * 36 + 18); x.fillRect(bx - RW * 0.7, by - RW * 0.7, RW * 1.4, RW * 1.4); }
+        function road(horizontal, at) {
+          const q = c(at);
+          if (horizontal) {
+            x.fillStyle = "#1c1a28"; x.fillRect(0, q - RW / 2 - SW, S, SW); x.fillRect(0, q + RW / 2, S, SW);      // sidewalks
+            x.fillStyle = "#08070f"; x.fillRect(0, q - RW / 2, S, RW);                                            // asphalt
+            x.fillStyle = "rgba(220,225,255,0.45)"; x.fillRect(0, q - RW / 2 + 3, S, 2.5); x.fillRect(0, q + RW / 2 - 5, S, 2.5); // edge lines
+            x.fillStyle = "rgba(255,205,70,0.85)"; for (let px = 0; px < S; px += 46) x.fillRect(px, q - 2, 26, 4); // dashed center
+          } else {
+            x.fillStyle = "#1c1a28"; x.fillRect(q - RW / 2 - SW, 0, SW, S); x.fillRect(q + RW / 2, 0, SW, S);
+            x.fillStyle = "#08070f"; x.fillRect(q - RW / 2, 0, RW, S);
+            x.fillStyle = "rgba(220,225,255,0.45)"; x.fillRect(q - RW / 2 + 3, 0, 2.5, S); x.fillRect(q + RW / 2 - 5, 0, 2.5, S);
+            x.fillStyle = "rgba(255,205,70,0.85)"; for (let py = 0; py < S; py += 46) x.fillRect(q - 2, py, 4, 26);
+          }
+        }
+        ROADS.forEach((r) => { road(true, r); road(false, r); });
+        // crosswalks at intersections
+        x.fillStyle = "rgba(235,240,255,0.7)";
+        ROADS.forEach((xc) => ROADS.forEach((zc) => { const xp = c(xc), yp = c(zc);
+          for (let k = -3; k <= 3; k++) { x.fillRect(xp + k * 9 - 3, yp - RW / 2 - SW, 6, SW); x.fillRect(xp + k * 9 - 3, yp + RW / 2, 6, SW);
+            x.fillRect(xp - RW / 2 - SW, yp + k * 9 - 3, SW, 6); x.fillRect(xp + RW / 2, yp + k * 9 - 3, SW, 6); }
+        }));
+        const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8; return tex;
+      }
+      const streets = new THREE.Mesh(new THREE.PlaneGeometry(2 * EXT, 2 * EXT),
+        new THREE.MeshStandardMaterial({ map: roadTexture(), metalness: 0.55, roughness: 0.5, transparent: true, opacity: 0.93 }));
+      streets.rotation.x = -Math.PI / 2; streets.position.y = 0.04; scene.add(streets);
+      // glowing Tron grid over the streets (Solana purple + teal)
+      const tron = new THREE.GridHelper(2 * EXT, Math.round(2 * EXT / 12), 0x14f195, 0x9945ff);
+      tron.material.transparent = true; tron.material.opacity = 0.32; tron.position.y = 0.07; scene.add(tron);
 
       // environment map so glass towers reflect the neon city
       const pmrem = new THREE.PMREMGenerator(renderer);
@@ -147,6 +183,9 @@
       const glassMats = [0x0a1430, 0x14082a, 0x0a1228].map((c, i) => new THREE.MeshStandardMaterial({ color: c, metalness: 1.0, roughness: 0.08, emissive: 0xffffff, emissiveMap: FAC[i], emissiveIntensity: 0.16 }));
       const trimMats = tints.map((c) => new THREE.MeshBasicMaterial({ color: c }));
       const unit = new THREE.BoxGeometry(1, 1, 1);
+      // Tron neon edge outlines (shared geometry, reused per building section)
+      const edgeGeo = new THREE.EdgesGeometry(unit);
+      const edgeMats = ["#14f195", "#9945ff", "#19e0ff"].map((c) => new THREE.LineBasicMaterial({ color: c, transparent: true, opacity: 0.5 }));
 
       // photoreal PBR facades (nano-banana) with normal maps for real depth
       const texLoader = new THREE.TextureLoader();
@@ -172,6 +211,7 @@
           const sh = s === sections - 1 ? hLeft : hLeft * (0.45 + Math.random() * 0.2); hLeft -= sh;
           const mat = fset ? fset[sh < 14 ? 0 : sh < 26 ? 1 : 2] : winMats[(Math.random() * winMats.length) | 0];
           const box = new THREE.Mesh(unit, mat); box.scale.set(cw, sh, cd); box.position.set(px, y + sh / 2, pz); g.add(box);
+          const eg = new THREE.LineSegments(edgeGeo, edgeMats[(Math.random() * edgeMats.length) | 0]); eg.scale.set(cw, sh, cd); eg.position.set(px, y + sh / 2, pz); g.add(eg); // Tron edges
           const t = new THREE.Mesh(unit, trim); t.scale.set(cw * 1.04, 0.5, cd * 1.04); t.position.set(px, y + sh, pz); g.add(t);
           y += sh; cw *= 0.66 + Math.random() * 0.08; cd *= 0.66 + Math.random() * 0.08;
         }
@@ -183,14 +223,15 @@
         scene.add(g);
       }
 
-      const STEP = 12, SPAN = 12, ROAD_HALF = STEP * SPAN;
+      const STEP = 12, SPAN = 14, ROAD_HALF = EXT;
       for (let i = -SPAN; i <= SPAN; i++) for (let j = -SPAN; j <= SPAN; j++) {
+        if (i % 3 === 0 || j % 3 === 0) continue;      // leave the road lanes clear
         const r = Math.hypot(i, j);
-        if (r < 4.0) continue;
-        if (Math.random() < 0.26) continue;
+        if (r < 3.0) continue;                          // central plaza
+        if (Math.random() < 0.14) continue;
         const h = 7 + Math.random() * (r > 8 ? 34 : 16);
-        const w = 4.5 + Math.random() * 3, d = 4.5 + Math.random() * 3;
-        makeBuilding(i * STEP + (Math.random() - 0.5) * 2, j * STEP + (Math.random() - 0.5) * 2, w, d, h);
+        const w = 5 + Math.random() * 3.5, d = 5 + Math.random() * 3.5;
+        makeBuilding(i * STEP + (Math.random() - 0.5) * 1.5, j * STEP + (Math.random() - 0.5) * 1.5, w, d, h);
       }
 
       function roundRect(x, a, b, w, h, r) { x.beginPath(); x.moveTo(a + r, b); x.arcTo(a + w, b, a + w, b + h, r); x.arcTo(a + w, b + h, a, b + h, r); x.arcTo(a, b + h, a, b, r); x.arcTo(a, b, a + w, b, r); x.closePath(); }
@@ -217,6 +258,7 @@
         const tower = new THREE.Mesh(new THREE.BoxGeometry(7, h, 7), mat);
         tower.position.set(px, h / 2, pz); tower.userData = { url: n.url, name: n.name, base: 0.9, mat };
         scene.add(tower); clickable.push(tower);
+        const te = new THREE.LineSegments(edgeGeo, new THREE.LineBasicMaterial({ color: col, transparent: true, opacity: 0.7 })); te.scale.set(7, h, 7); te.position.set(px, h / 2, pz); scene.add(te);
         const cap = new THREE.Mesh(new THREE.BoxGeometry(7.4, 1.2, 7.4), new THREE.MeshBasicMaterial({ color: col })); cap.position.set(px, h + 0.6, pz); scene.add(cap);
         const sign = makeSign(n.name, n.sub, n.color); sign.position.set(px, h + 7, pz); scene.add(sign); tower.userData.sign = sign;
         const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 70, 6), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.22 })); beam.position.set(px, h + 35, pz); scene.add(beam);
@@ -239,16 +281,25 @@
       const starGeo = new THREE.BufferGeometry(); starGeo.setAttribute("position", new THREE.Float32BufferAttribute(sv, 3));
       scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xbfa8ff, size: 0.8, transparent: true, opacity: 0.8 })));
 
-      // animated billboards on a few buildings
-      const billboards = [];
-      function makeBillboard(px, pz, ry, h) {
+      // billboards — animated $CATBOY marquees + clickable "ADVERTISE HERE" ad slots
+      const billboards = [], adMeshes = [];
+      const TG_URL = "https://t.me/kingpetty317";
+      function drawAd(x) {
+        x.fillStyle = "#0a0614"; x.fillRect(0, 0, 1024, 256);
+        x.strokeStyle = "#19e0ff"; x.lineWidth = 10; x.shadowColor = "#19e0ff"; x.shadowBlur = 34; x.strokeRect(16, 16, 992, 224);
+        x.textAlign = "center"; x.shadowBlur = 26; x.fillStyle = "#fff"; x.font = "900 96px Orbitron, sans-serif"; x.fillText("ADVERTISE HERE", 512, 116);
+        x.shadowBlur = 16; x.fillStyle = "#19e0ff"; x.font = "700 54px Rajdhani, sans-serif"; x.fillText("t.me/kingpetty317", 512, 196);
+      }
+      function makeBillboard(px, pz, ry, h, ad) {
         const cv = document.createElement("canvas"); cv.width = 1024; cv.height = 256; const x = cv.getContext("2d");
         const tex = new THREE.CanvasTexture(cv); tex.wrapS = THREE.RepeatWrapping;
-        const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true });
-        const bb = new THREE.Mesh(new THREE.PlaneGeometry(16, 4), mat); bb.position.set(px, h, pz); bb.rotation.y = ry; scene.add(bb);
-        billboards.push({ x, cv, tex, off: Math.random() * 1000, col: tints[(Math.random() * tints.length) | 0] });
+        const bb = new THREE.Mesh(new THREE.PlaneGeometry(16, 4), new THREE.MeshBasicMaterial({ map: tex, transparent: true }));
+        bb.position.set(px, h, pz); bb.rotation.y = ry; scene.add(bb);
+        if (ad) { drawAd(x); tex.needsUpdate = true; bb.userData = { url: TG_URL }; adMeshes.push(bb); }
+        else billboards.push({ x, cv, tex, off: Math.random() * 1000, col: tints[(Math.random() * tints.length) | 0] });
       }
       makeBillboard(-44, 12, Math.PI / 2, 30); makeBillboard(46, -6, -Math.PI / 2, 38); makeBillboard(8, -50, 0, 34); makeBillboard(-20, 48, Math.PI, 28);
+      makeBillboard(44, 30, -Math.PI / 2, 22, true); makeBillboard(-46, -26, Math.PI / 2, 24, true); makeBillboard(-8, 54, Math.PI, 19, true);
       const MARQUEE = "  $CATBOY   •   THE LEGEND EVOLVES   •   NOW ON SOLANA   •   NINE LIVES   ";
       function drawBillboards(t) {
         billboards.forEach((b) => {
@@ -263,20 +314,36 @@
       const carBody = new THREE.BoxGeometry(1, 1, 1);
       const headMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
       const tailMat = new THREE.MeshBasicMaterial({ color: 0xff2a3a });
+      const glassMat = new THREE.MeshStandardMaterial({ color: 0x0a1220, metalness: 0.9, roughness: 0.15, emissive: 0x0a1a2a, emissiveIntensity: 0.3 });
+      const wheelGeo = new THREE.CylinderGeometry(0.34, 0.34, 0.3, 10); wheelGeo.rotateX(Math.PI / 2);
+      const wheelMat = new THREE.MeshStandardMaterial({ color: 0x0a0a0e, roughness: 0.8 });
       function makeCar(kind, col) {
         const g = new THREE.Group();
-        const len = kind === "bus" ? 6 : kind === "cop" ? 3.1 : 2.6, w = kind === "bus" ? 1.7 : 1.4, hh = kind === "bus" ? 1.6 : 1.0;
-        const body = new THREE.Mesh(carBody, new THREE.MeshStandardMaterial({ color: col, metalness: 0.5, roughness: 0.45, emissive: new THREE.Color(col), emissiveIntensity: 0.15 }));
-        body.scale.set(len, hh, w); body.position.y = hh / 2 + 0.2; g.add(body);
-        const h1 = new THREE.Mesh(carBody, headMat); h1.scale.set(0.25, 0.25, 0.3); h1.position.set(len / 2, 0.5, w / 2 - 0.3); g.add(h1);
-        const h2 = h1.clone(); h2.position.z = -(w / 2 - 0.3); g.add(h2);
-        const t1 = new THREE.Mesh(carBody, tailMat); t1.scale.set(0.2, 0.2, 0.3); t1.position.set(-len / 2, 0.5, w / 2 - 0.3); g.add(t1);
-        const t2 = t1.clone(); t2.position.z = -(w / 2 - 0.3); g.add(t2);
-        if (kind === "bus") { const wins = new THREE.Mesh(carBody, new THREE.MeshBasicMaterial({ color: 0xffe08a })); wins.scale.set(len * 0.9, 0.5, w + 0.02); wins.position.y = 1.1; g.add(wins); }
-        if (kind === "cop") { const bar = new THREE.Mesh(carBody, new THREE.MeshBasicMaterial({ color: 0xff0000 })); bar.scale.set(0.8, 0.25, w * 0.8); bar.position.y = hh + 0.35; g.add(bar); g.userData.bar = bar; }
+        const len = kind === "bus" ? 6.5 : kind === "cop" ? 3.4 : 3.0, w = kind === "bus" ? 1.8 : 1.5;
+        const paint = new THREE.MeshStandardMaterial({ color: col, metalness: 0.7, roughness: 0.32, emissive: new THREE.Color(col), emissiveIntensity: 0.08 });
+        // lower body
+        const body = new THREE.Mesh(carBody, paint); body.scale.set(len, 0.7, w); body.position.y = 0.72; g.add(body);
+        // cabin (shorter, set back) — buses = long, cars = middle greenhouse
+        const cabLen = kind === "bus" ? len * 0.92 : len * 0.55;
+        const cab = new THREE.Mesh(carBody, kind === "bus" ? glassMat : paint); cab.scale.set(cabLen, 0.62, w * 0.92); cab.position.set(kind === "bus" ? 0 : -len * 0.05, 1.28, 0); g.add(cab);
+        // windows band
+        const win = new THREE.Mesh(carBody, glassMat); win.scale.set(cabLen * 0.98, 0.44, w + 0.03); win.position.set(cab.position.x, 1.3, 0); g.add(win);
+        if (kind === "bus") { const lit = new THREE.Mesh(carBody, new THREE.MeshBasicMaterial({ color: 0xffe08a })); lit.scale.set(cabLen * 0.9, 0.34, w + 0.05); lit.position.set(0, 1.3, 0); g.add(lit); }
+        // wheels
+        const wy = 0.34, wx = len * 0.32, wz = w / 2 + 0.02;
+        [[wx, wz], [wx, -wz], [-wx, wz], [-wx, -wz]].forEach(([px, pz]) => { const wh = new THREE.Mesh(wheelGeo, wheelMat); wh.position.set(px, wy, pz); g.add(wh); });
+        // lights
+        const h1 = new THREE.Mesh(carBody, headMat); h1.scale.set(0.16, 0.2, 0.34); h1.position.set(len / 2 - 0.05, 0.75, w / 2 - 0.32); g.add(h1);
+        const h2 = h1.clone(); h2.position.z = -(w / 2 - 0.32); g.add(h2);
+        const t1 = new THREE.Mesh(carBody, tailMat); t1.scale.set(0.12, 0.18, 0.34); t1.position.set(-len / 2 + 0.05, 0.78, w / 2 - 0.32); g.add(t1);
+        const t2 = t1.clone(); t2.position.z = -(w / 2 - 0.32); g.add(t2);
+        // neon underglow
+        const glow = new THREE.Mesh(new THREE.PlaneGeometry(len * 1.05, w * 1.15), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false }));
+        glow.rotation.x = -Math.PI / 2; glow.position.y = 0.08; g.add(glow);
+        if (kind === "cop") { const bar = new THREE.Mesh(carBody, new THREE.MeshBasicMaterial({ color: 0xff0000 })); bar.scale.set(0.9, 0.22, w * 0.7); bar.position.y = 1.7; g.add(bar); g.userData.bar = bar; }
         return g;
       }
-      const LANES = [-3, -1.6, 1.6, 3].map((m) => m * STEP);
+      const LANES = ROADS.slice();   // vehicles/peds travel the road centerlines
       const vehicles = [];
       function spawnVehicle(kind) {
         const colors = kind === "bus" ? [0x2a6cff] : kind === "cop" ? [0x111318] : [0x9b4dff, 0x19e0ff, 0xff3df0, 0x223, 0x554];
@@ -291,7 +358,7 @@
       for (let i = 0; i < 5; i++) spawnVehicle("bus");
       const cop = spawnVehicle("cop"); const runner = spawnVehicle("car"); runner.userData.spd = 0.6; runner.userData.lane = cop.userData.lane; runner.userData.axis = cop.userData.axis; runner.userData.dir = cop.userData.dir; runner.userData.pos = cop.userData.pos + 8;
       function placeVehicle(v) {
-        const u = v.userData; const along = u.pos, off = u.lane + (u.dir > 0 ? 2.2 : -2.2);
+        const u = v.userData; const along = u.pos, off = u.lane + (u.dir > 0 ? 3.2 : -3.2);
         if (u.axis === "x") { v.position.set(along, 0, off); v.rotation.y = u.dir > 0 ? 0 : Math.PI; }
         else { v.position.set(off, 0, along); v.rotation.y = u.dir > 0 ? -Math.PI / 2 : Math.PI / 2; }
       }
@@ -326,7 +393,7 @@
         peds.forEach((p) => {
           const u = p.userData; u.pos += u.spd * u.dir * dt * 60;
           if (u.pos > ROAD_HALF) u.pos = -ROAD_HALF; if (u.pos < -ROAD_HALF) u.pos = ROAD_HALF;
-          const off = u.lane + u.side * 4.2;
+          const off = u.lane + u.side * (ROADW / 2 + 2.5);   // on the sidewalk
           if (u.axis === "x") p.position.set(u.pos, 0, off); else p.position.set(off, 0, u.pos);
           p.position.y = Math.abs(Math.sin(t * (u.spd * 30) + u.ph)) * 0.18; // walk bob
           p.rotation.y = u.axis === "x" ? (u.dir > 0 ? 0 : Math.PI) : (u.dir > 0 ? -Math.PI / 2 : Math.PI / 2);
@@ -364,7 +431,9 @@
       renderer.domElement.addEventListener("pointerdown", (e) => { downXY = [e.clientX, e.clientY]; });
       renderer.domElement.addEventListener("pointerup", (e) => {
         if (!downXY) return; const moved = Math.hypot(e.clientX - downXY[0], e.clientY - downXY[1]); downXY = null;
-        if (moved > 8) return; setPointer(e); const o = pick(); if (o) { document.getElementById("load").classList.remove("gone"); location.href = o.userData.url; }
+        if (moved > 8) return; setPointer(e);
+        const o = pick(); if (o) { document.getElementById("load").classList.remove("gone"); location.href = o.userData.url; return; }
+        const a = ray.intersectObjects(adMeshes, false)[0]; if (a) window.open(a.object.userData.url, "_blank");
       });
 
       // street view + WASD
