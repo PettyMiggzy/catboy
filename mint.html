@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mint · CATBOY Nine Lives Collection</title>
+  <meta name="description" content="Mint your Catboy NFT from the Nine Lives Collection on Solana." />
+  <meta property="og:title" content="Mint · CATBOY Nine Lives Collection" />
+  <meta property="og:image" content="assets/nft/collection/001.jpg" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <link rel="icon" type="image/png" href="assets/solana.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="bg-grid" aria-hidden="true"></div>
+  <div class="bg-glow" aria-hidden="true"></div>
+
+  <header class="nav">
+    <a href="index.html" class="brand">
+      <img src="assets/catboy.png" alt="Catboy logo" class="brand-logo" />
+      <span class="brand-name">CATBOY</span>
+    </a>
+    <nav class="nav-links">
+      <a href="index.html#lore">Lore</a>
+      <a href="saga.html">Saga</a>
+      <a href="trench.html">Terminal</a>
+      <a href="nft.html" class="active">NFTs</a>
+      <a href="launch.html">Launch</a>
+      <a href="casino.html">Casino</a>
+      <a href="arcade.html">Arcade</a>
+      <a href="club.html">Club</a>
+      <a href="meme.html">Meme</a>
+      <a href="wallet.html">Wallet</a>
+      <a href="merch.html">Merch</a>
+      <a href="index.html#faq">FAQ</a>
+    </nav>
+    <a href="index.html#waitlist" class="btn btn-primary nav-cta">Join Allowlist</a>
+  </header>
+
+  <section class="page-hero" style="padding-bottom:0.5rem;">
+    <div class="page-hero-inner">
+      <a href="market.html" class="back-link">&lsaquo; Back to Marketplace</a>
+      <span class="eyebrow" style="display:block;margin-top:1rem;">Mint</span>
+      <h1>Mint a <span class="grad">Catboy</span></h1>
+      <p>Random reveal from the 100-piece Nine Lives Collection. One cat, nine lives — which one's yours?</p>
+    </div>
+  </section>
+
+  <section class="section" style="padding-top:1rem;">
+    <div class="mint-wrap">
+      <div class="mint-card">
+        <img src="assets/nft/collection/003.jpg" alt="Catboy NFT" class="mint-art" id="mintArt" />
+        <div class="mint-body">
+          <div class="stat-rows">
+            <div><span>Price</span><b id="mPrice">— SOL</b></div>
+            <div><span>Minted</span><b id="mSupply">— / —</b></div>
+            <div><span>Network</span><b>Solana</b></div>
+          </div>
+          <div class="mint-qty">
+            <button class="btn btn-ghost btn-sm" id="qMinus" type="button">−</button>
+            <span id="qVal">1</span>
+            <button class="btn btn-ghost btn-sm" id="qPlus" type="button">+</button>
+          </div>
+          <button class="btn btn-primary" id="mintBtn" type="button" style="width:100%;">Connect Wallet</button>
+          <p class="form-status" id="mintStatus" role="status" aria-live="polite"></p>
+          <p class="muted-note" style="text-align:center;">Non-custodial — you sign every mint yourself. Nothing here is financial advice.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="footer-brand"><img src="assets/catboy.png" alt="Catboy" class="footer-logo" /><span>CATBOY</span></div>
+    <p class="footer-copy">© <span id="year"></span> CATBOY · The Legend Evolves on Solana</p>
+  </footer>
+
+  <script src="assets/mint-config.js"></script>
+  <script src="script.js"></script>
+  <script type="module">
+    const C = window.CATBOY_MINT || {};
+    const $ = (id) => document.getElementById(id);
+    const btn = $("mintBtn"), status = $("mintStatus");
+    let qty = 1, wallet = null;
+
+    $("mPrice").textContent = (C.priceSol ?? 0) + " SOL";
+    $("mSupply").textContent = "0 / " + (C.total ?? 100);
+
+    // rotate preview art
+    const previews = ["001", "016", "003", "041", "004", "025"];
+    let pi = 0; setInterval(() => { pi = (pi + 1) % previews.length; $("mintArt").src = "assets/nft/collection/" + previews[pi] + ".jpg"; }, 2500);
+
+    $("qMinus").onclick = () => { qty = Math.max(1, qty - 1); $("qVal").textContent = qty; };
+    $("qPlus").onclick = () => { qty = Math.min(10, qty + 1); $("qVal").textContent = qty; };
+
+    function getProvider() {
+      return (window.solana && window.solana.isPhantom) ? window.solana : (window.solflare || window.backpack || (window.xnft && window.xnft.solana) || null);
+    }
+    async function connect() {
+      const p = getProvider();
+      if (!p) { status.style.color = "var(--magenta)"; status.textContent = "No Solana wallet found — install Phantom or use the Wallet page."; return null; }
+      const r = await p.connect(); wallet = p;
+      const a = (r && r.publicKey ? r.publicKey : p.publicKey).toString();
+      btn.textContent = C.enabled ? ("Mint " + qty + " · " + (C.priceSol * qty).toFixed(2) + " SOL") : "Mint (opens at launch)";
+      status.style.color = "var(--cyan)"; status.textContent = "Connected " + a.slice(0, 4) + "…" + a.slice(-4);
+      return a;
+    }
+
+    async function updateSupply() {
+      if (!C.enabled || !C.candyMachineId) return;
+      try {
+        const { createUmi } = await import("https://esm.sh/@metaplex-foundation/umi-bundle-defaults@0.9.2");
+        const { mplCandyMachine, fetchCandyMachine } = await import("https://esm.sh/@metaplex-foundation/mpl-candy-machine@6.0.1");
+        const { publicKey } = await import("https://esm.sh/@metaplex-foundation/umi@0.9.2");
+        const umi = createUmi(location.origin + C.rpc).use(mplCandyMachine());
+        const cm = await fetchCandyMachine(umi, publicKey(C.candyMachineId));
+        $("mSupply").textContent = Number(cm.itemsRedeemed) + " / " + Number(cm.data.itemsAvailable);
+      } catch (e) { console.warn("supply read failed", e); }
+    }
+
+    async function doMint() {
+      if (!C.enabled || !C.candyMachineId) {
+        status.style.color = "var(--cyan)";
+        status.textContent = "Mint opens at token launch — join the allowlist for guaranteed access.";
+        return;
+      }
+      if (!wallet) { if (!(await connect())) return; }
+      try {
+        status.style.color = "var(--muted)"; status.textContent = "Preparing mint…";
+        const { createUmi } = await import("https://esm.sh/@metaplex-foundation/umi-bundle-defaults@0.9.2");
+        const { mplCandyMachine, fetchCandyMachine, mintV2 } = await import("https://esm.sh/@metaplex-foundation/mpl-candy-machine@6.0.1");
+        const { walletAdapterIdentity } = await import("https://esm.sh/@metaplex-foundation/umi-signer-wallet-adapters@0.9.2");
+        const { generateSigner, transactionBuilder, some, publicKey } = await import("https://esm.sh/@metaplex-foundation/umi@0.9.2");
+        const { setComputeUnitLimit } = await import("https://esm.sh/@metaplex-foundation/mpl-toolbox@0.9.4");
+        const { TokenStandard } = await import("https://esm.sh/@metaplex-foundation/mpl-token-metadata@3.2.1");
+
+        const umi = createUmi(location.origin + C.rpc).use(mplCandyMachine()).use(walletAdapterIdentity(wallet));
+        const cm = await fetchCandyMachine(umi, publicKey(C.candyMachineId));
+        for (let i = 0; i < qty; i++) {
+          status.textContent = "Minting " + (i + 1) + " of " + qty + " — approve in your wallet…";
+          const nftMint = generateSigner(umi);
+          await transactionBuilder()
+            .add(setComputeUnitLimit(umi, { units: 800000 }))
+            .add(mintV2(umi, {
+              candyMachine: cm.publicKey,
+              nftMint,
+              collectionMint: publicKey(C.collectionMint),
+              collectionUpdateAuthority: cm.authority,
+              tokenStandard: TokenStandard.NonFungible,
+              candyGuard: cm.mintAuthority,
+              mintArgs: { solPayment: some({ destination: publicKey(C.treasury) }) },
+            }))
+            .sendAndConfirm(umi);
+        }
+        status.style.color = "var(--cyan)"; status.textContent = "Minted " + qty + " Catboy" + (qty > 1 ? "s" : "") + "! Check your wallet. 🐾".replace("🐾", "");
+        updateSupply();
+      } catch (e) { status.style.color = "var(--magenta)"; status.textContent = "Mint failed: " + (e.message || e); }
+    }
+
+    btn.addEventListener("click", async () => { if (!wallet) { await connect(); } else { doMint(); } });
+    if (!C.enabled) { btn.textContent = "Connect Wallet"; }
+    updateSupply();
+  </script>
+</body>
+</html>

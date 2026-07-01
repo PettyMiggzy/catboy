@@ -1047,3 +1047,11 @@ body.splash-open { overflow: hidden; }
 .nft-trait span { display: block; font-size: 0.65rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
 .nft-trait b { font-size: 0.85rem; }
 @media (max-width: 560px) { .nft-modal-card { flex-direction: column; } .nft-modal-img { width: 100%; max-width: 100%; } }
+
+/* ---------- Mint page ---------- */
+.mint-wrap { max-width: 760px; margin: 0 auto; padding: 0 1rem; }
+.mint-card { display: flex; gap: 1.6rem; background: rgba(12,8,26,0.7); border: 1px solid var(--border); border-radius: 18px; padding: 1.4rem; box-shadow: 0 0 50px rgba(155,77,255,0.2); }
+.mint-art { width: 300px; max-width: 45%; aspect-ratio: 1; object-fit: cover; border-radius: 14px; border: 1px solid var(--border); }
+.mint-body { flex: 1; display: flex; flex-direction: column; gap: 0.9rem; }
+.mint-qty { display: flex; align-items: center; justify-content: center; gap: 1.2rem; font-family: "Orbitron", sans-serif; font-size: 1.2rem; }
+@media (max-width: 560px) { .mint-card { flex-direction: column; } .mint-art { width: 100%; max-width: 100%; } }
