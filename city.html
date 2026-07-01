@@ -281,8 +281,9 @@
       const starGeo = new THREE.BufferGeometry(); starGeo.setAttribute("position", new THREE.Float32BufferAttribute(sv, 3));
       scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xbfa8ff, size: 0.8, transparent: true, opacity: 0.8 })));
 
-      // billboards — animated $CATBOY marquees + clickable "ADVERTISE HERE" ad slots
-      const billboards = [], adMeshes = [];
+      // billboards — animated $CATBOY marquees, themed promos (click to enter),
+      // and clickable "ADVERTISE HERE" ad slots (open Telegram)
+      const billboards = [], adMeshes = [], promoMeshes = [];
       const TG_URL = "https://t.me/kingpetty317";
       function drawAd(x) {
         x.fillStyle = "#0a0614"; x.fillRect(0, 0, 1024, 256);
@@ -290,21 +291,48 @@
         x.textAlign = "center"; x.shadowBlur = 26; x.fillStyle = "#fff"; x.font = "900 96px Orbitron, sans-serif"; x.fillText("ADVERTISE HERE", 512, 116);
         x.shadowBlur = 16; x.fillStyle = "#19e0ff"; x.font = "700 54px Rajdhani, sans-serif"; x.fillText("t.me/kingpetty317", 512, 196);
       }
-      function makeBillboard(px, pz, ry, h, ad) {
+      // themed promo billboards that link to on-site activities (drive spending)
+      const PROMOS = {
+        casino: { url: "casino.html", col: "#ffd84d", head: "NINE LIVES SLOTS", sub: "SPIN TO WIN REAL NFTs · $0.05", tag: "ENTER CASINO ›" },
+        mint:   { url: "mint.html",   col: "#ff3df0", head: "MINT IS LIVE",     sub: "100 NINE LIVES PFPs · ON SOLANA", tag: "MINT NOW ›" },
+        flip:   { url: "casino.html", col: "#19e0ff", head: "COIN FLIP",        sub: "DOUBLE YOUR $CATBOY · HEADS OR TAILS", tag: "PLAY ›" },
+        arcade: { url: "arcade.html", col: "#14f195", head: "CATBOY ARCADE",    sub: "BRAWL · HIGH SCORES · GLORY", tag: "PLAY ›" },
+      };
+      function drawPromo(x, p, t) {
+        const pulse = 0.5 + 0.5 * Math.sin(t * 3);
+        x.clearRect(0, 0, 1024, 256);
+        x.fillStyle = "#07040f"; x.fillRect(0, 0, 1024, 256);
+        x.strokeStyle = p.col; x.lineWidth = 8; x.shadowColor = p.col; x.shadowBlur = 20 + pulse * 26; roundRect(x, 14, 14, 996, 228, 18); x.stroke();
+        x.textAlign = "left"; x.textBaseline = "alphabetic";
+        x.fillStyle = p.col; x.shadowBlur = 24; x.font = "900 82px Orbitron, sans-serif"; x.fillText(p.head, 48, 108);
+        x.fillStyle = "#eae6ff"; x.shadowBlur = 8; x.font = "600 40px Rajdhani, sans-serif"; x.fillText(p.sub, 50, 162);
+        // pulsing CTA pill on the right
+        x.textAlign = "right"; x.fillStyle = p.col; x.shadowColor = p.col; x.shadowBlur = 12 + pulse * 20;
+        x.font = "700 46px Orbitron, sans-serif"; x.globalAlpha = 0.7 + pulse * 0.3; x.fillText(p.tag, 984, 218); x.globalAlpha = 1;
+      }
+      function makeBillboard(px, pz, ry, h, kind) {
         const cv = document.createElement("canvas"); cv.width = 1024; cv.height = 256; const x = cv.getContext("2d");
         const tex = new THREE.CanvasTexture(cv); tex.wrapS = THREE.RepeatWrapping;
         const bb = new THREE.Mesh(new THREE.PlaneGeometry(16, 4), new THREE.MeshBasicMaterial({ map: tex, transparent: true }));
         bb.position.set(px, h, pz); bb.rotation.y = ry; scene.add(bb);
-        if (ad) { drawAd(x); tex.needsUpdate = true; bb.userData = { url: TG_URL }; adMeshes.push(bb); }
+        if (kind === "ad") { drawAd(x); tex.needsUpdate = true; bb.userData = { url: TG_URL }; adMeshes.push(bb); }
+        else if (kind && PROMOS[kind]) { bb.userData = { url: PROMOS[kind].url, name: PROMOS[kind].head }; promoMeshes.push(bb); billboards.push({ x, cv, tex, kind, promo: PROMOS[kind] }); }
         else billboards.push({ x, cv, tex, off: Math.random() * 1000, col: tints[(Math.random() * tints.length) | 0] });
       }
+      // marquees
       makeBillboard(-44, 12, Math.PI / 2, 30); makeBillboard(46, -6, -Math.PI / 2, 38); makeBillboard(8, -50, 0, 34); makeBillboard(-20, 48, Math.PI, 28);
-      makeBillboard(44, 30, -Math.PI / 2, 22, true); makeBillboard(-46, -26, Math.PI / 2, 24, true); makeBillboard(-8, 54, Math.PI, 19, true);
+      makeBillboard(60, 44, -Math.PI / 2, 20); makeBillboard(-58, -50, Math.PI / 2, 26);
+      // themed on-site promos (clickable → enter the activity)
+      makeBillboard(30, -46, 0.35, 26, "casino"); makeBillboard(-34, -40, -0.4, 30, "mint");
+      makeBillboard(-52, 30, Math.PI / 2, 18, "flip"); makeBillboard(52, -34, -Math.PI / 2, 32, "arcade");
+      // "advertise here" slots (open Telegram)
+      makeBillboard(44, 30, -Math.PI / 2, 22, "ad"); makeBillboard(-46, -26, Math.PI / 2, 24, "ad"); makeBillboard(-8, 54, Math.PI, 19, "ad"); makeBillboard(40, 52, -Math.PI / 2, 16, "ad");
       const MARQUEE = "  $CATBOY   •   THE LEGEND EVOLVES   •   NOW ON SOLANA   •   NINE LIVES   ";
       function drawBillboards(t) {
         billboards.forEach((b) => {
+          if (b.promo) { drawPromo(b.x, b.promo, t); b.tex.needsUpdate = true; return; }
           const x = b.x; x.clearRect(0, 0, 1024, 256); x.fillStyle = "rgba(6,3,14,0.9)"; x.fillRect(0, 0, 1024, 256);
-          x.fillStyle = b.col; x.shadowColor = b.col; x.shadowBlur = 24; x.font = "900 120px Orbitron, sans-serif"; x.textBaseline = "middle";
+          x.textAlign = "left"; x.fillStyle = b.col; x.shadowColor = b.col; x.shadowBlur = 24; x.font = "900 120px Orbitron, sans-serif"; x.textBaseline = "middle";
           const scroll = ((t * 120 + b.off) % 1400) - 200; x.fillText(MARQUEE, -scroll * 2, 138); x.fillText(MARQUEE, -scroll * 2 + 2400, 138);
           b.tex.needsUpdate = true;
         });
@@ -433,6 +461,7 @@
         if (!downXY) return; const moved = Math.hypot(e.clientX - downXY[0], e.clientY - downXY[1]); downXY = null;
         if (moved > 8) return; setPointer(e);
         const o = pick(); if (o) { document.getElementById("load").classList.remove("gone"); location.href = o.userData.url; return; }
+        const pr = ray.intersectObjects(promoMeshes, false)[0]; if (pr) { document.getElementById("load").classList.remove("gone"); location.href = pr.object.userData.url; return; }
         const a = ray.intersectObjects(adMeshes, false)[0]; if (a) window.open(a.object.userData.url, "_blank");
       });
 
@@ -471,6 +500,7 @@
           if (hovered) { hoverEl.textContent = "Enter " + hovered.userData.name; hoverEl.style.color = "#" + hovered.material.emissive.getHexString(); hoverEl.style.opacity = 1; document.body.style.cursor = "pointer"; }
           else { hoverEl.style.opacity = 0; document.body.style.cursor = "default"; }
         }
+        if (!hovered) { const bh = ray.intersectObjects(promoMeshes, false)[0] || ray.intersectObjects(adMeshes, false)[0]; document.body.style.cursor = bh ? "pointer" : "default"; }
         if (hovered) { hovered.userData.mat.emissiveIntensity = 1.4 + Math.sin(t * 6) * 0.3; hovered.userData.sign.scale.set(18, 5.6, 1); }
         // life
         stepVehicles(dt, t); stepPeds(dt, t); stepRain(dt); drawBillboards(t);
