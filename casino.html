@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>CATBOY Casino — The Burn Lottery on Solana</title>
-  <meta name="description" content="The Catboy Burn Lottery: enter with $CATBOY, the winner takes the pot, and every losing entry is burned forever — making $CATBOY scarcer with every game." />
-  <meta property="og:title" content="CATBOY Casino — The Burn Lottery" />
-  <meta property="og:description" content="Winner takes the pot. Losing entries get burned forever. Deflation by design." />
-  <meta property="og:image" content="assets/art/arcade.jpg" />
+  <title>CATBOY Casino — Nine Lives Slots &amp; Games on Solana</title>
+  <meta name="description" content="The Catboy Casino: spin the Nine Lives Slots to win real Catboy NFTs, flip coins, and burn $CATBOY. Buy credits, spin for ~$0.05, chase the Legendary jackpot." />
+  <meta property="og:title" content="CATBOY Casino — Nine Lives Slots" />
+  <meta property="og:description" content="Spin to win Catboy NFTs. Higher the tier, harder the win. Buy credits and pull the lever." />
+  <meta property="og:image" content="assets/nft/collection/001.jpg" />
   <meta name="twitter:card" content="summary_large_image" />
   <link rel="icon" type="image/png" href="assets/solana.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -21,7 +21,6 @@
   <div class="bg-glow" aria-hidden="true"></div>
   <div class="scroll-progress" id="progress" aria-hidden="true"></div>
 
-  <!-- NAV -->
   <header class="nav">
     <a href="index.html" class="brand">
       <img src="assets/catboy.png" alt="Catboy logo" class="brand-logo" />
@@ -44,76 +43,233 @@
     <a href="index.html#waitlist" class="btn btn-primary nav-cta">Join Allowlist</a>
   </header>
 
-  <!-- PAGE HERO -->
-  <section class="page-hero">
+  <section class="page-hero" style="padding-bottom:0.5rem;">
     <div class="page-hero-inner">
       <a href="index.html" class="back-link">&lsaquo; Back to Home</a>
-      <span class="eyebrow" style="display:block;margin-top:1rem;">Insert Coin</span>
-      <h1>The Catboy <span class="grad">Burn Lottery</span></h1>
-      <p>Enter the round with $CATBOY. The winner takes the pot — and every losing entry is <b class="flame">burned forever</b>. The more you play, the scarcer $CATBOY becomes. Deflation, gamified.</p>
-      <img class="casino-hero-art" src="assets/art/arcade.jpg" alt="Catboy arcade — insert coin" />
+      <span class="eyebrow" style="display:block;margin-top:1rem;">Insert Credit</span>
+      <h1>Catboy <span class="grad">Casino</span></h1>
+      <p>Spin the <b>Nine Lives Slots</b> to win real Catboy NFTs. Buy credits, pull the lever, chase the Legendary jackpot. Higher the tier, harder the win — not every spin pays.</p>
     </div>
   </section>
 
-  <!-- BURN STATS -->
-  <section class="section" style="padding-top:2rem;">
-    <div class="burn-stats">
-      <div class="burn-stat"><div class="num"><span class="flame"><svg class="ic" viewBox="0 0 24 24"><path d="M12 2s5 4 5 9a5 5 0 0 1-10 0c0-2 1-3 1-3s0 2 1.5 2C11 12 9 8 12 2z"/></svg></span> TBA</div><div class="lbl">Total $CATBOY Burned</div></div>
-      <div class="burn-stat"><div class="num">TBA</div><div class="lbl">Rounds Played</div></div>
-      <div class="burn-stat"><div class="num">TBA</div><div class="lbl">Biggest Win</div></div>
+  <!-- CREDITS BAR -->
+  <section class="section" style="padding-top:0.5rem;">
+    <div class="cas-credits">
+      <div class="cas-bal"><span>Credits</span><b id="credits">0</b></div>
+      <div class="cas-bal"><span>Per spin</span><b>1 · $0.05</b></div>
+      <button class="btn btn-primary btn-sm" id="buyBtn" type="button">Buy Credits</button>
+      <span class="muted-note" id="casNote" style="margin:0;"></span>
     </div>
-    <div class="nft-mint">
-      <a href="#" class="btn btn-primary" data-game>Play — Coming Soon</a>
-      <p class="muted-note">The game launches after the token. Join the allowlist for early access.</p>
+
+    <!-- TABS -->
+    <div class="cas-tabs">
+      <button class="cas-tab active" data-tab="slots" type="button">Nine Lives Slots</button>
+      <button class="cas-tab" data-tab="flip" type="button">Coin Flip</button>
+      <button class="cas-tab" data-tab="lottery" type="button">Burn Lottery</button>
+    </div>
+
+    <!-- SLOTS -->
+    <div class="cas-panel" id="tab-slots">
+      <div class="slot-machine">
+        <div class="slot-reels" id="reels">
+          <div class="reel" id="r0"></div>
+          <div class="reel" id="r1"></div>
+          <div class="reel" id="r2"></div>
+          <div class="slot-line" aria-hidden="true"></div>
+        </div>
+        <div class="slot-result" id="slotResult">Match 3 to win · pull the lever</div>
+        <div class="slot-controls">
+          <button class="btn btn-ghost btn-sm" id="autoBtn" type="button">Auto ×10</button>
+          <button class="btn btn-primary slot-spin" id="spinBtn" type="button">SPIN · 1 credit</button>
+        </div>
+      </div>
+      <div class="paytable">
+        <h3>Paytable — 3 of a kind</h3>
+        <div class="pt-grid" id="ptGrid"></div>
+        <p class="muted-note">Odds are weighted: common symbols pay small credits, the Gold Cat and Catboy jackpots are rare and pay <b>NFTs</b>. Most spins don't hit — that's the game.</p>
+      </div>
+    </div>
+
+    <!-- COIN FLIP -->
+    <div class="cas-panel" id="tab-flip" style="display:none;">
+      <div class="flip-wrap">
+        <div class="flip-coin" id="flipCoin"><img src="assets/catboy.png" alt="" id="flipFace" /></div>
+        <div class="flip-controls">
+          <p class="muted-note" style="margin:0 0 .6rem;">Pick a side, set your bet, and flip. Win = double your credits. House keeps a small edge.</p>
+          <div class="flip-side">
+            <button class="btn btn-ghost side-btn active" data-side="cat" type="button">Catboy (Heads)</button>
+            <button class="btn btn-ghost side-btn" data-side="sol" type="button">Solana (Tails)</button>
+          </div>
+          <div class="flip-bet">
+            <span>Bet</span>
+            <button class="btn btn-ghost btn-sm" data-bet="1">1</button>
+            <button class="btn btn-ghost btn-sm" data-bet="5">5</button>
+            <button class="btn btn-ghost btn-sm" data-bet="10">10</button>
+            <b id="flipBet">1</b> credit(s)
+          </div>
+          <button class="btn btn-primary" id="flipBtn" type="button" style="width:100%;">FLIP</button>
+          <p class="flip-result" id="flipResult"></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- BURN LOTTERY -->
+    <div class="cas-panel" id="tab-lottery" style="display:none;">
+      <div class="section-head" style="margin-top:0;">
+        <span class="eyebrow">Deflationary</span>
+        <h2>The <span class="grad">Burn Lottery</span></h2>
+        <p class="section-intro">Enter a round with $CATBOY. Winner takes the pot — every losing entry is <b class="flame">burned forever</b>, shrinking supply with each game.</p>
+      </div>
+      <div class="burn-stats">
+        <div class="burn-stat"><div class="num">TBA</div><div class="lbl">Total $CATBOY Burned</div></div>
+        <div class="burn-stat"><div class="num">TBA</div><div class="lbl">Rounds Played</div></div>
+        <div class="burn-stat"><div class="num">TBA</div><div class="lbl">Biggest Win</div></div>
+      </div>
+      <div class="nft-mint"><a href="index.html#waitlist" class="btn btn-primary">Get Early Access</a>
+        <p class="muted-note">The live burn lottery opens after the token launch.</p></div>
     </div>
   </section>
 
-  <!-- HOW IT WORKS -->
-  <section class="section">
-    <div class="section-head">
-      <span class="eyebrow">How It Works</span>
-      <h2>Winner Takes the Pot. <span class="grad">Losers Get Burned.</span></h2>
-      <p class="section-intro">A simple, transparent, on-chain game with a deflationary twist.</p>
+  <!-- NFT WIN MODAL -->
+  <div class="win-modal" id="winModal" hidden>
+    <div class="win-bg" id="winBg"></div>
+    <div class="win-card">
+      <span class="win-burst">JACKPOT</span>
+      <img id="winImg" class="win-img" src="" alt="" />
+      <h3 id="winName"></h3>
+      <span class="nft-badge" id="winBadge"></span>
+      <p class="muted-note" id="winNote"></p>
+      <button class="btn btn-primary" id="winClose" type="button">Collect</button>
     </div>
-    <div class="steps">
-      <div class="step"><span class="step-num">1</span><h3>Connect</h3><p>Connect your Solana wallet and pick a round to enter.</p></div>
-      <div class="step"><span class="step-num">2</span><h3>Enter with $CATBOY</h3><p>Buy in with $CATBOY tokens. Every entry feeds the prize pot.</p></div>
-      <div class="step"><span class="step-num">3</span><h3>Winner Takes the Pot</h3><p>When the round ends, a provably-fair draw picks the winner — who takes the prize.</p></div>
-      <div class="step"><span class="step-num">4</span><h3>Losers Burned</h3><p>A share of the losing entries is sent to a burn address forever — shrinking supply with every game.</p></div>
-    </div>
-  </section>
+  </div>
 
-  <!-- WHY -->
-  <section class="section">
-    <div class="section-head">
-      <span class="eyebrow">Why It Matters</span>
-      <h2>Every Game Makes $CATBOY <span class="grad">Scarcer</span></h2>
-    </div>
-    <div class="util-grid">
-      <div class="util-card"><span class="util-icon"><svg class="ic" viewBox="0 0 24 24"><path d="M12 2s5 4 5 9a5 5 0 0 1-10 0c0-2 1-3 1-3s0 2 1.5 2C11 12 9 8 12 2z"/></svg></span><h3>Deflationary</h3><p>Losing entries are burned, permanently removing tokens from circulation.</p></div>
-      <div class="util-card"><span class="util-icon"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"/><line x1="9" y1="6" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="18"/></svg></span><h3>Real Stakes, Real Fun</h3><p>Quick rounds, live pots, and a leaderboard. Pure degen entertainment.</p></div>
-      <div class="util-card"><span class="util-icon"><svg class="ic" viewBox="0 0 24 24"><path d="M9 13a4 4 0 0 0 6 .5l2-2a4 4 0 0 0-6-6l-1 1"/><path d="M15 11a4 4 0 0 0-6-.5l-2 2a4 4 0 0 0 6 6l1-1"/></svg></span><h3>On-Chain &amp; Fair</h3><p>Provably-fair draws settled on Solana — fast, cheap, and transparent.</p></div>
-    </div>
-    <div class="store-cta">
-      <a href="index.html#waitlist" class="btn btn-primary">Get Early Access</a>
-    </div>
-  </section>
-
-  <!-- FOOTER -->
   <footer class="footer">
-    <div class="footer-brand">
-      <img src="assets/catboy.png" alt="Catboy" class="footer-logo" />
-      <span>CATBOY</span>
-    </div>
-    <p class="footer-disclaimer">
-      The Catboy Burn Lottery is a community game for entertainment only. Play responsibly and
-      never risk more than you can afford to lose. It is not investment advice, and outcomes are
-      random. Availability may depend on your jurisdiction — check your local laws. Crypto is volatile.
-    </p>
+    <div class="footer-brand"><img src="assets/catboy.png" alt="Catboy" class="footer-logo" /><span>CATBOY</span></div>
+    <p class="footer-disclaimer">The Catboy Casino is a community game for entertainment. Play responsibly; never risk more than you can afford to lose. Outcomes are random, credits currently run in demo mode, and real prizes go live with the token. Not financial advice — check your local laws.</p>
     <p class="footer-copy">© <span id="year"></span> CATBOY · The Legend Evolves on Solana</p>
     <p class="footer-credit">A <a href="https://t.me/kingpetty317" target="_blank" rel="noopener">King Petty</a> Build</p>
   </footer>
 
   <script src="script.js"></script>
+  <script>
+  (function () {
+    const $ = (id) => document.getElementById(id);
+    // ---- credits (demo; real purchase wires to backend/on-chain at launch) ----
+    let credits = parseInt(localStorage.getItem("catboy_credits") || "10", 10);
+    const setCredits = (n) => { credits = Math.max(0, n); localStorage.setItem("catboy_credits", credits); $("credits").textContent = credits; };
+    setCredits(credits);
+
+    // ---- symbols ----
+    const P = "assets/nft/collection/";
+    const SYM = {
+      fish:  { name: "Fish",     color: "#19e0ff", svg: '<path d="M4 12c4-6 12-6 16 0-4 6-12 6-16 0z"/><circle cx="9" cy="12" r="1" fill="currentColor"/>' , pay: { credits: 2 } },
+      paw:   { name: "Paw",      color: "#a86bff", svg: '<circle cx="12" cy="15" r="4"/><circle cx="7" cy="9" r="1.6"/><circle cx="12" cy="7" r="1.6"/><circle cx="17" cy="9" r="1.6"/>', pay: { credits: 4 } },
+      sol:   { name: "SOL",      color: "#14f195", img: "assets/solana.png", pay: { credits: 8 } },
+      seven: { name: "Lucky 7",  color: "#ffd84d", text: "7", pay: { credits: 20 } },
+      gold:  { name: "Gold Cat", color: "#ffb020", diamond: true, pay: { nft: "Rare" } },
+      cat:   { name: "Catboy",   color: "#ff3df0", img: "assets/catboy.png", pay: { nft: "Legendary" } },
+    };
+    // weighted reel strip
+    const WEIGHTS = { fish: 8, paw: 7, sol: 6, seven: 4, gold: 3, cat: 2 };
+    const STRIP = []; for (const k in WEIGHTS) for (let i = 0; i < WEIGHTS[k]; i++) STRIP.push(k);
+    const pick = () => STRIP[(Math.random() * STRIP.length) | 0];
+
+    function symHTML(k) {
+      const s = SYM[k];
+      if (s.img) return `<div class="sym" style="--c:${s.color}"><img src="${s.img}" alt=""></div>`;
+      if (s.text) return `<div class="sym" style="--c:${s.color}"><span class="sym-7">${s.text}</span></div>`;
+      if (s.diamond) return `<div class="sym" style="--c:${s.color}"><svg viewBox="0 0 24 24" class="sym-svg"><path d="M6 3h12l4 6-10 12L2 9z"/></svg></div>`;
+      return `<div class="sym" style="--c:${s.color}"><svg viewBox="0 0 24 24" class="sym-svg">${s.svg}</svg></div>`;
+    }
+
+    // paytable
+    $("ptGrid").innerHTML = Object.keys(SYM).map((k) => {
+      const s = SYM[k]; const prize = s.pay.nft ? `${s.pay.nft} NFT` : `${s.pay.credits} credits`;
+      return `<div class="pt-row">${symHTML(k)}${symHTML(k)}${symHTML(k)}<span class="pt-prize" style="color:${s.color}">${prize}</span></div>`;
+    }).join("");
+
+    const reels = [$("r0"), $("r1"), $("r2")];
+    reels.forEach((r) => r.innerHTML = symHTML("cat"));
+    let spinning = false, nfts = [];
+    fetch(P + "manifest.json").then((r) => r.json()).then((d) => nfts = d).catch(() => {});
+
+    function reelSpin(reel, finalK, dur) {
+      return new Promise((res) => {
+        const start = performance.now();
+        const iv = setInterval(() => { reel.innerHTML = symHTML(pick()); }, 70);
+        setTimeout(() => { clearInterval(iv); reel.innerHTML = symHTML(finalK); reel.classList.add("reel-stop"); setTimeout(() => reel.classList.remove("reel-stop"), 300); res(); }, dur);
+      });
+    }
+
+    async function spin() {
+      if (spinning) return;
+      if (credits < 1) { flash("Out of credits — buy more to keep spinning."); return; }
+      spinning = true; setCredits(credits - 1);
+      $("spinBtn").disabled = true; $("slotResult").textContent = "Spinning…"; $("slotResult").className = "slot-result";
+      const result = [pick(), pick(), pick()];
+      await Promise.all([reelSpin(reels[0], result[0], 700), reelSpin(reels[1], result[1], 1050), reelSpin(reels[2], result[2], 1400)]);
+      evaluate(result);
+      $("spinBtn").disabled = false; spinning = false;
+    }
+
+    function evaluate(r) {
+      const res = $("slotResult");
+      if (r[0] === r[1] && r[1] === r[2]) {
+        const s = SYM[r[0]];
+        if (s.pay.nft) { res.textContent = "JACKPOT — " + s.name + "!"; res.className = "slot-result win big"; nftWin(s.pay.nft); }
+        else { setCredits(credits + s.pay.credits); res.textContent = "Win! 3× " + s.name + " · +" + s.pay.credits + " credits"; res.className = "slot-result win"; }
+      } else { res.textContent = "No match — spin again"; res.className = "slot-result"; }
+    }
+
+    function nftWin(tier) {
+      const pool = nfts.filter((n) => n.tier === tier);
+      const n = pool.length ? pool[(Math.random() * pool.length) | 0] : { name: "Catboy", tier, file: "001.jpg" };
+      $("winImg").src = P + n.file; $("winName").textContent = n.name;
+      const b = $("winBadge"); b.textContent = tier; b.className = "nft-badge b-" + tier;
+      $("winNote").textContent = "You won a " + tier + " Catboy NFT! At launch it's airdropped to your wallet automatically.";
+      $("winModal").hidden = false;
+    }
+    const closeWin = () => $("winModal").hidden = true;
+    $("winClose").onclick = closeWin; $("winBg").onclick = closeWin;
+
+    $("spinBtn").onclick = spin;
+    $("autoBtn").onclick = async () => { for (let i = 0; i < 10 && credits >= 1; i++) { await spin(); await new Promise((r) => setTimeout(r, 250)); } };
+
+    // buy credits (demo)
+    $("buyBtn").onclick = async () => {
+      const p = (window.solana && window.solana.isPhantom) ? window.solana : (window.solflare || window.backpack || null);
+      if (p) { try { await p.connect(); } catch {} }
+      setCredits(credits + 20);
+      flash("+20 demo credits added. Real credits (0.05 SOL / $CATBOY each) go live at launch.");
+    };
+    function flash(m) { $("casNote").textContent = m; }
+
+    // tabs
+    document.querySelectorAll(".cas-tab").forEach((t) => t.onclick = () => {
+      document.querySelectorAll(".cas-tab").forEach((x) => x.classList.remove("active")); t.classList.add("active");
+      document.querySelectorAll(".cas-panel").forEach((p) => p.style.display = "none");
+      $("tab-" + t.dataset.tab).style.display = "block";
+    });
+
+    // ---- coin flip ----
+    let side = "cat", bet = 1;
+    document.querySelectorAll(".side-btn").forEach((b) => b.onclick = () => { document.querySelectorAll(".side-btn").forEach((x) => x.classList.remove("active")); b.classList.add("active"); side = b.dataset.side; $("flipFace").src = side === "cat" ? "assets/catboy.png" : "assets/solana.png"; });
+    document.querySelectorAll("[data-bet]").forEach((b) => b.onclick = () => { bet = +b.dataset.bet; $("flipBet").textContent = bet; });
+    $("flipBtn").onclick = () => {
+      if (spinning) return;
+      if (credits < bet) { $("flipResult").textContent = "Not enough credits."; $("flipResult").style.color = "var(--magenta)"; return; }
+      spinning = true; setCredits(credits - bet);
+      const coin = $("flipCoin"); coin.classList.add("flipping");
+      const win = Math.random() < 0.48; // house edge
+      const landed = win ? side : (side === "cat" ? "sol" : "cat");
+      setTimeout(() => {
+        coin.classList.remove("flipping"); $("flipFace").src = landed === "cat" ? "assets/catboy.png" : "assets/solana.png";
+        if (win) { setCredits(credits + bet * 2); $("flipResult").textContent = "WIN! +" + bet + " credits"; $("flipResult").style.color = "var(--cyan)"; }
+        else { $("flipResult").textContent = "Lost " + bet + " — flip again"; $("flipResult").style.color = "var(--muted)"; }
+        spinning = false;
+      }, 1100);
+    };
+  })();
+  </script>
 </body>
 </html>
