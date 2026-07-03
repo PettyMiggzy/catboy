@@ -1,0 +1,51 @@
+{
+ "name": "Genesis Monwolf \u2014 Festival Dj",
+ "symbol": "CATBOYGEN",
+ "description": "Catboy Genesis \u2014 the special launch collection of the Winslow Ecosystem. MonWolf (Monad) x Catboy (Solana). Genesis holders get top-tier utility: casino edge, Catboy City ownership, fighter skins, and treasury perks.",
+ "image": "https://www.catboyonsol.fun/assets/nft/genesis/011.jpg",
+ "external_url": "https://www.catboyonsol.fun/market.html",
+ "attributes": [
+  {
+   "trait_type": "Character",
+   "value": "MonWolf"
+  },
+  {
+   "trait_type": "Theme",
+   "value": "Festival Dj"
+  },
+  {
+   "trait_type": "Chain",
+   "value": "Monad"
+  },
+  {
+   "trait_type": "Aura",
+   "value": "Festival"
+  },
+  {
+   "trait_type": "Edition",
+   "value": "1 of 1"
+  },
+  {
+   "trait_type": "Utility",
+   "value": "Founder"
+  },
+  {
+   "trait_type": "Rarity",
+   "value": "Founder"
+  },
+  {
+   "display_type": "number",
+   "trait_type": "Rarity Rank",
+   "value": 11
+  }
+ ],
+ "properties": {
+  "files": [
+   {
+    "uri": "https://www.catboyonsol.fun/assets/nft/genesis/011.jpg",
+    "type": "image/jpeg"
+   }
+  ],
+  "category": "image"
+ }
+}

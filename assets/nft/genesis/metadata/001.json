@@ -1,0 +1,51 @@
+{
+ "name": "Genesis Catboy \u2014 Golden Genesis",
+ "symbol": "CATBOYGEN",
+ "description": "Catboy Genesis \u2014 the special launch collection of the Winslow Ecosystem. MonWolf (Monad) x Catboy (Solana). Genesis holders get top-tier utility: casino edge, Catboy City ownership, fighter skins, and treasury perks.",
+ "image": "https://www.catboyonsol.fun/assets/nft/genesis/001.jpg",
+ "external_url": "https://www.catboyonsol.fun/market.html",
+ "attributes": [
+  {
+   "trait_type": "Character",
+   "value": "Catboy"
+  },
+  {
+   "trait_type": "Theme",
+   "value": "Golden Genesis"
+  },
+  {
+   "trait_type": "Chain",
+   "value": "Winslow Dual"
+  },
+  {
+   "trait_type": "Aura",
+   "value": "Golden"
+  },
+  {
+   "trait_type": "Edition",
+   "value": "1 of 1"
+  },
+  {
+   "trait_type": "Utility",
+   "value": "Genesis"
+  },
+  {
+   "trait_type": "Rarity",
+   "value": "Legend"
+  },
+  {
+   "display_type": "number",
+   "trait_type": "Rarity Rank",
+   "value": 1
+  }
+ ],
+ "properties": {
+  "files": [
+   {
+    "uri": "https://www.catboyonsol.fun/assets/nft/genesis/001.jpg",
+    "type": "image/jpeg"
+   }
+  ],
+  "category": "image"
+ }
+}

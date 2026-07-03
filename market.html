@@ -55,12 +55,12 @@
   </section>
 
   <section class="section" style="padding-top:1rem;">
+    <div class="mkt-colltabs">
+      <button class="mkt-colltab active" data-c="nine" type="button">Nine Lives · 100</button>
+      <button class="mkt-colltab" data-c="genesis" type="button">✦ Genesis · Launch</button>
+    </div>
     <div class="mkt-filters" id="mktFilters">
-      <button class="mkt-chip active" data-f="all" type="button">All</button>
-      <button class="mkt-chip" data-f="Legendary" type="button">Legendary</button>
-      <button class="mkt-chip" data-f="Epic" type="button">Epic</button>
-      <button class="mkt-chip" data-f="Rare" type="button">Rare</button>
-      <button class="mkt-chip" data-f="Common" type="button">Common</button>
+      <span id="tierChips" class="tierchips"></span>
       <select id="mktSort" class="mkt-sort">
         <option value="id">Sort: Number</option>
         <option value="rarity">Sort: Rarity</option>
@@ -111,7 +111,7 @@
       }
       const pct = (k, v) => Math.round((TF[k] && TF[k][v] || 0) / items.length * 1000) / 10;
 
-      const FILTER_CATS = ["Aura", "Chain", "Utility", "Type", "Background", "Fur", "Eyes", "Outfit", "Headwear", "Accessory", "Expression"];
+      const FILTER_CATS = ["Character", "Theme", "Edition", "Aura", "Chain", "Utility", "Type", "Background", "Fur", "Eyes", "Outfit", "Headwear", "Accessory", "Expression"];
       let traitFilter = {};
       function buildTraitFilters() {
         const bar = document.getElementById("traitBar");
@@ -133,17 +133,41 @@
         });
       }
 
-      fetch("assets/nft/collection/manifest.json")
-        .then((r) => r.json())
-        .then((data) => { items = data; buildFreq(); buildTraitFilters(); render(); stats(); })
-        .catch(() => { document.getElementById("mktNote").textContent = "Collection failed to load."; });
+      const COLLS = {
+        nine:    { file: "assets/nft/collection/manifest.json", path: "assets/nft/collection/", note: "100-piece collection completes at mint" },
+        genesis: { file: "assets/nft/genesis/manifest.json",    path: "assets/nft/genesis/",    note: "Genesis — the special launch collection · all 1-of-1" },
+      };
+      let PATH = COLLS.nine.path, NOTE = COLLS.nine.note;
+      const TIER_ORDER = { Legendary: 0, Legend: 0, Founder: 1, Epic: 2, Rare: 3, Common: 4 };
+      function load(key) {
+        const c = COLLS[key]; PATH = c.path; NOTE = c.note; filter = "all"; traitFilter = {};
+        fetch(c.file).then((r) => r.json())
+          .then((data) => { items = data; buildFreq(); buildTierChips(); buildTraitFilters(); render(); stats(); })
+          .catch(() => { document.getElementById("mktNote").textContent = "Collection failed to load."; });
+      }
+      function buildTierChips() {
+        const tiers = [...new Set(items.map((i) => i.tier))].sort((a, b) => (TIER_ORDER[a] ?? 9) - (TIER_ORDER[b] ?? 9));
+        const box = document.getElementById("tierChips");
+        box.innerHTML = `<button class="mkt-chip active" data-f="all" type="button">All</button>` +
+          tiers.map((t) => `<button class="mkt-chip" data-f="${t}" type="button">${t}</button>`).join("");
+        box.querySelectorAll(".mkt-chip").forEach((c) => c.addEventListener("click", () => {
+          box.querySelectorAll(".mkt-chip").forEach((x) => x.classList.remove("active")); c.classList.add("active");
+          filter = c.dataset.f; render();
+        }));
+      }
+      load("nine");
+      document.querySelectorAll(".mkt-colltab").forEach((t) => t.addEventListener("click", () => {
+        document.querySelectorAll(".mkt-colltab").forEach((x) => x.classList.remove("active")); t.classList.add("active");
+        load(t.dataset.c);
+      }));
 
       function stats() {
         const n = items.length;
         const floor = Math.min(...items.map((i) => i.price));
-        const legend = items.filter((i) => i.tier === "Legendary").length;
+        const topTier = items.some((i) => i.tier === "Legend") ? "Legend" : "Legendary";
+        const rare = items.filter((i) => i.tier === topTier).length;
         document.getElementById("mktStats").innerHTML =
-          stat(n, "Items") + stat(floor + " SOL", "Floor") + stat(legend, "Legendary") + stat("Solana", "Chain");
+          stat(n, "Items") + stat(floor + " SOL", "Floor") + stat(rare, topTier + "s") + stat("Solana", "Chain");
       }
       function stat(v, l) { return `<div class="mkt-stat"><b>${v}</b><span>${l}</span></div>`; }
 
@@ -162,29 +186,25 @@
         const a = sorted();
         grid.innerHTML = a.map((i) => `
           <div class="nft-card t-${i.tier}" data-id="${i.id}">
-            <div class="nft-thumb"><span class="nft-rank" title="Rarity rank">＃${i.rank}</span><img loading="lazy" src="assets/nft/collection/${i.file}" alt="${i.name}" /></div>
+            <div class="nft-thumb"><span class="nft-rank" title="Rarity rank">＃${i.rank}</span><img loading="lazy" src="${PATH}${i.file}" alt="${i.name}" /></div>
             <div class="nft-meta">
               <div class="nft-row"><span class="nft-name">${i.name}</span><span class="nft-badge b-${i.tier}">${i.tier}</span></div>
               <div class="nft-row"><span class="nft-price">${i.price} SOL</span><span class="nft-buy">Mint</span></div>
             </div>
           </div>`).join("");
-        document.getElementById("mktNote").textContent = a.length + " of " + items.length + " shown · 100-piece collection completes at mint";
+        document.getElementById("mktNote").textContent = a.length + " of " + items.length + " shown · " + NOTE;
       }
 
       grid.addEventListener("click", (e) => {
         const card = e.target.closest(".nft-card"); if (!card) return;
         openModal(items.find((i) => i.id === +card.dataset.id));
       });
-      document.querySelectorAll(".mkt-chip").forEach((c) => c.addEventListener("click", () => {
-        document.querySelectorAll(".mkt-chip").forEach((x) => x.classList.remove("active")); c.classList.add("active");
-        filter = c.dataset.f; render();
-      }));
       document.getElementById("mktSort").addEventListener("change", (e) => { sort = e.target.value; render(); });
 
       const modal = document.getElementById("nftModal");
       function openModal(i) {
         if (!i) return;
-        document.getElementById("mImg").src = "assets/nft/collection/" + i.file;
+        document.getElementById("mImg").src = PATH + i.file;
         document.getElementById("mName").textContent = i.name;
         const b = document.getElementById("mBadge"); b.textContent = i.tier; b.className = "nft-badge b-" + i.tier;
         document.getElementById("mRank").textContent = "Rarity Rank ＃" + i.rank + " / " + items.length;

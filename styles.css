@@ -1276,3 +1276,12 @@ body.splash-open { overflow: hidden; }
 .venue-stats span { font-size: 0.64rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
 .venue-go { font-family: "Orbitron", sans-serif; font-weight: 700; font-size: 0.85rem; color: var(--cyan); }
 @media (max-width: 640px) { .venue-grid { grid-template-columns: 1fr; } }
+
+/* ---------- Marketplace collection tabs + genesis badges ---------- */
+.mkt-colltabs { max-width: 1200px; margin: 0 auto 1rem; display: flex; gap: 0.5rem; justify-content: center; padding: 0 1rem; }
+.mkt-colltab { font-family: "Orbitron", sans-serif; font-weight: 700; font-size: 0.8rem; letter-spacing: 0.04em; padding: 0.6rem 1.3rem; border-radius: 999px; cursor: pointer; color: var(--muted); background: rgba(255,255,255,0.03); border: 1px solid var(--border); transition: all 0.18s; }
+.mkt-colltab:hover { color: var(--ink); border-color: var(--cyan); }
+.mkt-colltab.active { color: var(--bg); background: linear-gradient(100deg, var(--cyan), var(--magenta)); border-color: transparent; box-shadow: 0 0 20px rgba(25,224,255,0.4); }
+.tierchips { display: inline-flex; gap: 0.5rem; flex-wrap: wrap; }
+.b-Legend { color: #ffd84d; border-color: #ffd84d; background: rgba(255,216,77,0.12); }
+.b-Founder { color: #14f195; border-color: #14f195; background: rgba(20,241,149,0.12); }
