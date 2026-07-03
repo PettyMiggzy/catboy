@@ -75,6 +75,11 @@ a { color: inherit; text-decoration: none; }
   position: relative; z-index: 2;
   display: flex; flex-direction: column; align-items: center; text-align: center;
   padding: 1rem;
+  /* fade the branded overlay out as the video dissolves to the NFT crew ending */
+  animation: splashStageOut 0.9s ease 3.5s forwards;
+}
+@keyframes splashStageOut {
+  to { opacity: 0; transform: translateY(-10px); }
 }
 
 /* spinning conic ring around the logo */

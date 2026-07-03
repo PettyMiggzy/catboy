@@ -47,9 +47,10 @@ const CONFIG = {
     if (tryPlay && tryPlay.catch) tryPlay.catch(() => {}); // autoplay may be blocked; user can skip
   }
   if (skip) skip.addEventListener("click", dismiss);
-  // The animated overlay runs ~4.8s; reveal the site right after it finishes.
-  // (If the video fires 'ended' sooner, that wins.)
-  setTimeout(dismiss, 5200);
+  // The splash video runs ~6.25s (original Catboy -> dissolve -> NFT crew on the
+  // CATBOY letters). Reveal the site right after it ends; 'ended' normally wins,
+  // this is the fallback if autoplay is blocked (Enter is always available).
+  setTimeout(dismiss, 6600);
 })();
 
 // ----- Footer year -----
