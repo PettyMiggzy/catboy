@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CATBOY Genesis — Special Launch Edition</title>
+  <meta name="description" content="Catboy Genesis: 100 original hand-crafted Catboy NFTs on Solana. 3 animated Legendaries, 12 Epic, 25 Rare, 60 Common — six trait categories, on-chain rarity ranks, and real holder utility. The rarest drop in the Winslow Ecosystem." />
+  <meta property="og:title" content="CATBOY Genesis — Special Launch Edition" />
+  <meta property="og:description" content="100 original Catboys. 3 animated Legendaries. Six trait categories, ranked 1–100 by rarity. Chase the rank." />
+  <meta property="og:image" content="https://www.catboyonsol.fun/assets/nft/genesis/092.jpg" />
+  <meta property="og:url" content="https://www.catboyonsol.fun/genesis.html" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:image" content="https://www.catboyonsol.fun/assets/nft/genesis/092.jpg" />
+  <link rel="icon" type="image/png" href="assets/solana.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="bg-grid" aria-hidden="true"></div>
+  <div class="bg-glow" aria-hidden="true"></div>
+
+  <!-- NAV -->
+  <header class="nav">
+    <a href="index.html" class="brand">
+      <img src="assets/catboy.png" alt="Catboy logo" class="brand-logo" />
+      <span class="brand-name">CATBOY</span>
+    </a>
+    <nav class="nav-links">
+      <a href="index.html#lore">Lore</a>
+      <a href="saga.html">Saga</a>
+      <a href="trench.html">Terminal</a>
+      <a href="nft.html" class="active">NFTs</a>
+      <a href="launch.html">Launch</a>
+      <a href="casino.html">Casino</a>
+      <a href="arcade.html">Arcade</a>
+      <a href="club.html">Club</a>
+      <a href="meme.html">Meme</a>
+      <a href="wallet.html">Wallet</a>
+      <a href="merch.html">Merch</a>
+      <a href="index.html#faq">FAQ</a>
+    </nav>
+    <a href="mint.html" class="btn btn-primary nav-cta">Mint Genesis</a>
+  </header>
+
+  <!-- HERO -->
+  <section class="gz-hero">
+    <div class="gz-hero-bg" style="background-image:url('assets/nft/genesis/092.jpg')"></div>
+    <div class="gz-hero-inner">
+      <span class="gz-kicker">✦ Special Launch Edition</span>
+      <h1>CATBOY <span class="gz-gold">GENESIS</span></h1>
+      <p class="gz-sub">The rarest drop in the Winslow Ecosystem. <b>100 original, hand-crafted Catboys</b> on Solana — each ranked 1–100 by on-chain rarity, with <b>3 fully animated 3D Legendaries</b> at the top. This is the collection that starts it all.</p>
+      <div class="gz-cta-row">
+        <a href="mint.html" class="gz-btn-gold">Mint Genesis ›</a>
+        <a href="market.html" class="btn btn-ghost">Explore the collection</a>
+      </div>
+      <div class="gz-statbar" id="statbar"><!-- filled by JS --></div>
+    </div>
+  </section>
+
+  <!-- ANIMATED LEGENDARIES -->
+  <section class="section" style="padding-top:2rem;">
+    <div class="section-head">
+      <span class="eyebrow" style="color:var(--gold)">✦ 3 of 100 · Animated 3D</span>
+      <h2>The <span class="gz-gold">Legendaries</span></h2>
+      <p class="section-intro">Three one-of-a-kind Legendaries — each a living, animated 3D scene. Pull one and you hold the top of the entire collection. Odds of hitting a Legendary in a random mint: <b style="color:var(--gold)">3 in 100</b>.</p>
+    </div>
+    <div class="gz-legends" id="legends"><!-- filled by JS --></div>
+  </section>
+
+  <!-- RARITY LADDER / ODDS -->
+  <section class="section" style="padding-top:0;">
+    <div class="section-head">
+      <span class="eyebrow">The Odds</span>
+      <h2>Every mint is a <span class="grad">gamble</span></h2>
+      <p class="section-intro">100 pieces, four tiers, fixed supply. The rarer the tier, the fewer exist — and the harder they hit. Here's exactly what you're chasing.</p>
+    </div>
+    <div class="gz-ladder" id="ladder"><!-- filled by JS --></div>
+    <p class="muted-note" style="text-align:center;">Tier is locked at mint and written to the NFT's on-chain metadata alongside its rarity rank. Supply never increases — 100 is 100, forever.</p>
+  </section>
+
+  <!-- TRAIT SYSTEM -->
+  <section class="section" style="padding-top:0;">
+    <div class="section-head">
+      <span class="eyebrow">The DNA</span>
+      <h2>Six traits. <span class="grad">Infinite flex.</span></h2>
+      <p class="section-intro">Every Genesis Catboy is built from six trait categories. The scarcer your combination, the higher your rank. Rarest value in each category is highlighted in gold.</p>
+    </div>
+    <div class="gz-traits" id="traits"><!-- filled by JS --></div>
+  </section>
+
+  <!-- CHASE THE RANK -->
+  <section class="section" style="padding-top:0;">
+    <div class="section-head">
+      <span class="eyebrow" style="color:var(--gold)">Top of the book</span>
+      <h2>Chase the <span class="gz-gold">rank</span></h2>
+      <p class="section-intro">Rarity rank #1 to #12 — the twelve most sought-after Catboys in Genesis. On Magic Eden and Tensor these are the pieces that command the premium.</p>
+    </div>
+    <div class="gz-chase" id="chase"><!-- filled by JS --></div>
+    <div style="text-align:center;margin-top:1.6rem;">
+      <a href="market.html" class="btn btn-ghost">See all 100 ranked ›</a>
+    </div>
+  </section>
+
+  <!-- UTILITY / WHY HOLD -->
+  <section class="section" style="padding-top:0;">
+    <div class="section-head">
+      <span class="eyebrow">Why Genesis</span>
+      <h2>Not just art — a <span class="grad">key</span></h2>
+      <p class="section-intro">Genesis is the founder tier of the entire Catboy universe. Holding one unlocks perks nothing else can.</p>
+    </div>
+    <div class="gz-util">
+      <div class="gz-ucard"><span class="ic">🎰</span><div><h4>Casino Edge</h4><p>Genesis holders get a permanent house-edge reduction and boosted daily bonuses across the Catboy Casino.</p></div></div>
+      <div class="gz-ucard"><span class="ic">🏙️</span><div><h4>Catboy City Ownership</h4><p>Claim rooftop signs, billboards and jumbotron slots in Catboy City — Genesis wallets get first pick.</p></div></div>
+      <div class="gz-ucard"><span class="ic">🥊</span><div><h4>Fighter Skins</h4><p>Unlock exclusive animated fighter skins and higher wager limits in the Catboy fight arena.</p></div></div>
+      <div class="gz-ucard"><span class="ic">💰</span><div><h4>Treasury Perks</h4><p>90% of every sale and fee routes to the treasury for buyback &amp; burn — Genesis holders vote on how it's deployed.</p></div></div>
+    </div>
+  </section>
+
+  <!-- FINAL CTA -->
+  <section class="section">
+    <div class="gz-final">
+      <span class="gz-kicker">Only 100 will ever exist</span>
+      <h2 style="margin-top:1rem;">Mint your <span class="gz-gold">Genesis</span></h2>
+      <p class="gz-sub" style="margin:1rem auto 1.8rem;">Random mint. Real odds. One of one hundred. When they're gone, they're gone — and the floor only knows one direction.</p>
+      <div class="gz-cta-row">
+        <a href="mint.html" class="gz-btn-gold">Mint now ›</a>
+        <a href="trade.html" class="btn btn-ghost">Trade on Magic Eden / Tensor</a>
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="footer-brand"><img src="assets/catboy.png" alt="Catboy" class="footer-logo" /><span>CATBOY</span></div>
+    <p class="footer-disclaimer">Catboy Genesis is a collectible NFT set of fixed supply (100). Rarity ranks are cosmetic and written to on-chain metadata. NFTs are collectibles, not investments — do your own research. Not financial advice.</p>
+    <p class="footer-copy">© <span id="year"></span> CATBOY · The Legend Evolves on Solana</p>
+    <p class="footer-credit">A <a href="https://t.me/kingpetty317" target="_blank" rel="noopener">King Petty</a> Build</p>
+  </footer>
+
+  <script>
+  (function () {
+    const PATH = "assets/nft/genesis/";
+    const $ = (id) => document.getElementById(id);
+    const yr = $("year"); if (yr) yr.textContent = new Date().getFullYear();
+
+    const TIERS = [
+      { key: "Legendary", cls: "t-leg", accent: "leg" },
+      { key: "Epic",      cls: "t-epic", accent: "epic" },
+      { key: "Rare",      cls: "t-rare", accent: "rare" },
+      { key: "Common",    cls: "t-com", accent: "com" },
+    ];
+    // animated legendaries: id -> video file (falls back to jpg if missing)
+    const ANIM = { 92: "anim/092.mp4", 57: "anim/057.mp4", 90: "anim/090.mp4" };
+    const TRAIT_CATS = ["Theme", "Outfit", "Aura", "Eyes", "Chain", "Utility"];
+
+    fetch(PATH + "manifest.json").then(r => r.json()).then(build).catch(e => {
+      $("legends").innerHTML = "<p class='muted-note'>Collection loading… " + e + "</p>";
+    });
+
+    function build(man) {
+      const total = man.length;
+      const byTier = {};
+      TIERS.forEach(t => byTier[t.key] = man.filter(x => x.tier === t.key));
+
+      // --- stat bar ---
+      $("statbar").innerHTML =
+        `<div class="gz-stat"><b>${total}</b><span>Total supply</span></div>` +
+        `<div class="gz-stat leg"><b>${byTier.Legendary.length}</b><span>Legendary · animated</span></div>` +
+        `<div class="gz-stat epic"><b>${byTier.Epic.length}</b><span>Epic</span></div>` +
+        `<div class="gz-stat rare"><b>${byTier.Rare.length}</b><span>Rare</span></div>` +
+        `<div class="gz-stat com"><b>${byTier.Common.length}</b><span>Common</span></div>`;
+
+      // --- legendaries showcase ---
+      const legs = byTier.Legendary.slice().sort((a, b) => a.rank - b.rank);
+      $("legends").innerHTML = legs.map(x => {
+        const media = ANIM[x.id]
+          ? `<video src="${PATH}${ANIM[x.id]}" autoplay muted loop playsinline poster="${PATH}${x.file}"></video>`
+          : `<img loading="lazy" src="${PATH}${x.file}" alt="${x.name}">`;
+        const theme = (x.traits && x.traits.Theme) || "";
+        return `<div class="gz-leg-card">
+          <div class="gz-leg-tag">
+            <span class="gz-chip gold">RANK #${x.rank}</span>
+            ${ANIM[x.id] ? `<span class="gz-chip live"><span class="d"></span>ANIMATED</span>` : ``}
+          </div>
+          ${media}
+          <div class="gz-leg-foot">
+            <div class="gz-leg-name">${theme}</div>
+            <div class="gz-leg-odds">Legendary · 1 of ${total} · ${x.price} SOL</div>
+          </div>
+        </div>`;
+      }).join("");
+
+      // --- rarity ladder ---
+      $("ladder").innerHTML = TIERS.map(t => {
+        const list = byTier[t.key];
+        const n = list.length;
+        const pct = ((n / total) * 100);
+        const pctStr = pct % 1 === 0 ? pct.toFixed(0) : pct.toFixed(1);
+        const price = list.length ? list[0].price : "—";
+        const samples = list.slice().sort((a, b) => a.rank - b.rank).slice(0, 4)
+          .map(x => `<img loading="lazy" src="${PATH}${x.file}" alt="">`).join("");
+        return `<div class="gz-tier ${t.cls}">
+          <h3>${t.key}</h3>
+          <div class="odds">${pctStr}%</div>
+          <div class="odds-l">chance per mint</div>
+          <div class="tmeta"><span>Supply</span><b>${n} / ${total}</b></div>
+          <div class="tmeta"><span>Floor idea</span><b>${price} SOL</b></div>
+          <div class="tstrip">${samples}</div>
+        </div>`;
+      }).join("");
+
+      // --- trait system ---
+      const freq = {};
+      TRAIT_CATS.forEach(c => freq[c] = {});
+      man.forEach(x => TRAIT_CATS.forEach(c => {
+        const v = x.traits && x.traits[c];
+        if (v == null) return;
+        freq[c][v] = (freq[c][v] || 0) + 1;
+      }));
+      $("traits").innerHTML = TRAIT_CATS.map(c => {
+        const entries = Object.entries(freq[c]).sort((a, b) => a[1] - b[1]); // rarest first
+        const shown = entries.slice(0, 5);
+        const rarestVal = entries.length ? entries[0][0] : null;
+        const rows = shown.map(([v, cnt]) => {
+          const p = ((cnt / total) * 100);
+          const pStr = p % 1 === 0 ? p.toFixed(0) : p.toFixed(1);
+          const rare = v === rarestVal ? " rarest" : "";
+          return `<div class="gz-trow${rare}"><span class="v">${v}</span><span class="p">${pStr}% · ${cnt}</span></div>`;
+        }).join("");
+        const more = entries.length > 5 ? `<div class="gz-trow"><span class="v" style="color:var(--muted)">+ ${entries.length - 5} more</span><span class="p"></span></div>` : "";
+        return `<div class="gz-tcat"><h4>${c}</h4>${rows}${more}</div>`;
+      }).join("");
+
+      // --- chase the rank (top 12) ---
+      const top = man.slice().sort((a, b) => a.rank - b.rank).slice(0, 12);
+      $("chase").innerHTML = top.map(x => {
+        const theme = (x.traits && x.traits.Theme) || x.name;
+        return `<a class="gz-rankcard" href="market.html" title="${x.name}">
+          <span class="rk">＃${x.rank}</span>
+          <img loading="lazy" src="${PATH}${x.file}" alt="${x.name}">
+          <span class="nm">${theme}</span>
+        </a>`;
+      }).join("");
+    }
+  })();
+  </script>
+</body>
+</html>

@@ -1290,3 +1290,98 @@ body.splash-open { overflow: hidden; }
 .tierchips { display: inline-flex; gap: 0.5rem; flex-wrap: wrap; }
 .b-Legend { color: #ffd84d; border-color: #ffd84d; background: rgba(255,216,77,0.12); }
 .b-Founder { color: #14f195; border-color: #14f195; background: rgba(20,241,149,0.12); }
+
+/* ===== GENESIS PROMO PAGE ===== */
+:root { --gold: #ffcd5a; }
+.gz-hero { position: relative; overflow: hidden; padding: clamp(3rem,7vw,6rem) clamp(1rem,4vw,2.5rem) clamp(2rem,5vw,4rem); text-align: center; }
+.gz-hero-bg { position: absolute; inset: 0; z-index: 0; opacity: 0.28; filter: blur(2px) saturate(1.3); background-size: cover; background-position: center; transform: scale(1.08); }
+.gz-hero-bg::after { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse at center, transparent 8%, rgba(6,3,14,0.85) 62%, #06030e 100%); }
+.gz-hero-inner { position: relative; z-index: 2; max-width: 900px; margin: 0 auto; }
+.gz-kicker { display: inline-flex; align-items: center; gap: 0.5rem; font-family: "Orbitron",sans-serif; font-size: 0.74rem; letter-spacing: 0.25em; text-transform: uppercase; color: var(--gold); border: 1px solid rgba(255,205,90,0.5); background: rgba(255,205,90,0.08); padding: 0.45rem 1rem; border-radius: 999px; box-shadow: 0 0 24px rgba(255,205,90,0.25); }
+.gz-hero h1 { font-size: clamp(2.6rem, 8vw, 5.4rem); font-weight: 900; line-height: 0.98; margin: 1.2rem 0 0.6rem; letter-spacing: -0.02em; }
+.gz-gold { background: linear-gradient(100deg, #fff6d8, var(--gold) 45%, #ffb347 90%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.gz-sub { color: var(--muted); font-size: clamp(1rem,2.4vw,1.28rem); max-width: 640px; margin: 0.5rem auto 0; line-height: 1.55; }
+.gz-cta-row { display: flex; gap: 0.9rem; justify-content: center; flex-wrap: wrap; margin-top: 1.8rem; }
+.gz-btn-gold { background: linear-gradient(100deg, var(--gold), #ffb347); color: #1a1204; font-weight: 800; border: none; padding: 0.95rem 1.8rem; border-radius: 999px; font-family: "Orbitron",sans-serif; letter-spacing: 0.04em; box-shadow: 0 8px 30px rgba(255,205,90,0.4); transition: transform 0.2s, box-shadow 0.2s; }
+.gz-btn-gold:hover { transform: translateY(-3px); box-shadow: 0 12px 40px rgba(255,205,90,0.6); }
+
+.gz-statbar { display: grid; grid-template-columns: repeat(5,1fr); gap: 0.6rem; max-width: 900px; margin: 2.4rem auto 0; }
+.gz-stat { background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 16px; padding: 1.1rem 0.6rem; }
+.gz-stat b { display: block; font-family: "Orbitron",sans-serif; font-size: clamp(1.3rem,3.4vw,2rem); font-weight: 900; line-height: 1; }
+.gz-stat span { display: block; color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.1em; margin-top: 0.45rem; }
+.gz-stat.leg b { color: var(--gold); } .gz-stat.epic b { color: var(--magenta); } .gz-stat.rare b { color: var(--cyan); } .gz-stat.com b { color: var(--purple); }
+@media (max-width: 620px){ .gz-statbar{ grid-template-columns: repeat(2,1fr);} .gz-stat.wide{ grid-column: span 2; } }
+
+/* Legendary video showcase */
+.gz-legends { display: grid; grid-template-columns: repeat(3,1fr); gap: 1.2rem; }
+@media (max-width: 860px){ .gz-legends{ grid-template-columns: 1fr; max-width: 460px; margin: 0 auto; } }
+.gz-leg-card { position: relative; border-radius: 20px; overflow: hidden; border: 2px solid rgba(255,205,90,0.55); box-shadow: 0 0 40px rgba(255,205,90,0.18); background: #0a0616; }
+.gz-leg-card video, .gz-leg-card img { width: 100%; display: block; aspect-ratio: 1; object-fit: cover; }
+.gz-leg-tag { position: absolute; top: 0.7rem; left: 0.7rem; z-index: 3; display: flex; gap: 0.4rem; align-items: center; }
+.gz-chip { font-family: "Orbitron",sans-serif; font-size: 0.64rem; font-weight: 800; letter-spacing: 0.06em; padding: 0.28rem 0.6rem; border-radius: 999px; }
+.gz-chip.gold { background: var(--gold); color: #1a1204; box-shadow: 0 0 16px rgba(255,205,90,0.6); }
+.gz-chip.live { background: rgba(6,3,16,0.8); color: var(--gold); border: 1px solid var(--gold); }
+.gz-chip.live .d { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 8px var(--gold); margin-right: 4px; animation: pulse 1.4s infinite; }
+.gz-leg-foot { position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; padding: 1.4rem 1rem 0.9rem; background: linear-gradient(transparent, rgba(6,3,14,0.94)); }
+.gz-leg-name { font-family: "Orbitron",sans-serif; font-weight: 900; font-size: 1.05rem; }
+.gz-leg-odds { color: var(--gold); font-size: 0.8rem; margin-top: 0.2rem; font-weight: 700; }
+
+/* Rarity ladder */
+.gz-ladder { display: grid; grid-template-columns: repeat(4,1fr); gap: 1rem; }
+@media (max-width: 820px){ .gz-ladder{ grid-template-columns: repeat(2,1fr);} }
+@media (max-width: 440px){ .gz-ladder{ grid-template-columns: 1fr;} }
+.gz-tier { border: 1px solid var(--border); border-radius: 18px; padding: 1.3rem 1.1rem; background: rgba(255,255,255,0.02); position: relative; overflow: hidden; transition: transform 0.2s, border-color 0.2s; }
+.gz-tier:hover { transform: translateY(-5px); }
+.gz-tier::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 4px; }
+.gz-tier.t-leg::before { background: var(--gold); } .gz-tier.t-leg:hover { border-color: var(--gold); box-shadow: 0 12px 40px rgba(255,205,90,0.2); }
+.gz-tier.t-epic::before { background: var(--magenta); } .gz-tier.t-epic:hover { border-color: var(--magenta); }
+.gz-tier.t-rare::before { background: var(--cyan); } .gz-tier.t-rare:hover { border-color: var(--cyan); }
+.gz-tier.t-com::before { background: var(--purple); } .gz-tier.t-com:hover { border-color: var(--purple); }
+.gz-tier h3 { font-family: "Orbitron",sans-serif; font-size: 1.15rem; font-weight: 900; }
+.gz-tier .odds { font-size: 2.2rem; font-weight: 900; font-family: "Orbitron",sans-serif; line-height: 1; margin: 0.5rem 0 0.1rem; }
+.gz-tier.t-leg .odds { color: var(--gold); } .gz-tier.t-epic .odds { color: var(--magenta); } .gz-tier.t-rare .odds { color: var(--cyan); } .gz-tier.t-com .odds { color: var(--purple); }
+.gz-tier .odds-l { color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.1em; }
+.gz-tier .tmeta { display: flex; justify-content: space-between; margin-top: 0.9rem; padding-top: 0.8rem; border-top: 1px solid var(--border); font-size: 0.85rem; }
+.gz-tier .tmeta b { color: #fff; }
+.gz-tier .tstrip { display: flex; gap: 4px; margin-top: 0.9rem; }
+.gz-tier .tstrip img { width: 100%; flex: 1; aspect-ratio: 1; object-fit: cover; border-radius: 6px; }
+
+/* Trait system */
+.gz-traits { display: grid; grid-template-columns: repeat(3,1fr); gap: 1rem; }
+@media (max-width: 780px){ .gz-traits{ grid-template-columns: 1fr;} }
+.gz-tcat { border: 1px solid var(--border); border-radius: 16px; padding: 1.2rem; background: rgba(255,255,255,0.02); }
+.gz-tcat h4 { font-family: "Orbitron",sans-serif; font-size: 0.82rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--cyan); margin-bottom: 0.9rem; }
+.gz-trow { display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem; padding: 0.4rem 0; }
+.gz-trow + .gz-trow { border-top: 1px solid rgba(255,255,255,0.05); }
+.gz-trow .v { color: #e8e8f4; }
+.gz-trow .p { font-family: "Orbitron",sans-serif; font-size: 0.78rem; color: var(--muted); }
+.gz-trow.rarest .v { color: var(--gold); font-weight: 700; }
+.gz-trow.rarest .p { color: var(--gold); }
+
+/* Chase rank grid */
+.gz-chase { display: grid; grid-template-columns: repeat(6,1fr); gap: 0.8rem; }
+@media (max-width: 900px){ .gz-chase{ grid-template-columns: repeat(3,1fr);} }
+@media (max-width: 460px){ .gz-chase{ grid-template-columns: repeat(2,1fr);} }
+.gz-rankcard { position: relative; border-radius: 14px; overflow: hidden; border: 1px solid var(--border); background: #0a0616; transition: transform 0.2s, border-color 0.2s; }
+.gz-rankcard:hover { transform: translateY(-4px); border-color: var(--gold); }
+.gz-rankcard img { width: 100%; display: block; aspect-ratio: 1; object-fit: cover; }
+.gz-rankcard .rk { position: absolute; top: 0.4rem; left: 0.4rem; font-family: "Orbitron",sans-serif; font-size: 0.62rem; font-weight: 900; background: rgba(6,3,16,0.82); color: var(--gold); border: 1px solid rgba(255,205,90,0.6); padding: 0.18rem 0.45rem; border-radius: 999px; }
+.gz-rankcard .nm { position: absolute; left: 0; right: 0; bottom: 0; padding: 1rem 0.5rem 0.45rem; background: linear-gradient(transparent, rgba(6,3,14,0.9)); font-size: 0.68rem; text-align: center; color: #dcdcec; }
+
+/* Utility FOMO */
+.gz-util { display: grid; grid-template-columns: repeat(2,1fr); gap: 1rem; }
+@media (max-width: 720px){ .gz-util{ grid-template-columns: 1fr;} }
+.gz-ucard { display: flex; gap: 1rem; align-items: flex-start; border: 1px solid var(--border); border-radius: 16px; padding: 1.2rem 1.3rem; background: rgba(255,255,255,0.02); }
+.gz-ucard .ic { font-size: 1.7rem; line-height: 1; }
+.gz-ucard h4 { font-family: "Orbitron",sans-serif; font-size: 1rem; margin-bottom: 0.35rem; }
+.gz-ucard p { color: var(--muted); font-size: 0.9rem; line-height: 1.5; }
+
+.gz-final { text-align: center; border: 1px solid rgba(255,205,90,0.4); border-radius: 24px; padding: clamp(2.5rem,6vw,4rem) 1.5rem; background: radial-gradient(ellipse at top, rgba(255,205,90,0.1), transparent 70%); max-width: var(--max); margin: 0 auto; }
+.gz-final h2 { font-size: clamp(2rem,5vw,3.2rem); font-weight: 900; }
+
+/* animated Legendary media (marketplace) */
+.nft-thumb video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.nft-anim-badge { position: absolute; top: 8px; right: 8px; z-index: 2; font-family: "Orbitron",sans-serif; font-size: 0.58rem; font-weight: 800; letter-spacing: 0.06em; color: #1a1204; background: var(--gold); border-radius: 999px; padding: 0.16rem 0.5rem; box-shadow: 0 0 14px rgba(255,205,90,0.6); }
+.nft-modal-media { width: 300px; max-width: 42%; display: flex; }
+.nft-modal-media video.nft-modal-img, .nft-modal-media img.nft-modal-img { width: 100%; max-width: 100%; }
+@media (max-width: 560px) { .nft-modal-media { width: 100%; max-width: 100%; } }

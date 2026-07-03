@@ -49,7 +49,7 @@
       <span class="eyebrow" style="display:block;margin-top:1rem;" id="mktEyebrow">Marketplace</span>
       <h1 id="mktTitle">The <span class="grad">Nine Lives</span> Collection</h1>
       <p id="mktIntro">High-quality anime Catboy PFPs — each with its own traits and rarity. Browse the drop and mint your favorite at launch.</p>
-      <div class="hero-actions" style="margin-top:1rem;"><a href="mint.html" class="btn btn-primary">Mint &rsaquo;</a> <a href="trade.html" class="btn btn-ghost">Buy / Sell / Trade &rsaquo;</a></div>
+      <div class="hero-actions" style="margin-top:1rem;"><a href="mint.html" class="btn btn-primary">Mint &rsaquo;</a> <a href="trade.html" class="btn btn-ghost">Buy / Sell / Trade &rsaquo;</a> <a href="genesis.html" class="btn btn-ghost" style="border-color:var(--gold);color:var(--gold);">✦ Genesis Drop &rsaquo;</a></div>
       <div class="mkt-stats" id="mktStats"></div>
     </div>
   </section>
@@ -78,7 +78,7 @@
     <div class="nft-modal-bg" id="nftModalBg"></div>
     <div class="nft-modal-card">
       <button class="nft-modal-x" id="nftModalX" type="button" aria-label="Close">&times;</button>
-      <img id="mImg" class="nft-modal-img" src="" alt="" />
+      <div id="mMedia" class="nft-modal-media"></div>
       <div class="nft-modal-info">
         <div class="nft-modal-head"><span class="nft-badge" id="mBadge"></span><span class="nft-rank-chip" id="mRank"></span></div>
         <h3 id="mName"></h3>
@@ -140,6 +140,9 @@
                    eyebrow: "✦ Special Launch Edition", title: "Catboy <span class='grad'>Genesis</span>", intro: "The special launch edition — 100 original high-quality Catboy pieces with real trait rarity. 3 Legendary (animated 3D), 12 Epic, 25 Rare, 60 Common. Part of the Winslow Ecosystem." },
       };
       let PATH = COLLS.nine.path, NOTE = COLLS.nine.note;
+      // animated Legendaries (Genesis only): NFT id -> clip under PATH
+      const ANIM = { 57: "anim/057.mp4", 90: "anim/090.mp4", 92: "anim/092.mp4" };
+      const animSrc = (i) => (PATH.indexOf("genesis") > -1 && ANIM[i.id]) ? PATH + ANIM[i.id] : null;
       const TIER_ORDER = { Legendary: 0, Legend: 0, Founder: 1, Epic: 2, Rare: 3, Common: 4 };
       function load(key) {
         const c = COLLS[key]; PATH = c.path; NOTE = c.note; filter = "all"; traitFilter = {};
@@ -191,7 +194,7 @@
         const a = sorted();
         grid.innerHTML = a.map((i) => `
           <div class="nft-card t-${i.tier}" data-id="${i.id}">
-            <div class="nft-thumb"><span class="nft-rank" title="Rarity rank">＃${i.rank}</span><img loading="lazy" src="${PATH}${i.file}" alt="${i.name}" /></div>
+            <div class="nft-thumb">${animSrc(i) ? `<span class="nft-anim-badge">● ANIMATED</span>` : ``}<span class="nft-rank" title="Rarity rank">＃${i.rank}</span>${animSrc(i) ? `<video src="${animSrc(i)}" autoplay muted loop playsinline poster="${PATH}${i.file}"></video>` : `<img loading="lazy" src="${PATH}${i.file}" alt="${i.name}" />`}</div>
             <div class="nft-meta">
               <div class="nft-row"><span class="nft-name">${i.name}</span><span class="nft-badge b-${i.tier}">${i.tier}</span></div>
               <div class="nft-row"><span class="nft-price">${i.price} SOL</span><span class="nft-buy">Mint</span></div>
@@ -209,7 +212,9 @@
       const modal = document.getElementById("nftModal");
       function openModal(i) {
         if (!i) return;
-        document.getElementById("mImg").src = PATH + i.file;
+        document.getElementById("mMedia").innerHTML = animSrc(i)
+          ? `<video class="nft-modal-img" src="${animSrc(i)}" autoplay muted loop playsinline poster="${PATH}${i.file}"></video>`
+          : `<img class="nft-modal-img" src="${PATH}${i.file}" alt="${i.name}" />`;
         document.getElementById("mName").textContent = i.name;
         const b = document.getElementById("mBadge"); b.textContent = i.tier; b.className = "nft-badge b-" + i.tier;
         document.getElementById("mRank").textContent = "Rarity Rank ＃" + i.rank + " / " + items.length;
