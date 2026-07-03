@@ -55,9 +55,10 @@
   </section>
 
   <section class="section" style="padding-top:1rem;">
-    <div class="mkt-colltabs">
+    <div class="mkt-colltabs mkt-colltabs-3">
       <button class="mkt-colltab active" data-c="nine" type="button">Nine Lives · 100</button>
-      <button class="mkt-colltab" data-c="genesis" type="button">✦ Genesis · 100<span class="tab-new">NEW</span></button>
+      <button class="mkt-colltab" data-c="genesis" type="button">✦ Genesis · 100</button>
+      <button class="mkt-colltab mkt-pride" data-c="pride" type="button">🏳️‍🌈 Pride · 10<span class="tab-new">NEW</span></button>
     </div>
     <div class="mkt-filters" id="mktFilters">
       <span id="tierChips" class="tierchips"></span>
@@ -138,6 +139,8 @@
                    eyebrow: "Marketplace", title: "The <span class='grad'>Nine Lives</span> Collection", intro: "100 high-quality anime Catboy PFPs — each with its own traits and rarity. Browse the drop and mint at launch." },
         genesis: { file: "assets/nft/genesis/manifest.json",    path: "assets/nft/genesis/",    note: "Genesis — special launch edition · 3 Legendary (animated) / 12 Epic / 25 Rare / 60 Common",
                    eyebrow: "✦ Special Launch Edition", title: "Catboy <span class='grad'>Genesis</span>", intro: "The special launch edition — 100 original high-quality Catboy pieces with real trait rarity. 3 Legendary (animated 3D), 12 Epic, 25 Rare, 60 Common. Part of the Winslow Ecosystem." },
+        pride:   { file: "assets/nft/pride/manifest.json",      path: "assets/nft/pride/",      note: "Pride Edition 2026 · 10 pieces · Love is Love 🏳️‍🌈 · a portion of every Pride mint is donated to LGBTQ+ charity",
+                   eyebrow: "🏳️‍🌈 Pride Edition 2026", title: "Catboy <span class='grad'>Pride</span>", intro: "A limited Pride Edition — 10 original rainbow Catboys. Love is love. 🏳️‍🌈 A portion of every Pride mint is donated to LGBTQ+ charity." },
       };
       let PATH = COLLS.nine.path, NOTE = COLLS.nine.note;
       // animated Legendaries (Genesis only): NFT id -> clip under PATH

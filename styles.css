@@ -1447,3 +1447,11 @@ body.splash-open { overflow: hidden; }
 .ch-champ { color: #fff; font-family: "Orbitron",sans-serif; font-weight: 900; font-size: 1.15rem; letter-spacing: 0.04em; }
 .ch-champ .champ-name { display: block; font-size: 2rem; color: var(--gold); text-shadow: 0 0 22px rgba(255,205,90,0.6); margin: 0.4rem 0; }
 .ch-champ span { display: block; font-family: "Rajdhani",sans-serif; font-weight: 500; font-size: 0.95rem; color: var(--muted); }
+
+/* Pride collection tab + badge */
+.mkt-colltabs-3 { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 620px) { .mkt-colltabs-3 { grid-template-columns: 1fr; } }
+.mkt-colltab.mkt-pride { position: relative; }
+.mkt-colltab.mkt-pride.active { background: linear-gradient(100deg,#e40303,#ff8c00 20%,#ffed00 40%,#008026 60%,#004dff 80%,#750787); color: #fff; border-color: transparent; }
+.mkt-colltab.mkt-pride:not(.active) { border-color: #ff8c00; }
+.b-Pride { color: #fff; border-color: transparent; background: linear-gradient(100deg,#e40303,#ff8c00 25%,#ffed00 45%,#008026 62%,#004dff 80%,#750787); }

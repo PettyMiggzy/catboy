@@ -1,0 +1,46 @@
+{
+ "name": "Pride Catboy \u2014 Pride DJ",
+ "symbol": "CATBOYPRIDE",
+ "description": "Catboy Pride Edition 2026 \u2014 a limited run of 10. Love is love. A portion of every Pride mint is donated to LGBTQ+ charity. \ud83c\udff3\ufe0f\u200d\ud83c\udf08",
+ "image": "https://www.catboyonsol.fun/assets/nft/pride/008.jpg",
+ "external_url": "https://www.catboyonsol.fun/market.html",
+ "attributes": [
+  {
+   "trait_type": "Character",
+   "value": "Catboy"
+  },
+  {
+   "trait_type": "Edition",
+   "value": "Pride 2026"
+  },
+  {
+   "trait_type": "Theme",
+   "value": "Pride Party"
+  },
+  {
+   "trait_type": "Flag",
+   "value": "Rave"
+  },
+  {
+   "trait_type": "Vibe",
+   "value": "Proud"
+  },
+  {
+   "trait_type": "Utility",
+   "value": "Pride Holder"
+  },
+  {
+   "trait_type": "Rarity",
+   "value": "Pride"
+  }
+ ],
+ "properties": {
+  "files": [
+   {
+    "uri": "https://www.catboyonsol.fun/assets/nft/pride/008.jpg",
+    "type": "image/jpeg"
+   }
+  ],
+  "category": "image"
+ }
+}

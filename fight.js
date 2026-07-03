@@ -849,6 +849,7 @@
     window.CATBOY_FIGHT._chargeBoss = () => { if (G && G.p2 && G.p2.def.boss) { G.p2.meter = 100; G.p2.ai.t = 0; G.p2.ai.want = "special"; } };
     window.CATBOY_FIGHT._charge = (who) => { if (G && G[who]) G[who].meter = 100; };
     window.CATBOY_FIGHT._lowHp = (who) => { if (G && G[who]) G[who].hp = Math.min(G[who].hp, 12); };
+    window.CATBOY_FIGHT._heal = (who) => { if (G && G[who]) G[who].hp = G[who].maxhp; };
   }
 
   // stake the current wager at the start of a bout (one opponent, best of 3)
