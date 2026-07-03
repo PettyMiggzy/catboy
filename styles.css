@@ -1344,7 +1344,7 @@ body.splash-open { overflow: hidden; }
 .gz-tier .tmeta { display: flex; justify-content: space-between; margin-top: 0.9rem; padding-top: 0.8rem; border-top: 1px solid var(--border); font-size: 0.85rem; }
 .gz-tier .tmeta b { color: #fff; }
 .gz-tier .tstrip { display: flex; gap: 4px; margin-top: 0.9rem; }
-.gz-tier .tstrip img { width: 100%; flex: 1; aspect-ratio: 1; object-fit: cover; border-radius: 6px; }
+.gz-tier .tstrip img { flex: 1 1 0; min-width: 0; width: 0; aspect-ratio: 1; object-fit: cover; border-radius: 6px; }
 
 /* Trait system */
 .gz-traits { display: grid; grid-template-columns: repeat(3,1fr); gap: 1rem; }
