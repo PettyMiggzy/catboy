@@ -206,6 +206,7 @@
         life: 1, fade: 0.0016 + Math.random() * 0.0016,
       });
     }
+    if (G.sblood.length > 46) G.sblood.splice(0, G.sblood.length - 46);  // cap so it never whites out
   }
   function drawScreenBlood() {
     const arr = G.sblood; if (!arr || !arr.length) return;
@@ -269,7 +270,7 @@
       def.vx = kb * (att.facing); def.vy = -3;
       spark(hitX, hitY, "#ff3df0", 8);
       bloodSpray(hitX, hitY, att.facing, Math.min(22, 5 + d));   // blood on a clean hit
-      if (d >= 16) screenBlood(1 + (d / 14 | 0), hitX);          // heavy hits fleck the screen
+      screenBlood(1 + (d >= 16 ? 2 : 0), hitX);                  // every clean hit flecks the screen; heavy hits more
       G.shake = Math.max(G.shake, 9);
       att.combo++; att.comboT = 900;
       if (att.combo > 1) popText(def.x, def.y - def.h - 10, att.combo + " HIT", "#ffd84d");
