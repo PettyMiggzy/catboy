@@ -586,8 +586,17 @@
   }
 
   function bar(x, y, w, f, mirror, name, color, meter) {
+    if (f.hpShown == null) f.hpShown = f.maxhp;
+    f.hpShown += (f.hp - f.hpShown) * 0.09;                     // lag toward live HP
+    if (Math.abs(f.hpShown - f.hp) < 0.6) f.hpShown = f.hp;
     const pct = Math.max(0, f.hp / f.maxhp);
+    const pctS = Math.max(0, f.hpShown / f.maxhp);
     ctx.fillStyle = "rgba(0,0,0,0.55)"; ctx.fillRect(x, y, w, 22);
+    // chip-damage trail (recently lost health draining) behind the live bar
+    if (pctS > pct + 0.001) {
+      const bxS = mirror ? x + w * (1 - pctS) : x;
+      ctx.fillStyle = "rgba(255,70,80,0.65)"; ctx.fillRect(bxS, y, w * pctS, 22);
+    }
     const bx = mirror ? x + w * (1 - pct) : x;
     const g = ctx.createLinearGradient(x, 0, x + w, 0);
     g.addColorStop(0, "#19e0ff"); g.addColorStop(1, "#ff3df0");
