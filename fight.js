@@ -71,7 +71,7 @@
   // ---------- FINAL BOSS: Winslow (the creator, in full Solana armor) ----------
   // Not player-selectable — always the last opponent, bigger and brutal.
   const BOSS = { id: "winslow", name: "WINSLOW", img: "char_winslow.png", char: true, boss: true,
-    color: "#9945ff", hp: 210, pow: 1.35, spd: 0.98, special: "Solana Surge",
+    color: "#9945ff", hp: 300, pow: 1.6, spd: 1.05, special: "Solana Blast",
     blurb: "The creator. Full Solana armor. Beat the roster to face him." };
 
   // Per-fighter special moves — each its own archetype + visual.
@@ -87,7 +87,7 @@
     pyth:    { type: "rain",      color: "#aa78ff", n: 5, dmg: 9 },      // candlestick rain
     trump:   { type: "slam",      color: "#d4af37", dmg: 28 },           // tariff ground pound
     popcat:  { type: "multishot", color: "#e7b9a0", n: 4, dmg: 6, fast: true }, // pop barrage
-    winslow: { type: "beam",      color: "#9945ff", dmg: 40 },           // massive Solana surge beam
+    winslow: { type: "beam",      color: "#9945ff", dmg: 46, blast: true },  // SOLANA BLAST — screen-wide finisher
   };
   const specOf = (def) => SPECIALS[def.id] || { type: "orb", color: def.color, dmg: 22 };
 
@@ -214,7 +214,8 @@
     // only an ACTUAL block (visible) reduces damage — no more invisible CPU blocking
     const blocked = def.state === "block" || (def === G.p1 && keys.block && def.onGround);
     let d = dmg;
-    if (blocked) { d = Math.round(dmg * 0.25); spark(hitX, hitY, "#19e0ff", 7); G.shake = Math.max(G.shake, 4); }
+    if (def.def.boss) d = Math.round(d * 0.6);   // Solana armor — the boss shrugs off damage
+    if (blocked) { d = Math.round(d * 0.25); spark(hitX, hitY, "#19e0ff", 7); G.shake = Math.max(G.shake, 4); }
     else {
       def.set("hurt", 260 + dmg * 6); def.hitstun = 260 + dmg * 6;
       def.vx = kb * (att.facing); def.vy = -3;
@@ -238,21 +239,22 @@
     const dist = Math.abs(me.x - foe.x);
     me.facing = foe.x >= me.x ? 1 : -1;
     if (me.busy() || me.state === "ko" || me.hitstun > 0) { ai.want = "idle"; return; }
-    const lvl = 0.5 + G.oppIdx * 0.07; // harder later
+    const boss = me.def.boss;
+    const lvl = boss ? 0.98 : 0.5 + G.oppIdx * 0.07; // boss is max difficulty
     if (ai.t <= 0) {
-      ai.t = 220 + Math.random() * 380 * (1.3 - lvl);
+      ai.t = (boss ? 80 : 220) + Math.random() * (boss ? 150 : 380) * (1.3 - lvl); // boss reacts fast
       const r = Math.random();
-      if (foe.state === "punch" || foe.state === "kick") { ai.want = (r < Math.min(0.55, lvl)) ? "block" : "back"; }
+      if (foe.state === "punch" || foe.state === "kick") { ai.want = (r < Math.min(boss ? 0.8 : 0.55, lvl)) ? "block" : (boss ? "punch" : "back"); }
       else if (dist > me.reach() + 30) ai.want = "approach";
-      else if (me.meter >= 100 && r < 0.6) ai.want = "special";
-      else if (r < 0.45) ai.want = "punch";
-      else if (r < 0.72) ai.want = "kick";
-      else if (r < 0.85) ai.want = "back";
+      else if (me.meter >= 100 && r < (boss ? 0.85 : 0.6)) ai.want = "special";
+      else if (r < (boss ? 0.55 : 0.45)) ai.want = "punch";
+      else if (r < (boss ? 0.85 : 0.72)) ai.want = "kick";
+      else if (r < (boss ? 0.9 : 0.85)) ai.want = "back";
       else ai.want = "idle";
     }
     me.vx = 0;
     if (me.state === "block" && ai.want !== "block") me.state = "idle";
-    if (ai.want === "approach") me.vx = me.def.spd * 2.4 * me.facing;
+    if (ai.want === "approach") me.vx = me.def.spd * (boss ? 3.2 : 2.4) * me.facing;
     else if (ai.want === "back") me.vx = -me.def.spd * 1.8 * me.facing;
     else if (ai.want === "punch") me.tryAttack("punch");
     else if (ai.want === "kick") me.tryAttack("kick");
@@ -647,7 +649,12 @@
         // bout won — pay out the wager (house edge baked into the mult)
         if (G.staked > 0) { const pay = Math.round(G.staked * payMult(G.oppIdx)); setCredits(getCredits() + pay); G.lastPay = pay; wgNote("You won " + pay + " credits! 🐾"); }
         else G.lastPay = 0;
-        if (G.oppIdx >= G.oppQueue.length - 1) { G.phase = "matchwin"; G.cleared = true; }
+        if (G.oppIdx >= G.oppQueue.length - 1) {
+          G.phase = "matchwin"; G.cleared = true;
+          if (G.oppQueue[G.oppIdx] && G.oppQueue[G.oppIdx].boss) {
+            try { window.dispatchEvent(new CustomEvent("catboy:winslow-beaten", { detail: { challenge: !!G.challenge } })); } catch {}
+          }
+        }
         else { G.phase = "matchwin"; }
       } else {
         if (G.staked > 0) { G.lastPay = -G.staked; wgNote("Lost " + G.staked + " credits. Rematch to win it back."); }
@@ -770,6 +777,16 @@
     G = newMatch(player, opps);
     G.phase = "intro"; startRound(false); stakeBout();
   }
+
+  // Boss challenge: CATBOY straight into Winslow (used by the promo panel)
+  function startBossChallenge() {
+    WAGER = 0;
+    G = newMatch(ROSTER[0], [BOSS]);
+    G.challenge = true;
+    G.phase = "intro"; startRound(false); stakeBout();
+    const shell = document.querySelector(".fight-shell"); if (shell) shell.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+  window.CATBOY_FIGHT = { startBossChallenge };
 
   // stake the current wager at the start of a bout (one opponent, best of 3)
   function stakeBout() {

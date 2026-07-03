@@ -1422,3 +1422,23 @@ body.splash-open { overflow: hidden; }
 .vo-bar { height: 7px; border-radius: 999px; background: rgba(255,255,255,0.08); overflow: hidden; }
 .vo-bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--cyan), var(--magenta)); }
 .vo-pct { font-family: "Orbitron",sans-serif; font-size: 0.78rem; text-align: right; color: var(--muted); }
+
+/* ===== WINSLOW BOSS CHALLENGE (promo) ===== */
+.challenge-card { max-width: 760px; margin: 0 auto; border: 1px solid rgba(255,205,90,0.4); border-radius: 20px; padding: 1.4rem 1.5rem; background: radial-gradient(ellipse at top, rgba(153,69,255,0.14), rgba(255,205,90,0.05) 70%); text-align: center; }
+.ch-head { display: flex; flex-wrap: wrap; gap: 0.6rem 1rem; align-items: center; justify-content: space-between; margin-bottom: 0.8rem; }
+.ch-tag { font-family: "Orbitron",sans-serif; font-weight: 900; font-size: 0.8rem; letter-spacing: 0.06em; color: var(--gold); }
+.ch-prize { color: var(--muted); font-size: 0.95rem; }
+.ch-prize b { color: #fff; }
+.ch-sol { color: var(--gold) !important; text-shadow: 0 0 12px rgba(255,205,90,0.5); }
+.ch-lead { color: var(--muted); font-size: 0.98rem; line-height: 1.55; margin: 0.6rem auto 0; max-width: 620px; }
+.ch-lead b { color: #fff; }
+.ch-count { display: flex; gap: 0.7rem; justify-content: center; margin: 0.4rem 0 0.2rem; }
+.ch-count span { position: relative; font-family: "Orbitron",sans-serif; font-weight: 900; font-size: clamp(1.6rem,5vw,2.4rem); color: #fff; min-width: 62px; padding: 0.5rem 0.4rem 1.1rem; border: 1px solid var(--border); border-radius: 12px; background: rgba(0,0,0,0.3); line-height: 1; }
+.ch-count i { position: absolute; left: 0; right: 0; bottom: 0.5rem; font-style: normal; font-family: "Rajdhani",sans-serif; font-size: 0.62rem; letter-spacing: 0.15em; text-transform: uppercase; color: var(--muted); }
+.ch-actions { display: flex; gap: 0.7rem; justify-content: center; flex-wrap: wrap; margin-top: 1.1rem; }
+.ch-note { color: var(--muted); font-size: 0.82rem; margin-top: 0.8rem; }
+.ch-closed { color: #fff; font-size: 1.05rem; font-weight: 700; }
+.ch-closed span { display: block; color: var(--muted); font-weight: 400; font-size: 0.9rem; margin-top: 0.4rem; }
+.ch-won { color: #fff; font-family: "Orbitron",sans-serif; font-weight: 900; font-size: 1.2rem; }
+.ch-won span { display: block; font-family: "Rajdhani",sans-serif; font-weight: 500; font-size: 0.95rem; color: var(--muted); margin: 0.5rem 0; }
+.ch-won code { display: inline-block; font-family: "Orbitron",sans-serif; font-size: 1.1rem; letter-spacing: 0.1em; color: var(--gold); background: rgba(255,205,90,0.1); border: 1px dashed var(--gold); border-radius: 8px; padding: 0.5rem 1rem; margin-top: 0.3rem; }

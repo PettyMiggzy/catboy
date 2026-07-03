@@ -50,7 +50,20 @@
     </div>
   </section>
 
-  <section class="section" style="padding-top:0.5rem;">
+  <!-- WINSLOW BOSS CHALLENGE (promo) -->
+  <section class="section" style="padding-top:0.5rem;padding-bottom:0;">
+    <div class="challenge-card" id="challengeCard">
+      <div class="ch-head">
+        <span class="ch-tag" id="chTag">⚔️ Boss Challenge</span>
+        <span class="ch-prize">Beat <b>WINSLOW</b> → win <b class="ch-sol">1 SOL</b></span>
+      </div>
+      <div class="ch-body" id="chBody"><!-- filled by JS --></div>
+      <div class="ch-actions" id="chActions"></div>
+      <p class="ch-note" id="chNote"></p>
+    </div>
+  </section>
+
+  <section class="section" style="padding-top:1rem;">
     <div class="fight-shell">
       <div class="wager-bar">
         <span class="wg-cred">Credits <b id="wgCredits">0</b> <span class="demo-pill" style="margin-left:.4rem;">FREE DEMO</span></span>
@@ -97,7 +110,82 @@
   <script src="assets/wallets.js"></script>
   <script src="assets/mint-config.js"></script>
   <script src="assets/holder.js"></script>
+  <script src="assets/challenge.js"></script>
   <script src="script.js"></script>
   <script src="fight.js"></script>
+  <script>
+  (function () {
+    const CH = window.CATBOY_CHALLENGE, $ = (id) => document.getElementById(id);
+    const body = $("chBody"), actions = $("chActions"), note = $("chNote"), tag = $("chTag");
+    let paidThisSession = false;
+
+    function pad(n) { return String(n).padStart(2, "0"); }
+    function render() {
+      if (CH.isClosed()) {
+        tag.textContent = "🏁 Challenge Closed";
+        body.innerHTML = `<div class="ch-closed">The 1 SOL has been claimed.${CH.winner ? ` Winner: <b>${CH.winner}</b>` : ""}<br><span>Only one winner — this promo is over. GG.</span></div>`;
+        actions.innerHTML = "";
+        note.textContent = "Watch the socials for the next Catboy tournament.";
+        return;
+      }
+      if (CH.isPractice()) {
+        const c = CH.countdown();
+        tag.textContent = "⚔️ Boss Challenge · Practice";
+        body.innerHTML =
+          `<div class="ch-count"><span>${pad(c.d)}<i>days</i></span><span>${pad(c.h)}<i>hrs</i></span><span>${pad(c.m)}<i>min</i></span><span>${pad(c.s)}<i>sec</i></span></div>
+           <p class="ch-lead">Practice free now. When the clock hits zero the real promo goes live: <b>0.25 SOL to enter, beat Winslow, win 1 SOL.</b> One winner, first to beat him.</p>`;
+        actions.innerHTML = `<button class="btn btn-primary" id="chFight" type="button">Practice vs Winslow (free)</button>`;
+        note.textContent = "Winslow is brutal — armored, aggressive, hits like a truck. Use practice to learn him.";
+      } else { // LIVE
+        tag.textContent = "🔴 Boss Challenge · LIVE";
+        body.innerHTML =
+          `<p class="ch-lead"><b>0.25 SOL</b> to enter · beat Winslow in a best-of-3 · win <b class="ch-sol">1 SOL</b>. One winner — first to beat him takes it and the challenge closes.</p>`;
+        actions.innerHTML =
+          `<button class="btn btn-primary" id="chEnter" type="button">Enter — pay 0.25 SOL</button>
+           <button class="btn btn-ghost" id="chFight" type="button">Practice first (free)</button>`;
+        note.textContent = "Entry funds the prize pool. Winners get a proof code to claim the 1 SOL — payout is handled by the team.";
+      }
+      wire();
+    }
+    function wire() {
+      const f = $("chFight"); if (f) f.onclick = () => startFight(false);
+      const e = $("chEnter"); if (e) e.onclick = enterPaid;
+    }
+    function startFight(paid) {
+      if (paid) paidThisSession = true;
+      if (window.CATBOY_FIGHT) window.CATBOY_FIGHT.startBossChallenge();
+    }
+    async function enterPaid() {
+      const e = $("chEnter"); if (!e) return;
+      e.disabled = true; note.textContent = "Approve the 0.25 SOL entry in your wallet…";
+      try {
+        await CH.payEntry();
+        note.textContent = "Entry paid ✓ — beat Winslow to win 1 SOL. Good luck.";
+        startFight(true);
+      } catch (err) {
+        note.textContent = "Entry cancelled: " + (err.message || err);
+      } finally { e.disabled = false; }
+    }
+
+    // win handler
+    window.addEventListener("catboy:winslow-beaten", (ev) => {
+      CH.markBeaten(CH.isLive() ? "live" : "practice");
+      if (CH.isLive() && paidThisSession) {
+        const code = "WIN-" + Math.abs((Date.now() ^ 0x9e37) % 1e8).toString(36).toUpperCase();
+        body.innerHTML = `<div class="ch-won">🏆 YOU BEAT WINSLOW!<br><span>Claim your <b class="ch-sol">1 SOL</b> — DM this proof code to the team:</span><code>${code}</code></div>`;
+        actions.innerHTML = `<a class="btn btn-primary" href="https://t.me/kingpetty317" target="_blank" rel="noopener">Claim 1 SOL ›</a>`;
+        note.textContent = "One winner only — if you're first, the 1 SOL is yours and the challenge closes.";
+        try { localStorage.setItem("catboy_win_code", code); } catch {}
+      } else {
+        note.textContent = CH.isLive()
+          ? "Nice — but you have to ENTER (0.25 SOL) for a win to count toward the 1 SOL."
+          : "GG — you beat him in practice! The real 1 SOL promo starts on the countdown.";
+      }
+    });
+
+    render();
+    setInterval(() => { if (CH.isPractice()) render(); }, 1000);
+  })();
+  </script>
 </body>
 </html>
