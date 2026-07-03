@@ -47,10 +47,34 @@ After that you'll only get emails for **new** tokens.
   short loop on your own droplet instead (same env vars).
 - A website is **not** proof of safety. Always DYOR.
 
-## Run it on your droplet instead (optional, faster)
+## Run it on your droplet (FASTER — polls every ~25s)
+
+On the droplet:
 ```bash
-pip3 install --upgrade pip
-export SMTP_USER=... SMTP_PASS=... ALERT_TO=... PUMP_ONLY=true REQUIRE_WEBSITE=true
-# every 60s:
-while true; do python3 watcher/scan.py; sleep 60; done
+# 1. get the code
+git clone https://github.com/PettyMiggzy/catboy.git   # or: git pull
+cd catboy/watcher
+
+# 2. configure secrets (never committed)
+cp .env.example .env
+nano .env            # fill SMTP_USER / SMTP_PASS / ALERT_TO, set POLL=25
+
+# 3a. quick test (foreground, Ctrl-C to stop)
+./run_loop.sh
+
+# 3b. run it forever as a service (survives reboots)
+sudo cp catboy-watcher.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now catboy-watcher
+journalctl -u catboy-watcher -f     # live logs
 ```
+
+`.env` knobs: `POLL` (seconds between checks), `PUMP_ONLY`, `REQUIRE_WEBSITE`,
+`KEYWORDS`, `MAX_ALERTS`. First run seeds the current list and emails you a
+"watcher is LIVE" note; after that only **new** tokens trigger email.
+
+> Website detection also catches **custom domains** (e.g. `1234.xyz`) — any http
+> link that isn't a known social counts as a website, so your test token will
+> trip it. Note DexScreener can take a few minutes to index a brand-new token.
+
+Use either the GitHub Action **or** the droplet — no need for both.

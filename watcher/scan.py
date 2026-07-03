@@ -41,12 +41,28 @@ def get_json(url, timeout=25):
         return json.load(r)
 
 
+SOCIAL_HOSTS = ("twitter.com", "x.com", "t.me", "telegram", "discord", "instagram",
+                "tiktok", "youtube", "youtu.be", "facebook", "reddit", "medium",
+                "github", "linktr.ee", "warpcast")
+
+
 def website_of(links):
-    for l in links or []:
+    links = links or []
+    # 1) explicitly tagged website
+    for l in links:
         t = (l.get("type") or "").lower()
         lab = (l.get("label") or "").lower()
         if t in ("website", "web") or "website" in lab or "home" in lab:
             return l.get("url")
+    # 2) fallback: any http link that isn't a known social (catches custom domains)
+    for l in links:
+        t = (l.get("type") or l.get("label") or "").lower()
+        url = (l.get("url") or "").strip()
+        if t in ("twitter", "x", "telegram", "tg", "discord", "instagram", "tiktok", "youtube"):
+            continue
+        low = url.lower()
+        if url.startswith("http") and not any(h in low for h in SOCIAL_HOSTS):
+            return url
     return None
 
 

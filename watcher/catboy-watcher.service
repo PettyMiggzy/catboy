@@ -1,0 +1,20 @@
+# systemd unit — survives reboots, auto-restarts.
+# Edit WorkingDirectory/User to match your droplet, then:
+#   sudo cp catboy-watcher.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now catboy-watcher
+#   journalctl -u catboy-watcher -f     # watch the logs
+[Unit]
+Description=CATBOY launch watcher
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/catboy/watcher
+ExecStart=/usr/bin/env bash /root/catboy/watcher/run_loop.sh
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
