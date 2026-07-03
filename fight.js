@@ -179,7 +179,7 @@
     G.p2.maxhp = Math.round(G.p2.maxhp * (1 + G.oppIdx * 0.06));
     G.p2.hp = G.p2.maxhp;
     if (!keepWins) { G.w1 = 0; G.w2 = 0; G.round = 1; }
-    G.roundTime = 99; G.phase = "intro"; G.phaseT = 0; G.sparks = []; G.shots = []; G.beams = []; G.pops = []; G.blood = []; G.splats = []; G.finFlash = 0;
+    G.roundTime = 99; G.phase = "intro"; G.phaseT = 0; G.sparks = []; G.shots = []; G.beams = []; G.pops = []; G.blood = []; G.splats = []; G.sblood = []; G.finFlash = 0;
   }
 
   function spark(x, y, c, n) {
@@ -192,11 +192,50 @@
       G.blood.push({ x, y, vx: dir * (0.5 + Math.random() * 4) + (Math.random() - 0.5) * 5,
         vy: -(1.5 + Math.random() * 7), r: 1.4 + Math.random() * 3.2, life: 1 });
   }
+  // blood that hits the "camera" and runs down the screen (big hits / finishers)
+  function screenBlood(n, cx) {
+    if (!G.sblood) G.sblood = [];
+    for (let i = 0; i < (n || 6); i++) {
+      const size = 12 + Math.random() * 44;
+      G.sblood.push({
+        x: (cx != null ? cx : W / 2) + (Math.random() - 0.5) * W * 0.85,
+        y: H * (0.08 + Math.random() * 0.5),
+        blobs: Array.from({ length: 3 + (Math.random() * 4 | 0) },
+          () => ({ dx: (Math.random() - 0.5) * size * 1.5, dy: (Math.random() - 0.5) * size * 1.3, rr: size * (0.28 + Math.random() * 0.6) })),
+        drip: 0, dripV: 0.2 + Math.random() * 0.5, dw: size * (0.1 + Math.random() * 0.16),
+        life: 1, fade: 0.0016 + Math.random() * 0.0016,
+      });
+    }
+  }
+  function drawScreenBlood() {
+    const arr = G.sblood; if (!arr || !arr.length) return;
+    for (let i = arr.length - 1; i >= 0; i--) {
+      const s = arr[i];
+      s.drip += s.dripV; s.dripV += 0.015; s.life -= s.fade;
+      if (s.life <= 0) { arr.splice(i, 1); continue; }
+      const a = Math.min(0.82, s.life);
+      ctx.fillStyle = "rgba(122,8,16," + a + ")";
+      // drip streak running down + rounded head
+      ctx.beginPath();
+      ctx.moveTo(s.x - s.dw, s.y); ctx.lineTo(s.x + s.dw, s.y);
+      ctx.lineTo(s.x + s.dw * 0.35, s.y + s.drip); ctx.lineTo(s.x - s.dw * 0.35, s.y + s.drip);
+      ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.arc(s.x, s.y + s.drip, s.dw * 0.55, 0, 7); ctx.fill();
+      // irregular splat blob
+      s.blobs.forEach((bl) => { ctx.beginPath(); ctx.arc(s.x + bl.dx, s.y + bl.dy, bl.rr, 0, 7); ctx.fill(); });
+      // wet gloss highlight
+      ctx.fillStyle = "rgba(210,50,60," + (0.28 * s.life) + ")";
+      ctx.beginPath(); ctx.arc(s.x - size(s) * 0.18, s.y - size(s) * 0.18, size(s) * 0.22, 0, 7); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+  function size(s) { return s.blobs[0] ? s.blobs[0].rr * 1.6 : 20; }
   function koFighter(def, att, kb) {
     // crumple to the ground in place — a small stagger, then fall (no launching off-screen)
     def.set("ko", 4200); def.vx = att.facing * 1.4; def.vy = -3;
     G.shake = 16; G.slow = 0.35;
     bloodSpray(def.x, def.y - def.h * 0.55, att.facing, 24);
+    screenBlood(9, def.x);   // KO splatters the screen
   }
   // finisher: available when the foe is low + in range (player only)
   function finishPromptable(f, foe) {
@@ -212,6 +251,7 @@
     foe.hp = 0; foe.set("ko", 5200); foe.vx = f.facing * 2.4; foe.vy = -4;
     bloodSpray(foe.x, foe.y - foe.h * 0.6, f.facing, 60);
     bloodSpray(foe.x, foe.y - foe.h * 0.32, f.facing, 44);
+    screenBlood(16, foe.x);   // blood splatters the screen and runs down
     spark(foe.x, foe.y - foe.h * 0.5, "#ff2d4d", 30);
     popText(W / 2, H / 2 - 44, "FINISHED!", "#ff2d4d");
     popText(f.x, f.y - f.h - 20, f.def.special.toUpperCase(), f.def.color);
@@ -229,6 +269,7 @@
       def.vx = kb * (att.facing); def.vy = -3;
       spark(hitX, hitY, "#ff3df0", 8);
       bloodSpray(hitX, hitY, att.facing, Math.min(22, 5 + d));   // blood on a clean hit
+      if (d >= 16) screenBlood(1 + (d / 14 | 0), hitX);          // heavy hits fleck the screen
       G.shake = Math.max(G.shake, 9);
       att.combo++; att.comboT = 900;
       if (att.combo > 1) popText(def.x, def.y - def.h - 10, att.combo + " HIT", "#ffd84d");
@@ -701,7 +742,13 @@
     drawShots();
     order.forEach(drawFighter);
     drawFX();
-    if (G.finFlash > 0) { ctx.globalAlpha = G.finFlash * 0.5; ctx.fillStyle = "#c00018"; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; G.finFlash -= 0.02; }
+    // finisher: a red vignette (dark edges) instead of a flat red box
+    if (G.finFlash > 0) {
+      const g = ctx.createRadialGradient(W/2, H/2, H*0.25, W/2, H/2, W*0.62);
+      g.addColorStop(0, "rgba(140,0,20,0)"); g.addColorStop(1, "rgba(150,0,22," + (G.finFlash * 0.7) + ")");
+      ctx.fillStyle = g; ctx.fillRect(0, 0, W, H); G.finFlash -= 0.02;
+    }
+    drawScreenBlood();       // lens blood that drips down — on top of everything
     drawHUD();
   }
   function drawShake() {
