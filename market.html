@@ -68,6 +68,7 @@
         <option value="pricedown">Price: High → Low</option>
       </select>
     </div>
+    <div class="mkt-traits-bar" id="traitBar"></div>
     <div class="mkt-grid" id="mktGrid"></div>
     <p class="muted-note" id="mktNote" style="text-align:center;margin-top:1.5rem;"></p>
   </section>
@@ -110,9 +111,31 @@
       }
       const pct = (k, v) => Math.round((TF[k] && TF[k][v] || 0) / items.length * 1000) / 10;
 
+      const FILTER_CATS = ["Aura", "Chain", "Utility", "Type", "Background", "Fur", "Eyes", "Outfit", "Headwear", "Accessory", "Expression"];
+      let traitFilter = {};
+      function buildTraitFilters() {
+        const bar = document.getElementById("traitBar");
+        let html = "";
+        FILTER_CATS.forEach((k) => {
+          if (!TF[k]) return;
+          const opts = Object.entries(TF[k]).sort((a, b) => a[1] - b[1])
+            .map(([v, c]) => `<option value="${v}">${v} (${c})</option>`).join("");
+          html += `<select class="mkt-tsel" data-cat="${k}"><option value="">${k}: All</option>${opts}</select>`;
+        });
+        html += `<button class="mkt-chip" id="traitClear" type="button">Clear traits</button>`;
+        bar.innerHTML = html;
+        bar.querySelectorAll(".mkt-tsel").forEach((s) => s.addEventListener("change", () => {
+          if (s.value) traitFilter[s.dataset.cat] = s.value; else delete traitFilter[s.dataset.cat];
+          s.classList.toggle("on", !!s.value); render();
+        }));
+        document.getElementById("traitClear").addEventListener("click", () => {
+          traitFilter = {}; bar.querySelectorAll(".mkt-tsel").forEach((s) => { s.value = ""; s.classList.remove("on"); }); render();
+        });
+      }
+
       fetch("assets/nft/collection/manifest.json")
         .then((r) => r.json())
-        .then((data) => { items = data; buildFreq(); render(); stats(); })
+        .then((data) => { items = data; buildFreq(); buildTraitFilters(); render(); stats(); })
         .catch(() => { document.getElementById("mktNote").textContent = "Collection failed to load."; });
 
       function stats() {
@@ -125,7 +148,9 @@
       function stat(v, l) { return `<div class="mkt-stat"><b>${v}</b><span>${l}</span></div>`; }
 
       function sorted() {
-        let a = items.filter((i) => filter === "all" || i.tier === filter);
+        const tf = Object.entries(traitFilter);
+        let a = items.filter((i) => (filter === "all" || i.tier === filter) &&
+          tf.every(([k, v]) => (i.traits || {})[k] === v));
         if (sort === "id") a.sort((x, y) => x.id - y.id);
         else if (sort === "rarity") a.sort((x, y) => (x.rank || 999) - (y.rank || 999));
         else if (sort === "priceup") a.sort((x, y) => x.price - y.price);

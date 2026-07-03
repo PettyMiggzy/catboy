@@ -1035,7 +1035,7 @@ body.splash-open { overflow: hidden; }
 .nft-modal { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; padding: 1rem; }
 .nft-modal[hidden] { display: none; }
 .nft-modal-bg { position: absolute; inset: 0; background: rgba(3,2,10,0.85); backdrop-filter: blur(6px); }
-.nft-modal-card { position: relative; z-index: 1; display: flex; gap: 1.4rem; max-width: 760px; width: 100%; background: #0c0820; border: 1px solid var(--border); border-radius: 18px; padding: 1.2rem; box-shadow: 0 30px 80px rgba(0,0,0,0.6); }
+.nft-modal-card { position: relative; z-index: 1; display: flex; gap: 1.4rem; max-width: 760px; width: 100%; max-height: 90vh; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; background: #0c0820; border: 1px solid var(--border); border-radius: 18px; padding: 1.2rem; box-shadow: 0 30px 80px rgba(0,0,0,0.6); }
 .nft-modal-img { width: 300px; max-width: 42%; border-radius: 12px; object-fit: cover; }
 .nft-modal-info { flex: 1; }
 .nft-modal-info h3 { font-family: "Orbitron", sans-serif; margin: 0.4rem 0 0.6rem; }
@@ -1046,7 +1046,13 @@ body.splash-open { overflow: hidden; }
 .nft-trait { background: rgba(155,77,255,0.08); border: 1px solid var(--border); border-radius: 8px; padding: 0.4rem 0.6rem; }
 .nft-trait span { display: block; font-size: 0.65rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
 .nft-trait b { font-size: 0.85rem; }
-@media (max-width: 560px) { .nft-modal-card { flex-direction: column; } .nft-modal-img { width: 100%; max-width: 100%; } }
+@media (max-width: 560px) { .nft-modal-card { flex-direction: column; } .nft-modal-img { width: 100%; max-width: 100%; max-height: 44vh; object-fit: contain; } }
+
+/* ---------- Marketplace trait filters ---------- */
+.mkt-traits-bar { max-width: 1200px; margin: -0.6rem auto 1.4rem; display: flex; flex-wrap: wrap; gap: 0.45rem; align-items: center; padding: 0 1rem; }
+.mkt-tsel { background: rgba(10,6,24,0.8); color: var(--ink); border: 1px solid var(--border); border-radius: 999px; padding: 0.4rem 0.8rem; font-family: "Rajdhani", sans-serif; font-weight: 600; font-size: 0.8rem; cursor: pointer; }
+.mkt-tsel:focus { outline: none; border-color: var(--cyan); }
+.mkt-tsel.on { border-color: var(--cyan); color: var(--cyan); background: rgba(25,224,255,0.12); }
 
 /* ---------- Mint page ---------- */
 .mint-wrap { max-width: 760px; margin: 0 auto; padding: 0 1rem; }
