@@ -1245,3 +1245,12 @@ body.splash-open { overflow: hidden; }
 .wg-chip:hover { color: var(--ink); border-color: var(--cyan); }
 .wg-chip.active { color: var(--bg); background: linear-gradient(100deg, var(--cyan), var(--magenta)); border-color: transparent; box-shadow: 0 0 16px rgba(25,224,255,0.4); }
 .wg-note { flex-basis: 100%; text-align: center; color: var(--muted); font-size: 0.78rem; margin: 0.1rem 0 0; min-height: 1em; }
+
+/* ---------- Marketplace rarity rank ---------- */
+.nft-thumb { position: relative; }
+.nft-rank { position: absolute; top: 8px; left: 8px; z-index: 2; font-family: "Orbitron", sans-serif; font-size: 0.64rem; font-weight: 700; letter-spacing: 0.02em; color: #fff; background: rgba(6,3,16,0.8); border: 1px solid var(--cyan); border-radius: 999px; padding: 0.18rem 0.5rem; box-shadow: 0 0 12px rgba(25,224,255,0.35); }
+.nft-modal-head { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+.nft-rank-chip { font-family: "Orbitron", sans-serif; font-size: 0.66rem; color: var(--cyan); border: 1px solid var(--cyan); background: rgba(25,224,255,0.1); border-radius: 999px; padding: 0.2rem 0.6rem; }
+.nft-trait { position: relative; }
+.trait-pct { display: block; font-style: normal; font-size: 0.66rem; color: var(--muted); margin-top: 0.1rem; }
+.nft-trait:has(.trait-pct) b { display: block; }

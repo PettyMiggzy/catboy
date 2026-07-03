@@ -79,7 +79,7 @@
       <button class="nft-modal-x" id="nftModalX" type="button" aria-label="Close">&times;</button>
       <img id="mImg" class="nft-modal-img" src="" alt="" />
       <div class="nft-modal-info">
-        <span class="nft-badge" id="mBadge"></span>
+        <div class="nft-modal-head"><span class="nft-badge" id="mBadge"></span><span class="nft-rank-chip" id="mRank"></span></div>
         <h3 id="mName"></h3>
         <div class="nft-price-row"><span class="muted-note" style="margin:0;">Price</span><b id="mPrice"></b></div>
         <div class="nft-traits" id="mTraits"></div>
@@ -103,9 +103,16 @@
       const RANK = { Legendary: 0, Epic: 1, Rare: 2, Common: 3 };
       let items = [], filter = "all", sort = "id";
 
+      let TF = {};   // trait-value frequencies for rarity %
+      function buildFreq() {
+        TF = {};
+        items.forEach((i) => { for (const [k, v] of Object.entries(i.traits || {})) { (TF[k] = TF[k] || {}); TF[k][v] = (TF[k][v] || 0) + 1; } });
+      }
+      const pct = (k, v) => Math.round((TF[k] && TF[k][v] || 0) / items.length * 1000) / 10;
+
       fetch("assets/nft/collection/manifest.json")
         .then((r) => r.json())
-        .then((data) => { items = data; render(); stats(); })
+        .then((data) => { items = data; buildFreq(); render(); stats(); })
         .catch(() => { document.getElementById("mktNote").textContent = "Collection failed to load."; });
 
       function stats() {
@@ -120,7 +127,7 @@
       function sorted() {
         let a = items.filter((i) => filter === "all" || i.tier === filter);
         if (sort === "id") a.sort((x, y) => x.id - y.id);
-        else if (sort === "rarity") a.sort((x, y) => RANK[x.tier] - RANK[y.tier] || x.id - y.id);
+        else if (sort === "rarity") a.sort((x, y) => (x.rank || 999) - (y.rank || 999));
         else if (sort === "priceup") a.sort((x, y) => x.price - y.price);
         else if (sort === "pricedown") a.sort((x, y) => y.price - x.price);
         return a;
@@ -130,7 +137,7 @@
         const a = sorted();
         grid.innerHTML = a.map((i) => `
           <div class="nft-card t-${i.tier}" data-id="${i.id}">
-            <div class="nft-thumb"><img loading="lazy" src="assets/nft/collection/${i.file}" alt="${i.name}" /></div>
+            <div class="nft-thumb"><span class="nft-rank" title="Rarity rank">＃${i.rank}</span><img loading="lazy" src="assets/nft/collection/${i.file}" alt="${i.name}" /></div>
             <div class="nft-meta">
               <div class="nft-row"><span class="nft-name">${i.name}</span><span class="nft-badge b-${i.tier}">${i.tier}</span></div>
               <div class="nft-row"><span class="nft-price">${i.price} SOL</span><span class="nft-buy">Mint</span></div>
@@ -155,9 +162,10 @@
         document.getElementById("mImg").src = "assets/nft/collection/" + i.file;
         document.getElementById("mName").textContent = i.name;
         const b = document.getElementById("mBadge"); b.textContent = i.tier; b.className = "nft-badge b-" + i.tier;
+        document.getElementById("mRank").textContent = "Rarity Rank ＃" + i.rank + " / " + items.length;
         document.getElementById("mPrice").textContent = i.price + " SOL";
         document.getElementById("mTraits").innerHTML = Object.entries(i.traits).map(([k, v]) =>
-          `<div class="nft-trait"><span>${k}</span><b>${v}</b></div>`).join("");
+          `<div class="nft-trait"><span>${k}</span><b>${v}</b><i class="trait-pct">${pct(k, v)}%</i></div>`).join("");
         document.getElementById("mStatus").textContent = "";
         modal.hidden = false; document.body.style.overflow = "hidden";
       }

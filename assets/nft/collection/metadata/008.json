@@ -1,10 +1,18 @@
 {
  "name": "Catboy #008",
  "symbol": "CATBOY",
- "description": "$CATBOY \u2014 The Nine Lives Collection. A legendary anime catboy reborn on Solana. Holders unlock real utility across the Catboy ecosystem: The Cat's Den club, allowlist, and more.",
- "image": "https://catboy-ecru.vercel.app/assets/nft/collection/008.jpg",
- "external_url": "https://catboy-ecru.vercel.app/market.html",
+ "description": "$CATBOY \u2014 The Nine Lives Collection. Reborn on Solana. Holders unlock real utility across the Catboy ecosystem: casino perks, Catboy City ownership, fighter skins, the Cat's Den club, and allowlist. Part of the Winslow Ecosystem.",
+ "image": "https://www.catboyonsol.fun/assets/nft/collection/008.jpg",
+ "external_url": "https://www.catboyonsol.fun/market.html",
  "attributes": [
+  {
+   "trait_type": "Aura",
+   "value": "Neon"
+  },
+  {
+   "trait_type": "Chain",
+   "value": "Solana"
+  },
   {
    "trait_type": "Background",
    "value": "Server Room"
@@ -34,14 +42,23 @@
    "value": "Fanged"
   },
   {
+   "trait_type": "Utility",
+   "value": "Alpha"
+  },
+  {
    "trait_type": "Rarity",
    "value": "Epic"
+  },
+  {
+   "display_type": "number",
+   "trait_type": "Rarity Rank",
+   "value": 19
   }
  ],
  "properties": {
   "files": [
    {
-    "uri": "https://catboy-ecru.vercel.app/assets/nft/collection/008.jpg",
+    "uri": "https://www.catboyonsol.fun/assets/nft/collection/008.jpg",
     "type": "image/jpeg"
    }
   ],

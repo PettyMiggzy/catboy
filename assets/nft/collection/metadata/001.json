@@ -1,23 +1,68 @@
 {
  "name": "Catboy #001",
  "symbol": "CATBOY",
- "description": "$CATBOY \u2014 The Nine Lives Collection. A legendary anime catboy reborn on Solana. Holders unlock real utility across the Catboy ecosystem: The Cat's Den club, allowlist, and more.",
- "image": "https://catboy-ecru.vercel.app/assets/nft/collection/001.jpg",
- "external_url": "https://catboy-ecru.vercel.app/market.html",
+ "description": "$CATBOY \u2014 The Nine Lives Collection. Reborn on Solana. Holders unlock real utility across the Catboy ecosystem: casino perks, Catboy City ownership, fighter skins, the Cat's Den club, and allowlist. Part of the Winslow Ecosystem.",
+ "image": "https://www.catboyonsol.fun/assets/nft/collection/001.jpg",
+ "external_url": "https://www.catboyonsol.fun/market.html",
  "attributes": [
   {
    "trait_type": "Type",
    "value": "Golden God"
   },
   {
+   "trait_type": "Aura",
+   "value": "Golden"
+  },
+  {
+   "trait_type": "Chain",
+   "value": "Winslow Dual"
+  },
+  {
+   "trait_type": "Background",
+   "value": "Solana Vault"
+  },
+  {
+   "trait_type": "Fur",
+   "value": "24K Gold"
+  },
+  {
+   "trait_type": "Eyes",
+   "value": "Gold"
+  },
+  {
+   "trait_type": "Outfit",
+   "value": "Gold Drip"
+  },
+  {
+   "trait_type": "Headwear",
+   "value": "Crown"
+  },
+  {
+   "trait_type": "Accessory",
+   "value": "Diamond"
+  },
+  {
+   "trait_type": "Expression",
+   "value": "Fierce"
+  },
+  {
+   "trait_type": "Utility",
+   "value": "Founder"
+  },
+  {
    "trait_type": "Rarity",
    "value": "Legendary"
+  },
+  {
+   "display_type": "number",
+   "trait_type": "Rarity Rank",
+   "value": 1
   }
  ],
  "properties": {
   "files": [
    {
-    "uri": "https://catboy-ecru.vercel.app/assets/nft/collection/001.jpg",
+    "uri": "https://www.catboyonsol.fun/assets/nft/collection/001.jpg",
     "type": "image/jpeg"
    }
   ],
