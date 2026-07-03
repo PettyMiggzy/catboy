@@ -70,7 +70,7 @@
 
   // ---------- FINAL BOSS: Winslow (the creator, in full Solana armor) ----------
   // Not player-selectable — always the last opponent, bigger and brutal.
-  const BOSS = { id: "winslow", name: "WINSLOW", img: "char_winslow.png", char: true, boss: true,
+  const BOSS = { id: "winslow", name: "WINSLOW", poses: true, posePrefix: "winslow", boss: true,
     color: "#9945ff", hp: 300, pow: 1.6, spd: 1.05, special: "Solana Blast",
     blurb: "The creator. Full Solana armor. Beat the roster to face him." };
 
@@ -97,17 +97,19 @@
     if (IMG[src]) return IMG[src];
     const i = new Image(); i.src = src; IMG[src] = i; return i;
   }
+  const POSE_STATES = ["idle","punch","kick","special","hit","ko","jump"];
+  function loadPoses(pfx) { POSE_STATES.forEach((p) => load(FP + pfx + "_" + p + ".png")); }
   ROSTER.forEach((r) => {
-    if (r.poses) ["idle","punch","kick","special","hit","ko","jump"].forEach((p) => load(FP + "catboy_" + p + ".png"));
+    if (r.poses) loadPoses(r.posePrefix || "catboy");
     else load(FP + r.img);
   });
-  load(FP + BOSS.img);   // preload the boss
+  loadPoses(BOSS.posePrefix);   // preload the boss's pose set
   const BG = load("assets/game/city-bg.png");
 
   function fimg(def, state) {
     if (def.poses) {
       const map = { idle:"idle", walk:"idle", jump:"jump", punch:"punch", kick:"kick", special:"special", block:"idle", hurt:"hit", ko:"ko" };
-      return IMG[FP + "catboy_" + (map[state] || "idle") + ".png"];
+      return IMG[FP + (def.posePrefix || "catboy") + "_" + (map[state] || "idle") + ".png"];
     }
     return IMG[FP + def.img];
   }
