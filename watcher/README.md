@@ -13,7 +13,27 @@ that put in real effort (a website filters out most low-effort rugs).
 - **Alerts:** email digest via Gmail.
 - **Cost:** free. **No wallet key involved** — this only watches and emails.
 
-## Setup (5 minutes)
+## Easiest notifications: ntfy.sh (30 seconds, no account)
+
+Instead of email you can get **phone push notifications** with zero setup:
+1. Install the **ntfy** app (App Store / Google Play), or open https://ntfy.sh.
+2. **Subscribe** to a secret topic name you invent — make it unguessable, e.g.
+   `catboy-launch-9f3k2xq`. (Anyone who knows the topic can read it, so keep it secret.)
+3. Put that topic in `.env` as `NTFY_TOPIC=...` (droplet) or as a repo secret /
+   workflow env (GitHub). Done — every alert pushes straight to your phone.
+
+Test it right now from any terminal:
+```bash
+curl -d "it works 🐾" ntfy.sh/catboy-launch-9f3k2xq
+```
+
+**Telegram** is also easy: make a bot via **@BotFather**, get your chat id from
+**@userinfobot**, set `TELEGRAM_TOKEN` + `TELEGRAM_CHAT`.
+
+You can use ntfy, Telegram, and/or email together — the watcher sends to whichever
+are set. Email setup (Gmail) is below if you prefer it.
+
+## Email setup (optional — only if you want Gmail)
 
 ### 1. Make a Gmail App Password (for the burner account)
 1. Sign in to the burner Gmail.

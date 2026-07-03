@@ -17,7 +17,7 @@ All config comes from env vars (set as GitHub Action secrets — nothing hardcod
   MAX_ALERTS     cap per run (default 20)
   SEEN_FILE      state file path (default watcher/seen.json)
 """
-import os, json, ssl, smtplib, time, urllib.request, urllib.error
+import os, json, ssl, smtplib, time, urllib.request, urllib.error, urllib.parse
 from email.mime.text import MIMEText
 from email.utils import formatdate
 
@@ -113,20 +113,54 @@ def save_seen(seen):
         json.dump(sorted(seen), f)
 
 
-def send_email(subject, body):
-    if not (SMTP_USER and SMTP_PASS):
-        print("[watcher] no SMTP creds set — printing instead:\n", subject, "\n", body)
-        return
+def _post(url, data, headers=None):
+    req = urllib.request.Request(url, data=data, headers=headers or {}, method="POST")
+    with urllib.request.urlopen(req, timeout=20) as r:
+        return r.read()
+
+
+def _send_email(subject, body):
     msg = MIMEText(body, "plain", "utf-8")
-    msg["Subject"] = subject
-    msg["From"] = SMTP_USER
-    msg["To"] = ALERT_TO
+    msg["Subject"] = subject; msg["From"] = SMTP_USER; msg["To"] = ALERT_TO
     msg["Date"] = formatdate(localtime=True)
     ctx = ssl.create_default_context()
     with smtplib.SMTP_SSL("smtp.gmail.com", 465, context=ctx) as s:
         s.login(SMTP_USER, SMTP_PASS)
         s.sendmail(SMTP_USER, [ALERT_TO], msg.as_string())
-    print("[watcher] emailed:", subject)
+
+
+def notify(subject, body):
+    """Send via whichever channels are configured: ntfy (easiest), Telegram, email."""
+    sent = []
+    topic = os.environ.get("NTFY_TOPIC")
+    if topic:
+        server = os.environ.get("NTFY_SERVER", "https://ntfy.sh").rstrip("/")
+        try:
+            _post(server, json.dumps({"topic": topic, "title": subject, "message": body,
+                                      "priority": 5, "tags": ["rocket"]}).encode("utf-8"),
+                  {"Content-Type": "application/json"})
+            sent.append("ntfy")
+        except Exception as e:
+            print("[watcher] ntfy error:", e)
+    tok, chat = os.environ.get("TELEGRAM_TOKEN"), os.environ.get("TELEGRAM_CHAT")
+    if tok and chat:
+        try:
+            _post(f"https://api.telegram.org/bot{tok}/sendMessage",
+                  urllib.parse.urlencode({"chat_id": chat, "text": subject + "\n\n" + body,
+                                          "disable_web_page_preview": "true"}).encode(),
+                  {"Content-Type": "application/x-www-form-urlencoded"})
+            sent.append("telegram")
+        except Exception as e:
+            print("[watcher] telegram error:", e)
+    if SMTP_USER and SMTP_PASS:
+        try:
+            _send_email(subject, body); sent.append("email")
+        except Exception as e:
+            print("[watcher] email error:", e)
+    if sent:
+        print("[watcher] sent via:", ", ".join(sent), "—", subject)
+    else:
+        print("[watcher] NO channel configured — printing:\n", subject, "\n", body)
 
 
 def matches_keywords(prof, meta):
@@ -202,7 +236,7 @@ def main():
 
     if first_run:
         save_seen(seen)
-        send_email("🐾 CATBOY launch watcher is LIVE",
+        notify("🐾 CATBOY launch watcher is LIVE",
                    "Your watcher is running. You'll get an email when a new "
                    f"{'pump.fun ' if PUMP_ONLY else 'Solana '}token sets a website.\n\n"
                    f"Seeded {len(seen)} existing tokens (no alerts for these).")
@@ -257,7 +291,7 @@ def main():
     subject = f"🚀 {len(lines)} new {'pump.fun' if PUMP_ONLY else 'Solana'} launch(es) with a website"
     body = "New tokens that just launched and set a website:\n\n" + "\n".join(lines) + \
            "\n— CATBOY watcher. Always DYOR; a website is not safety."
-    send_email(subject, body)
+    notify(subject, body)
 
 
 if __name__ == "__main__":

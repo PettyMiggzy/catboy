@@ -32,6 +32,10 @@ jobs:
 
       - name: Scan and alert
         env:
+          # easiest: just set an NTFY_TOPIC secret and subscribe on your phone
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT: ${{ secrets.TELEGRAM_CHAT }}
           SMTP_USER: ${{ secrets.SMTP_USER }}
           SMTP_PASS: ${{ secrets.SMTP_PASS }}
           ALERT_TO: ${{ secrets.ALERT_TO }}
