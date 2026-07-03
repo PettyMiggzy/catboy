@@ -1,0 +1,49 @@
+name: Launch Watcher
+
+# Emails you when new Solana / pump.fun tokens set a website.
+# Runs every 5 minutes (GitHub's minimum). Also runnable manually.
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: launch-watcher
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # persist the "already alerted" list between runs (no repo commits)
+      - name: Restore state
+        uses: actions/cache/restore@v4
+        with:
+          path: watcher/seen.json
+          key: watcher-seen-${{ github.run_id }}
+          restore-keys: watcher-seen-
+
+      - name: Scan and alert
+        env:
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          ALERT_TO: ${{ secrets.ALERT_TO }}
+          PUMP_ONLY: "true"        # only pump.fun mints; set "false" for all Solana
+          REQUIRE_WEBSITE: "true"  # only tokens that set a website
+          KEYWORDS: ""             # optional: "cat,dog,ai" to narrow; empty = all
+          MAX_ALERTS: "20"
+        run: python watcher/scan.py
+
+      - name: Save state
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: watcher/seen.json
+          key: watcher-seen-${{ github.run_id }}
