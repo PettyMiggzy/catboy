@@ -1,42 +1,42 @@
 {
- "name": "Genesis Catboy \u2014 Casino King",
+ "name": "Genesis Catboy #004",
  "symbol": "CATBOYGEN",
- "description": "Catboy Genesis \u2014 the special launch collection of the Winslow Ecosystem. MonWolf (Monad) x Catboy (Solana). Genesis holders get top-tier utility: casino edge, Catboy City ownership, fighter skins, and treasury perks.",
+ "description": "Catboy Genesis \u2014 the special launch edition. 100 original high-quality Catboy pieces on Solana. Genesis holders unlock top-tier utility: casino edge, Catboy City ownership, fighter skins, and treasury perks.",
  "image": "https://www.catboyonsol.fun/assets/nft/genesis/004.jpg",
  "external_url": "https://www.catboyonsol.fun/market.html",
  "attributes": [
   {
-   "trait_type": "Character",
-   "value": "Catboy"
-  },
-  {
    "trait_type": "Theme",
-   "value": "Casino King"
+   "value": "Neon Alley"
   },
   {
-   "trait_type": "Chain",
-   "value": "Solana"
+   "trait_type": "Outfit",
+   "value": "Gold Armor"
   },
   {
    "trait_type": "Aura",
-   "value": "Jackpot"
+   "value": "None"
   },
   {
-   "trait_type": "Edition",
-   "value": "1 of 1"
+   "trait_type": "Eyes",
+   "value": "Blue"
+  },
+  {
+   "trait_type": "Chain",
+   "value": "Monad"
   },
   {
    "trait_type": "Utility",
-   "value": "Founder"
+   "value": "Alley"
   },
   {
    "trait_type": "Rarity",
-   "value": "Founder"
+   "value": "Common"
   },
   {
    "display_type": "number",
    "trait_type": "Rarity Rank",
-   "value": 4
+   "value": 34
   }
  ],
  "properties": {

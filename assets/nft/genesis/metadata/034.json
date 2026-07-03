@@ -1,0 +1,51 @@
+{
+ "name": "Genesis Catboy #034",
+ "symbol": "CATBOYGEN",
+ "description": "Catboy Genesis \u2014 the special launch edition. 100 original high-quality Catboy pieces on Solana. Genesis holders unlock top-tier utility: casino edge, Catboy City ownership, fighter skins, and treasury perks.",
+ "image": "https://www.catboyonsol.fun/assets/nft/genesis/034.jpg",
+ "external_url": "https://www.catboyonsol.fun/market.html",
+ "attributes": [
+  {
+   "trait_type": "Theme",
+   "value": "Volcano"
+  },
+  {
+   "trait_type": "Outfit",
+   "value": "Gold Armor"
+  },
+  {
+   "trait_type": "Aura",
+   "value": "Neon"
+  },
+  {
+   "trait_type": "Eyes",
+   "value": "Violet"
+  },
+  {
+   "trait_type": "Chain",
+   "value": "Solana"
+  },
+  {
+   "trait_type": "Utility",
+   "value": "Degen"
+  },
+  {
+   "trait_type": "Rarity",
+   "value": "Rare"
+  },
+  {
+   "display_type": "number",
+   "trait_type": "Rarity Rank",
+   "value": 39
+  }
+ ],
+ "properties": {
+  "files": [
+   {
+    "uri": "https://www.catboyonsol.fun/assets/nft/genesis/034.jpg",
+    "type": "image/jpeg"
+   }
+  ],
+  "category": "image"
+ }
+}

@@ -1,42 +1,42 @@
 {
- "name": "Genesis Catboy \u2014 Street King",
+ "name": "Genesis Catboy #011",
  "symbol": "CATBOYGEN",
- "description": "Catboy Genesis \u2014 the special launch collection of the Winslow Ecosystem. MonWolf (Monad) x Catboy (Solana). Genesis holders get top-tier utility: casino edge, Catboy City ownership, fighter skins, and treasury perks.",
+ "description": "Catboy Genesis \u2014 the special launch edition. 100 original high-quality Catboy pieces on Solana. Genesis holders unlock top-tier utility: casino edge, Catboy City ownership, fighter skins, and treasury perks.",
  "image": "https://www.catboyonsol.fun/assets/nft/genesis/011.jpg",
  "external_url": "https://www.catboyonsol.fun/market.html",
  "attributes": [
   {
-   "trait_type": "Character",
-   "value": "Catboy"
+   "trait_type": "Theme",
+   "value": "Cosmic"
   },
   {
-   "trait_type": "Theme",
-   "value": "Street King"
+   "trait_type": "Outfit",
+   "value": "Samurai"
+  },
+  {
+   "trait_type": "Aura",
+   "value": "Electric"
+  },
+  {
+   "trait_type": "Eyes",
+   "value": "Emerald"
   },
   {
    "trait_type": "Chain",
    "value": "Solana"
   },
   {
-   "trait_type": "Aura",
-   "value": "Graffiti"
-  },
-  {
-   "trait_type": "Edition",
-   "value": "1 of 1"
-  },
-  {
    "trait_type": "Utility",
-   "value": "Founder"
+   "value": "Degen"
   },
   {
    "trait_type": "Rarity",
-   "value": "Founder"
+   "value": "Rare"
   },
   {
    "display_type": "number",
    "trait_type": "Rarity Rank",
-   "value": 11
+   "value": 25
   }
  ],
  "properties": {
