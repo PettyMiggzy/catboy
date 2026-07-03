@@ -1260,3 +1260,19 @@ body.splash-open { overflow: hidden; }
 .nft-trait { position: relative; }
 .trait-pct { display: block; font-style: normal; font-size: 0.66rem; color: var(--muted); margin-top: 0.1rem; }
 .nft-trait:has(.trait-pct) b { display: block; }
+
+/* ---------- Trade page ---------- */
+.venue-grid { max-width: 900px; margin: 0 auto 1.2rem; display: grid; grid-template-columns: 1fr 1fr; gap: 1.4rem; }
+.venue-card { display: block; text-decoration: none; color: var(--ink); background: var(--card); border: 1px solid var(--border); border-radius: 18px; padding: 1.5rem; transition: transform 0.18s, border-color 0.18s, box-shadow 0.18s; }
+.venue-card:hover { transform: translateY(-5px); border-color: var(--cyan); box-shadow: 0 14px 44px rgba(25,224,255,0.2); }
+.venue-top { display: flex; align-items: center; justify-content: space-between; }
+.venue-name { font-family: "Orbitron", sans-serif; font-weight: 900; font-size: 1.3rem; }
+.venue-state { font-family: "Orbitron", sans-serif; font-size: 0.62rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--border); border-radius: 999px; padding: 0.2rem 0.6rem; }
+.venue-state.live { color: #14f195; border-color: #14f195; }
+.venue-desc { color: var(--muted); font-size: 0.9rem; margin: 0.7rem 0 1rem; line-height: 1.5; }
+.venue-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem; margin-bottom: 1.1rem; }
+.venue-stats div { text-align: center; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 0.5rem 0.3rem; }
+.venue-stats b { display: block; font-family: "Orbitron", sans-serif; font-size: 0.95rem; color: var(--cyan); }
+.venue-stats span { font-size: 0.64rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.venue-go { font-family: "Orbitron", sans-serif; font-weight: 700; font-size: 0.85rem; color: var(--cyan); }
+@media (max-width: 640px) { .venue-grid { grid-template-columns: 1fr; } }

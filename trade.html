@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Trade — CATBOY Nine Lives Collection</title>
+  <meta name="description" content="Buy, sell, and make offers on the Catboy Nine Lives Collection on Solana — via Magic Eden and Tensor. Connect your wallet to see and list your Catboys." />
+  <meta property="og:title" content="Trade CATBOY NFTs" />
+  <meta property="og:image" content="assets/nft/collection/001.jpg" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <link rel="icon" type="image/png" href="assets/solana.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="bg-grid" aria-hidden="true"></div>
+  <div class="bg-glow" aria-hidden="true"></div>
+
+  <header class="nav">
+    <a href="index.html" class="brand">
+      <img src="assets/catboy.png" alt="Catboy logo" class="brand-logo" />
+      <span class="brand-name">CATBOY</span>
+    </a>
+    <nav class="nav-links">
+      <a href="index.html#lore">Lore</a>
+      <a href="saga.html">Saga</a>
+      <a href="trench.html">Terminal</a>
+      <a href="nft.html" class="active">NFTs</a>
+      <a href="launch.html">Launch</a>
+      <a href="casino.html">Casino</a>
+      <a href="arcade.html">Arcade</a>
+      <a href="club.html">Club</a>
+      <a href="meme.html">Meme</a>
+      <a href="wallet.html">Wallet</a>
+      <a href="merch.html">Merch</a>
+      <a href="index.html#faq">FAQ</a>
+    </nav>
+    <a href="index.html#waitlist" class="btn btn-primary nav-cta">Join Allowlist</a>
+  </header>
+
+  <section class="page-hero" style="padding-bottom:0.5rem;">
+    <div class="page-hero-inner">
+      <a href="market.html" class="back-link">&lsaquo; Back to Marketplace</a>
+      <span class="eyebrow" style="display:block;margin-top:1rem;">Buy · Sell · Offer</span>
+      <h1>Trade <span class="grad">Catboys</span></h1>
+      <p>The Nine Lives Collection trades on Solana's biggest NFT marketplaces — <b>Magic Eden</b> and <b>Tensor</b>. Buy the floor, snipe rares by rank, list yours, or make an offer. Secondary trading opens the moment the collection mints.</p>
+    </div>
+  </section>
+
+  <!-- MARKETPLACES -->
+  <section class="section" style="padding-top:1rem;">
+    <div class="venue-grid">
+      <a class="venue-card" id="meCard" href="#" target="_blank" rel="noopener">
+        <div class="venue-top"><span class="venue-name">Magic Eden</span><span class="venue-state" id="meState">Opens at mint</span></div>
+        <p class="venue-desc">The largest Solana NFT marketplace. Buy, list, sweep the floor, and make collection offers.</p>
+        <div class="venue-stats"><div><b id="meFloor">—</b><span>Floor</span></div><div><b id="meListed">—</b><span>Listed</span></div><div><b id="meVol">—</b><span>Volume</span></div></div>
+        <span class="venue-go" id="meGo">Trade on Magic Eden ›</span>
+      </a>
+      <a class="venue-card" id="tsCard" href="#" target="_blank" rel="noopener">
+        <div class="venue-top"><span class="venue-name">Tensor</span><span class="venue-state" id="tsState">Opens at mint</span></div>
+        <p class="venue-desc">The pro trader's marketplace — fast sweeps, bids, and real-time rarity/rank tools.</p>
+        <div class="venue-stats"><div><b>Rank-aware</b><span>Bidding</span></div><div><b>Instant</b><span>Sweeps</span></div><div><b>Low</b><span>Fees</span></div></div>
+        <span class="venue-go" id="tsGo">Trade on Tensor ›</span>
+      </a>
+    </div>
+    <p class="muted-note" style="text-align:center;">Trading happens on-chain and non-custodially on Magic Eden / Tensor. Catboy takes no cut of secondary sales beyond the collection royalty, which funds buyback &amp; burn.</p>
+  </section>
+
+  <!-- YOUR HOLDINGS -->
+  <section class="section" style="padding-top:0;">
+    <div class="section-head">
+      <span class="eyebrow">Your Wallet</span>
+      <h2>Your <span class="grad">Catboys</span></h2>
+      <p class="section-intro">Connect your Solana wallet to see the Catboys you own — then jump straight to listing or selling them.</p>
+    </div>
+    <div style="text-align:center;">
+      <button class="btn btn-primary" id="connectBtn" type="button">Connect Wallet</button>
+      <p class="form-status" id="holdStatus" role="status" aria-live="polite"></p>
+    </div>
+    <div class="mkt-grid" id="holdGrid" style="margin-top:1.5rem;"></div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section class="section">
+    <div class="section-head"><span class="eyebrow">How trading works</span><h2>Sell or <span class="grad">flip</span> in 3 steps</h2></div>
+    <div class="steps">
+      <div class="step"><span class="step-n">1</span><h3>Own a Catboy</h3><p>Mint at launch or buy the floor on Magic Eden / Tensor. Rarer rank = higher value.</p></div>
+      <div class="step"><span class="step-n">2</span><h3>List or take an offer</h3><p>Set your ask, or accept a standing bid. It's non-custodial — you sign, the NFT stays in your wallet until it sells.</p></div>
+      <div class="step"><span class="step-n">3</span><h3>Get paid in SOL</h3><p>Sale settles on-chain instantly. A small royalty routes to the treasury for buyback &amp; burn.</p></div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="footer-brand"><img src="assets/catboy.png" alt="Catboy" class="footer-logo" /><span>CATBOY</span></div>
+    <p class="footer-disclaimer">Secondary trading occurs on third-party marketplaces (Magic Eden, Tensor). Catboy does not custody assets or execute trades. NFTs are collectibles, not investments — do your own research. Not financial advice.</p>
+    <p class="footer-copy">© <span id="year"></span> CATBOY · The Legend Evolves on Solana</p>
+    <p class="footer-credit">A <a href="https://t.me/kingpetty317" target="_blank" rel="noopener">King Petty</a> Build</p>
+  </footer>
+
+  <script src="assets/mint-config.js"></script>
+  <script src="assets/market-links.js"></script>
+  <script src="script.js"></script>
+  <script>
+  (function () {
+    const M = window.CATBOY_MARKET || {};
+    const $ = (id) => document.getElementById(id);
+
+    // wire marketplace cards
+    function setVenue(card, go, state, url) {
+      if (M.enabled && url) { card.href = url; state.textContent = "● Live"; state.classList.add("live"); }
+      else { card.href = "index.html#waitlist"; card.removeAttribute("target"); go.textContent = "Opens at mint — join allowlist ›"; }
+    }
+    setVenue($("meCard"), $("meGo"), $("meState"), M.magicEden);
+    setVenue($("tsCard"), $("tsGo"), $("tsState"), M.tensor);
+
+    // --- holdings: DAS getAssetsByOwner, filtered to the Catboy collection ---
+    const getProvider = () => (window.solana && window.solana.isPhantom) ? window.solana : (window.solflare || window.backpack || (window.xnft && window.xnft.solana) || null);
+    async function loadHoldings(owner) {
+      const grid = $("holdGrid"), st = $("holdStatus");
+      if (!M.collectionMint) {
+        st.style.color = "var(--muted)";
+        st.textContent = "Connected " + owner.slice(0, 4) + "…" + owner.slice(-4) + " — your Catboys appear here once the collection mints.";
+        return;
+      }
+      st.textContent = "Loading your Catboys…";
+      try {
+        const r = await fetch(location.origin + M.rpc, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ jsonrpc: "2.0", id: "catboy", method: "getAssetsByOwner",
+            params: { ownerAddress: owner, page: 1, limit: 1000 } }),
+        });
+        const d = await r.json();
+        const list = ((d.result && d.result.items) || []).filter((a) =>
+          (a.grouping || []).some((g) => g.group_key === "collection" && g.group_value === M.collectionMint));
+        if (!list.length) { st.textContent = "No Catboys found in this wallet yet — grab one on Magic Eden."; grid.innerHTML = ""; return; }
+        st.textContent = "You own " + list.length + " Catboy" + (list.length > 1 ? "s" : "") + ".";
+        grid.innerHTML = list.map((a) => {
+          const img = (a.content && a.content.links && a.content.links.image) || "assets/catboy.png";
+          const name = (a.content && a.content.metadata && a.content.metadata.name) || "Catboy";
+          const mint = a.id;
+          return `<div class="nft-card"><div class="nft-thumb"><img loading="lazy" src="${img}" alt="${name}"></div>
+            <div class="nft-meta"><div class="nft-row"><span class="nft-name">${name}</span></div>
+            <a class="nft-buy" href="${M.meItem + mint}" target="_blank" rel="noopener">List / Sell ›</a></div></div>`;
+        }).join("");
+      } catch (e) { st.style.color = "var(--magenta)"; st.textContent = "Couldn't load holdings: " + (e.message || e); }
+    }
+    $("connectBtn").addEventListener("click", async () => {
+      const p = getProvider(), st = $("holdStatus");
+      if (!p) { st.style.color = "var(--magenta)"; st.textContent = "No Solana wallet found — install Phantom or use the Wallet page."; return; }
+      try { const r = await p.connect(); loadHoldings((r && r.publicKey ? r.publicKey : p.publicKey).toString()); }
+      catch { st.textContent = "Connection cancelled."; }
+    });
+  })();
+  </script>
+</body>
+</html>
