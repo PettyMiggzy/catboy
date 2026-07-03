@@ -17,13 +17,17 @@ All config comes from env vars (set as GitHub Action secrets — nothing hardcod
   MAX_ALERTS     cap per run (default 20)
   SEEN_FILE      state file path (default watcher/seen.json)
 """
-import os, json, ssl, smtplib, urllib.request, urllib.error
+import os, json, ssl, smtplib, time, urllib.request, urllib.error
 from email.mime.text import MIMEText
 from email.utils import formatdate
 
 PROFILES = "https://api.dexscreener.com/token-profiles/latest/v1"
 TOKENS = "https://api.dexscreener.com/latest/dex/tokens/"
+PUMPFUN = "https://frontend-api-v3.pump.fun/coins?limit=100&sort=created_timestamp&order=DESC&includeNsfw=true"
 UA = {"User-Agent": "catboy-watcher/1.0"}
+BROWSER_UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                            "(KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+              "Accept": "application/json"}
 
 SMTP_USER = os.environ.get("SMTP_USER", "")
 SMTP_PASS = os.environ.get("SMTP_PASS", "")
@@ -35,8 +39,8 @@ MAX_ALERTS = int(os.environ.get("MAX_ALERTS", "20"))
 SEEN_FILE = os.environ.get("SEEN_FILE", "watcher/seen.json")
 
 
-def get_json(url, timeout=25):
-    req = urllib.request.Request(url, headers=UA)
+def get_json(url, timeout=25, headers=None):
+    req = urllib.request.Request(url, headers=headers or UA)
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return json.load(r)
 
@@ -134,11 +138,13 @@ def matches_keywords(prof, meta):
     return any(k in hay for k in KEYWORDS)
 
 
-def main():
-    profiles = get_json(PROFILES)
+def dexscreener_candidates():
+    out = []
+    try:
+        profiles = get_json(PROFILES)
+    except Exception as e:
+        print("[watcher] dexscreener error:", e); return out
     rows = profiles if isinstance(profiles, list) else profiles.get("profiles", [])
-
-    candidates = []
     for r in rows:
         if r.get("chainId") != "solana":
             continue
@@ -148,7 +154,40 @@ def main():
         site = website_of(r.get("links"))
         if REQUIRE_WEBSITE and not site:
             continue
-        candidates.append((addr, r, site))
+        r["_src"] = "dex"
+        out.append((addr, r, site))
+    return out
+
+
+def pumpfun_candidates():
+    """Direct pump.fun feed — coins appear seconds after creation, with website set."""
+    out = []
+    try:
+        coins = get_json(PUMPFUN, headers=BROWSER_UA)
+    except Exception as e:
+        print("[watcher] pump.fun error:", e); return out
+    for c in coins or []:
+        mint = c.get("mint") or ""
+        site = (c.get("website") or "").strip()
+        if REQUIRE_WEBSITE and not site:
+            continue
+        links = []
+        if site: links.append({"label": "Website", "url": site})
+        if c.get("twitter"): links.append({"type": "twitter", "url": c["twitter"]})
+        if c.get("telegram"): links.append({"type": "telegram", "url": c["telegram"]})
+        prof = {"tokenAddress": mint, "links": links, "description": c.get("description"),
+                "header": c.get("name"), "_src": "pump", "_pf": c}
+        out.append((mint, prof, site or None))
+    return out
+
+
+def main():
+    # merge both feeds, dedupe by mint (pump.fun wins — it has fresher meta)
+    by_mint = {}
+    for a, r, s in dexscreener_candidates() + pumpfun_candidates():
+        if a and (a not in by_mint or r.get("_src") == "pump"):
+            by_mint[a] = (a, r, s)
+    candidates = list(by_mint.values())
 
     seen = load_seen()
     first_run = seen is None
@@ -179,21 +218,33 @@ def main():
     for addr, prof, site in fresh:
         if n >= MAX_ALERTS:
             break
-        meta = enrich(addr)
+        pf = prof.get("_pf")
+        if pf:   # brand-new pump.fun coin — use its own metadata (not yet on DexScreener)
+            meta = {"name": pf.get("name"), "symbol": pf.get("symbol"),
+                    "mc": pf.get("usd_market_cap"), "age": pf.get("created_timestamp"),
+                    "dex": "https://dexscreener.com/solana/" + addr}
+        else:
+            meta = enrich(addr)
         if not matches_keywords(prof, meta):
             continue
         soc = socials_of(prof.get("links"))
         name = meta.get("name") or prof.get("header") or "(unknown)"
         sym = ("$" + meta["symbol"]) if meta.get("symbol") else ""
         mc = meta.get("mc")
+        src = "pump.fun (live)" if prof.get("_src") == "pump" else "dexscreener"
+        age = ""
+        if meta.get("age"):
+            secs = int(time.time() - float(meta["age"]) / 1000)
+            age = f"  Age: {secs}s\n" if 0 <= secs < 36000 else ""
         lines.append(
-            f"• {name} {sym}\n"
+            f"• {name} {sym}   [{src}]\n"
             f"  CA: {addr}\n"
             f"  Website: {site or '—'}\n"
             + (f"  X: {soc['x']}\n" if soc.get("x") else "")
             + (f"  TG: {soc['tg']}\n" if soc.get("tg") else "")
             + (f"  Market cap: ${int(float(mc)):,}\n" if mc else "")
             + (f"  Liquidity: ${int(float(meta['liq'])):,}\n" if meta.get("liq") else "")
+            + age
             + f"  Chart: {meta.get('dex') or 'https://dexscreener.com/solana/' + addr}\n"
             + f"  Pump: https://pump.fun/{addr}\n"
         )

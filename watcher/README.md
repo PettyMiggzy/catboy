@@ -4,7 +4,11 @@ Emails you when a **new Solana / pump.fun token sets a website** — the moment 
 publishes a DexScreener profile with a website link. Great for catching launches
 that put in real effort (a website filters out most low-effort rugs).
 
-- **Data source:** DexScreener latest token-profiles (public, no key).
+- **Data sources (both, merged):**
+  1. **pump.fun live feed** — new coins appear **seconds** after creation, with
+     the `website` field already set. This is the instant trigger.
+  2. **DexScreener token-profiles** — backup/cross-check once indexed.
+  Alerts are deduped across both, tagged with the source and the coin's age.
 - **Runs:** GitHub Action, every 5 minutes (`.github/workflows/launch-watcher.yml`).
 - **Alerts:** email digest via Gmail.
 - **Cost:** free. **No wallet key involved** — this only watches and emails.
