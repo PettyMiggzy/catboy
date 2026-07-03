@@ -59,8 +59,10 @@
       <div class="cas-bal"><span>Credits</span><b id="credits">0</b></div>
       <div class="cas-bal"><span>Per spin</span><b>1 · FREE</b></div>
       <button class="btn btn-primary btn-sm" id="buyBtn" type="button">Get Free Credits</button>
+      <button class="btn btn-ghost btn-sm" id="holderBtn" type="button" style="border-color:var(--gold);color:var(--gold);">✦ Holder Perks</button>
       <span class="muted-note" id="casNote" style="margin:0;">Everything's free to play right now — no wallet or money needed. Real $CATBOY credits arrive near launch.</span>
     </div>
+    <div id="holderBar" class="holder-bar" hidden></div>
 
     <!-- DAILY BONUS -->
     <div class="daily-bonus" id="dailyBonus">
@@ -199,6 +201,8 @@
   </footer>
 
   <script src="assets/wallets.js"></script>
+  <script src="assets/mint-config.js"></script>
+  <script src="assets/holder.js"></script>
   <script src="script.js"></script>
   <script>
   (function () {
@@ -237,7 +241,7 @@
     // ---- daily bonus / streak ----
     const dayNum = () => Math.floor(Date.now() / 86400000);
     const getDaily = () => { try { return JSON.parse(localStorage.getItem("catboy_daily") || "null") || { last: -1, streak: 0 }; } catch { return { last: -1, streak: 0 }; } };
-    const dailyReward = (streak) => 20 + Math.min(streak, 7) * 5;   // 25 → 55
+    const dailyReward = (streak) => Math.round((20 + Math.min(streak, 7) * 5) * window.CATBOY_PERKS.dailyMult()); // holders earn more
     function refreshDaily() {
       const d = getDaily(), today = dayNum(), claimable = d.last !== today;
       const nextStreak = (d.last === today - 1) ? d.streak + 1 : 1;
@@ -443,7 +447,7 @@
       ensureCredits(bet);
       spinning = true; setCredits(credits - bet);
       const coin = $("flipCoin"); coin.classList.add("flipping");
-      const win = Math.random() < 0.48; // house edge
+      const win = Math.random() < window.CATBOY_PERKS.flipChance(); // holder perk lowers the house edge
       const landed = win ? side : (side === "cat" ? "sol" : "cat");
       setTimeout(() => {
         coin.classList.remove("flipping"); $("flipFace").src = landed === "cat" ? "assets/catboy.png" : "assets/solana.png";
@@ -452,6 +456,45 @@
         spinning = false;
       }, 1100);
     };
+
+    // ---- HOLDER PERKS (real, gated on Catboy NFT ownership) ----
+    const H = window.CATBOY_HOLDER, PK = window.CATBOY_PERKS;
+    function renderHolder() {
+      const h = H.get(), bar = $("holderBar");
+      const flipPct = Math.round(PK.flipChance(h) * 100);
+      const daily = PK.dailyMult(h);
+      const preview = h.source === "preview";
+      if (h.isHolder) {
+        bar.hidden = false;
+        bar.innerHTML =
+          `<span class="hb-badge ${h.isGenesis ? "gen" : "nine"}">✦ ${PK.label(h)}${preview ? " · PREVIEW" : ""}</span>` +
+          `<span class="hb-perk">Coin-flip win chance <b>${flipPct}%</b> <i>(vs 48%)</i></span>` +
+          `<span class="hb-perk">Daily bonus <b>×${daily}</b></span>` +
+          (preview ? `<button class="hb-off" id="hbOff" type="button">exit preview</button>` : ``);
+        $("holderBtn").textContent = "✦ " + PK.label(h);
+      } else {
+        bar.hidden = true;
+        $("holderBtn").textContent = "✦ Holder Perks";
+      }
+      refreshDaily();
+      const off = $("hbOff"); if (off) off.onclick = () => H.setPreview("");
+    }
+    window.addEventListener("catboy:holder", renderHolder);
+    $("holderBtn").onclick = async () => {
+      const h = H.get();
+      if (h.isHolder) { renderHolder(); return; }
+      // pre-mint: ownership can't be verified yet → offer a labelled preview
+      const launched = window.CATBOY_MINT && window.CATBOY_MINT.enabled;
+      if (!launched) {
+        flash("Genesis mints soon — previewing holder perks so you can see what you'll unlock.");
+        H.setPreview("genesis");
+        return;
+      }
+      try { flash("Checking your wallet for Catboys…"); await H.connect();
+            const g = H.get(); flash(g.isHolder ? "Perks unlocked — welcome, holder." : "No Catboys found in this wallet yet."); }
+      catch (e) { flash("Wallet: " + (e.message || e)); }
+    };
+    renderHolder();
 
     // daily bonus + leaderboard init
     $("dbBtn").onclick = claimDaily;

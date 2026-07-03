@@ -12,7 +12,8 @@
   const CREDIT_KEY = "catboy_credits";
   const getCredits = () => { const c = parseInt(localStorage.getItem(CREDIT_KEY) || "50", 10); return isNaN(c) ? 50 : c; };
   const setCredits = (n) => { n = Math.max(0, Math.round(n)); localStorage.setItem(CREDIT_KEY, n); const el = document.getElementById("wgCredits"); if (el) el.textContent = n; };
-  const payMult = (oppIdx) => 1.8 + oppIdx * 0.2;   // tougher/later foes pay more (house edge baked in)
+  const PK = window.CATBOY_PERKS, HLD = window.CATBOY_HOLDER;
+  const payMult = (oppIdx) => 1.8 + oppIdx * 0.2 + (PK ? PK.wagerBonus() : 0);   // holders earn a bigger payout
   let WAGER = 0;
   function wgNote(m) { const el = document.getElementById("wgNote"); if (el) el.textContent = m; }
   document.querySelectorAll(".wg-chip").forEach((c) => c.addEventListener("click", () => {
@@ -20,6 +21,37 @@
     c.classList.add("active"); WAGER = parseInt(c.dataset.w, 10) || 0;
   }));
   setCredits(getCredits());   // init the display
+
+  // ---------- holder perks (bigger payout + higher wager cap) ----------
+  function renderFHolder() {
+    if (!PK || !HLD) return;
+    const h = HLD.get(), cap = PK.wagerCap(h);
+    document.querySelectorAll(".wg-chip[data-need]").forEach((c) => {
+      const val = parseInt(c.dataset.w, 10);
+      c.hidden = val > cap;   // reveal 250 / 500 only when unlocked
+    });
+    const btn = document.getElementById("fHolderBtn");
+    if (btn) btn.textContent = h.isHolder ? "✦ " + PK.label(h) : "✦ Holder Perks";
+    if (h.isHolder) {
+      const bonus = Math.round(PK.wagerBonus() * 100);
+      wgNote("✦ " + PK.label(h) + (h.source === "preview" ? " (preview)" : "") +
+        ": +" + bonus + "% payout, wagers up to " + cap + ". Tap Holder Perks to toggle.");
+    }
+  }
+  window.addEventListener("catboy:holder", renderFHolder);
+  {
+    const btn = document.getElementById("fHolderBtn");
+    if (btn) btn.addEventListener("click", async () => {
+      const h = HLD.get();
+      if (h.source === "preview") { HLD.setPreview(""); wgNote("Preview off."); return; }
+      const launched = window.CATBOY_MINT && window.CATBOY_MINT.enabled;
+      if (h.isHolder) { renderFHolder(); return; }
+      if (!launched) { HLD.setPreview("genesis"); wgNote("Previewing Genesis-holder perks — bigger payouts + 500 wager cap."); return; }
+      try { await HLD.connect(); const g = HLD.get(); wgNote(g.isHolder ? "Holder perks unlocked." : "No Catboys in this wallet yet."); }
+      catch (e) { wgNote("Wallet: " + (e.message || e)); }
+    });
+  }
+  renderFHolder();
 
   // ---------- roster ----------
   const ROSTER = [

@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Holder Perks — CATBOY</title>
+  <meta name="description" content="Your Catboy holder dashboard: casino edge, Catboy City billboard, fighter perks, and treasury voting — all unlocked by holding a Genesis or Nine Lives Catboy." />
+  <link rel="icon" type="image/png" href="assets/solana.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="bg-grid" aria-hidden="true"></div>
+  <div class="bg-glow" aria-hidden="true"></div>
+
+  <header class="nav">
+    <a href="index.html" class="brand"><img src="assets/catboy.png" alt="Catboy logo" class="brand-logo" /><span class="brand-name">CATBOY</span></a>
+    <nav class="nav-links">
+      <a href="index.html#lore">Lore</a><a href="saga.html">Saga</a><a href="nft.html">NFTs</a>
+      <a href="market.html">Market</a><a href="casino.html">Casino</a><a href="arcade.html">Arcade</a>
+      <a href="city.html">City</a><a href="index.html#faq">FAQ</a>
+    </nav>
+    <a href="genesis.html" class="btn btn-primary nav-cta">Genesis</a>
+  </header>
+
+  <section class="page-hero" style="padding-bottom:0.5rem;">
+    <div class="page-hero-inner">
+      <a href="genesis.html" class="back-link">&lsaquo; Back to Genesis</a>
+      <span class="eyebrow" style="display:block;margin-top:1rem;color:var(--gold)">✦ Holder Dashboard</span>
+      <h1>Your <span class="gz-gold">Perks</span></h1>
+      <p>Hold a <b>Genesis</b> or <b>Nine Lives</b> Catboy and these unlock automatically — casino edge, a Catboy City billboard, fighter perks, and a vote on the treasury. Connect to check your wallet.</p>
+      <div class="hero-actions" style="margin-top:1rem;">
+        <button class="btn btn-primary" id="connectBtn" type="button">Connect Wallet</button>
+        <button class="btn btn-ghost" id="previewBtn" type="button" style="border-color:var(--gold);color:var(--gold);">Preview as Genesis holder</button>
+      </div>
+      <div id="statusBar" class="holder-bar" hidden style="justify-content:center;"></div>
+    </div>
+  </section>
+
+  <section class="section" style="padding-top:1rem;">
+    <div class="gz-util" style="max-width:var(--max);margin:0 auto;">
+
+      <!-- CASINO EDGE -->
+      <div class="perk-card" id="perkCasino">
+        <div class="perk-head"><span class="ic">🎰</span><h3>Casino Edge</h3><span class="perk-state" data-state>Locked</span></div>
+        <p class="perk-body" data-body>Genesis holders flip coins at a <b>player-favored</b> edge and pull a <b>2×</b> daily bonus. Nine Lives holders get a fair flip and 1.5× daily.</p>
+        <a class="btn btn-ghost btn-sm" href="casino.html">Open the Casino ›</a>
+      </div>
+
+      <!-- FIGHTER -->
+      <div class="perk-card" id="perkFight">
+        <div class="perk-head"><span class="ic">🥊</span><h3>Fighter Perks</h3><span class="perk-state" data-state>Locked</span></div>
+        <p class="perk-body" data-body>Holders earn a <b>bigger wager payout</b> and unlock <b>higher wager caps</b> (up to 500 for Genesis) in the Catboy Brawl arena.</p>
+        <a class="btn btn-ghost btn-sm" href="fight.html">Enter the Arena ›</a>
+      </div>
+
+      <!-- CITY BILLBOARD -->
+      <div class="perk-card" id="perkCity">
+        <div class="perk-head"><span class="ic">🏙️</span><h3>Catboy City Billboard</h3><span class="perk-state" data-state>Locked</span></div>
+        <p class="perk-body" data-body>Claim your own neon billboard in Catboy City — your name/ticker up in lights. Genesis wallets get first pick.</p>
+        <div class="perk-gated" data-gated hidden>
+          <input id="bbText" type="text" maxlength="18" placeholder="YOUR NAME / $TICKER" />
+          <button class="btn btn-primary btn-sm" id="bbClaim" type="button">Claim billboard</button>
+          <div class="bb-preview" id="bbPreview" hidden><span id="bbPreviewText"></span></div>
+        </div>
+      </div>
+
+      <!-- TREASURY VOTE -->
+      <div class="perk-card" id="perkVote">
+        <div class="perk-head"><span class="ic">💰</span><h3>Treasury Vote</h3><span class="perk-state" data-state>Locked</span></div>
+        <p class="perk-body" data-body>90% of every sale &amp; fee routes to the treasury. Holders vote how the next buyback tranche is deployed. One wallet, one vote (Genesis = 3×).</p>
+        <div class="perk-gated" data-gated hidden>
+          <div class="vote-q" id="voteQ">How should the next treasury tranche be deployed?</div>
+          <div class="vote-opts" id="voteOpts"></div>
+          <p class="muted-note" id="voteNote" style="margin:.5rem 0 0;"></p>
+        </div>
+      </div>
+
+    </div>
+    <p class="muted-note" style="text-align:center;max-width:640px;margin:1.4rem auto 0;">
+      Ownership is verified on-chain (DAS) the moment the collection mints. Before mint you can preview perks to see exactly what a Catboy unlocks. Votes &amp; billboards you set now are saved to this device and become your on-chain signal at launch.
+    </p>
+  </section>
+
+  <footer class="footer">
+    <div class="footer-brand"><img src="assets/catboy.png" alt="Catboy" class="footer-logo" /><span>CATBOY</span></div>
+    <p class="footer-copy">© <span id="year"></span> CATBOY · The Legend Evolves on Solana</p>
+  </footer>
+
+  <script src="assets/wallets.js"></script>
+  <script src="assets/mint-config.js"></script>
+  <script src="assets/holder.js"></script>
+  <script>
+  (function () {
+    const $ = (id) => document.getElementById(id);
+    const H = window.CATBOY_HOLDER, PK = window.CATBOY_PERKS;
+    $("year").textContent = new Date().getFullYear();
+
+    // ---- treasury proposal (signal vote; on-chain snapshot at launch) ----
+    const PROPOSAL = "tranche-01";
+    const OPTIONS = [
+      { id: "burn", label: "🔥 Buyback & burn $CATBOY" },
+      { id: "lp",   label: "💧 Seed liquidity / floor" },
+      { id: "prize",label: "🏆 Fund casino & tournament prizes" },
+    ];
+    const votesKey = "catboy_votes_" + PROPOSAL;
+    const myVoteKey = "catboy_myvote_" + PROPOSAL;
+    function getVotes() { try { return JSON.parse(localStorage.getItem(votesKey) || "{}") || {}; } catch { return {}; } }
+    function renderVote() {
+      const box = $("voteOpts"); const votes = getVotes(); const mine = localStorage.getItem(myVoteKey);
+      const total = Object.values(votes).reduce((a, b) => a + b, 0) || 0;
+      box.innerHTML = OPTIONS.map((o) => {
+        const c = votes[o.id] || 0; const pct = total ? Math.round(c / total * 100) : 0;
+        return `<button class="vote-opt${mine === o.id ? " voted" : ""}" data-o="${o.id}" type="button">
+          <span class="vo-label">${o.label}</span>
+          <span class="vo-bar"><i style="width:${pct}%"></i></span>
+          <span class="vo-pct">${pct}%</span></button>`;
+      }).join("");
+      box.querySelectorAll(".vote-opt").forEach((b) => b.onclick = () => castVote(b.dataset.o));
+      $("voteNote").textContent = mine ? "You voted · " + total + " votes cast" : total + " votes cast — pick one.";
+    }
+    function castVote(id) {
+      const h = H.get(); if (!h.isHolder) return;
+      const votes = getVotes(); const prev = localStorage.getItem(myVoteKey);
+      const weight = h.isGenesis ? 3 : 1;
+      if (prev === id) return;
+      if (prev && votes[prev]) votes[prev] = Math.max(0, votes[prev] - weight);
+      votes[id] = (votes[id] || 0) + weight;
+      localStorage.setItem(votesKey, JSON.stringify(votes));
+      localStorage.setItem(myVoteKey, id);
+      renderVote();
+    }
+
+    // ---- city billboard claim ----
+    function loadBillboard() {
+      const t = localStorage.getItem("catboy_billboard") || "";
+      $("bbText").value = t;
+      $("bbPreview").hidden = !t; $("bbPreviewText").textContent = t;
+    }
+    $("bbClaim").onclick = () => {
+      const h = H.get(); if (!h.isHolder) return;
+      const t = ($("bbText").value || "").trim().slice(0, 18).toUpperCase();
+      if (!t) return;
+      localStorage.setItem("catboy_billboard", t);
+      $("bbPreview").hidden = false; $("bbPreviewText").textContent = t;
+    };
+
+    // ---- render gating ----
+    function render() {
+      const h = H.get(); const on = h.isHolder;
+      const bar = $("statusBar");
+      if (h.connected || h.source === "preview") {
+        bar.hidden = false;
+        bar.innerHTML = on
+          ? `<span class="hb-badge ${h.isGenesis ? "gen" : "nine"}">✦ ${PK.label(h)}${h.source === "preview" ? " · PREVIEW" : ""}</span>
+             <span class="hb-perk">Genesis <b>${h.genesis}</b> · Nine Lives <b>${h.nine}</b></span>`
+          : `<span class="hb-perk">${h.address ? h.address.slice(0,4)+"…"+h.address.slice(-4) : "Connected"} — no Catboys found yet.</span>`;
+      } else bar.hidden = true;
+
+      document.querySelectorAll(".perk-card").forEach((card) => {
+        const st = card.querySelector("[data-state]");
+        st.textContent = on ? "Active" : "Locked";
+        st.classList.toggle("on", on);
+        const gated = card.querySelector("[data-gated]");
+        if (gated) gated.hidden = !on;
+      });
+      $("previewBtn").textContent = h.source === "preview" ? "Exit preview" : "Preview as Genesis holder";
+      renderVote(); loadBillboard();
+    }
+    window.addEventListener("catboy:holder", render);
+
+    $("connectBtn").onclick = async () => {
+      try { await H.connect(); } catch (e) { alert("Wallet: " + (e.message || e)); }
+    };
+    $("previewBtn").onclick = () => {
+      const h = H.get();
+      H.setPreview(h.source === "preview" ? "" : "genesis");
+    };
+    render();
+  })();
+  </script>
+</body>
+</html>
