@@ -36,6 +36,12 @@
     { id: "popcat", name: "POPCAT",   img: "char_popcat.png",char: true, color: "#e7b9a0", hp: 90,  pow: 0.95, spd: 1.22, special: "Pop Slam", blurb: "Pop pop pop. Glass cannon." },
   ];
 
+  // ---------- FINAL BOSS: Winslow (the creator, in full Solana armor) ----------
+  // Not player-selectable — always the last opponent, bigger and brutal.
+  const BOSS = { id: "winslow", name: "WINSLOW", img: "char_winslow.png", char: true, boss: true,
+    color: "#9945ff", hp: 210, pow: 1.35, spd: 0.98, special: "Solana Surge",
+    blurb: "The creator. Full Solana armor. Beat the roster to face him." };
+
   // Per-fighter special moves — each its own archetype + visual.
   const SPECIALS = {
     catboy:  { type: "rush",      color: "#9b4dff", hits: 5, dmg: 7 },   // dashing claw flurry
@@ -49,6 +55,7 @@
     pyth:    { type: "rain",      color: "#aa78ff", n: 5, dmg: 9 },      // candlestick rain
     trump:   { type: "slam",      color: "#d4af37", dmg: 28 },           // tariff ground pound
     popcat:  { type: "multishot", color: "#e7b9a0", n: 4, dmg: 6, fast: true }, // pop barrage
+    winslow: { type: "beam",      color: "#9945ff", dmg: 40 },           // massive Solana surge beam
   };
   const specOf = (def) => SPECIALS[def.id] || { type: "orb", color: def.color, dmg: 22 };
 
@@ -62,6 +69,7 @@
     if (r.poses) ["idle","punch","kick","special","hit","ko","jump"].forEach((p) => load(FP + "catboy_" + p + ".png"));
     else load(FP + r.img);
   });
+  load(FP + BOSS.img);   // preload the boss
   const BG = load("assets/game/city-bg.png");
 
   function fimg(def, state) {
@@ -96,7 +104,7 @@
     this.state = "idle"; this.st = 0;       // state timer (ms)
     this.cool = 0; this.hitstun = 0; this.invuln = 0; this.flash = 0;
     this.didHit = false; this.combo = 0; this.comboT = 0;
-    this.h = (def.poses || def.char) ? 252 : 150;  // draw height (full-body chars vs token)
+    this.h = ((def.poses || def.char) ? 252 : 150) * (def.boss ? 1.3 : 1);  // boss looms larger
     this.onGround = true;
     this.ai = { t: 0, want: "idle" };
     this.bob = Math.random() * 6;
@@ -547,7 +555,10 @@
     drawSetup();
     if (G.phase === "intro") {
       drawWorld(0);
-      center("ROUND " + G.round, G.p1.def.name + "  VS  " + G.p2.def.name, "#19e0ff");
+      if (G.p2.def.boss)
+        center("FINAL BOSS", G.p1.def.name + "  VS  " + G.p2.def.name, "#ffd84d");
+      else
+        center("ROUND " + G.round, G.p1.def.name + "  VS  " + G.p2.def.name, "#19e0ff");
       if (G.phaseT > 1500) { G.phase = "fight"; G.phaseT = 0; }
     } else if (G.phase === "fight") {
       think(G.p2, G.p1, dt);
@@ -577,7 +588,11 @@
       drawWorld(dt);
       const more = G.oppIdx < G.oppQueue.length - 1;
       const won = G.lastPay > 0 ? "+" + G.lastPay + " credits · " : "";
-      center("VICTORY", won + (more ? "Tap to face " + G.oppQueue[G.oppIdx + 1].name : "You cleared the roster!"), "#ffd84d");
+      const nextIsBoss = more && G.oppQueue[G.oppIdx + 1].boss;
+      center(G.cleared ? "CHAMPION" : "VICTORY",
+        won + (more ? (nextIsBoss ? "Tap to face the FINAL BOSS — WINSLOW" : "Tap to face " + G.oppQueue[G.oppIdx + 1].name)
+                    : "You beat WINSLOW — you cleared it all! 👑"),
+        "#ffd84d");
     } else if (G.phase === "matchlose") {
       drawWorld(dt);
       const lost = G.lastPay < 0 ? G.lastPay + " credits · " : "";
@@ -711,9 +726,15 @@
 
   function startGame(idx) {
     const player = ROSTER[idx];
-    const opps = ROSTER.filter((_, i) => i !== idx);
-    // shuffle deterministically-ish
-    for (let i = opps.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [opps[i], opps[j]] = [opps[j], opps[i]]; }
+    let opps;
+    if (/[?&]boss\b/.test(location.search)) {
+      opps = [BOSS];   // boss rush: straight to Winslow
+    } else {
+      opps = ROSTER.filter((_, i) => i !== idx);
+      // shuffle deterministically-ish
+      for (let i = opps.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [opps[i], opps[j]] = [opps[j], opps[i]]; }
+      opps.push(BOSS);   // Winslow is ALWAYS the final fight
+    }
     G = newMatch(player, opps);
     G.phase = "intro"; startRound(false); stakeBout();
   }
