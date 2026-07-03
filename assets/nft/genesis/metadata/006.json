@@ -1,5 +1,5 @@
 {
- "name": "Genesis Catboy \u2014 Cosmic",
+ "name": "Genesis Catboy \u2014 Stormbringer",
  "symbol": "CATBOYGEN",
  "description": "Catboy Genesis \u2014 the special launch collection of the Winslow Ecosystem. MonWolf (Monad) x Catboy (Solana). Genesis holders get top-tier utility: casino edge, Catboy City ownership, fighter skins, and treasury perks.",
  "image": "https://www.catboyonsol.fun/assets/nft/genesis/006.jpg",
@@ -11,15 +11,15 @@
   },
   {
    "trait_type": "Theme",
-   "value": "Cosmic"
+   "value": "Stormbringer"
   },
   {
    "trait_type": "Chain",
-   "value": "Solana"
+   "value": "Winslow Dual"
   },
   {
    "trait_type": "Aura",
-   "value": "Cosmic"
+   "value": "Storm"
   },
   {
    "trait_type": "Edition",

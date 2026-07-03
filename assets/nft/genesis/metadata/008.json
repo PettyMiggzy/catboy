@@ -1,5 +1,5 @@
 {
- "name": "Genesis Catboy \u2014 Cyber King",
+ "name": "Genesis Catboy \u2014 Skyline",
  "symbol": "CATBOYGEN",
  "description": "Catboy Genesis \u2014 the special launch collection of the Winslow Ecosystem. MonWolf (Monad) x Catboy (Solana). Genesis holders get top-tier utility: casino edge, Catboy City ownership, fighter skins, and treasury perks.",
  "image": "https://www.catboyonsol.fun/assets/nft/genesis/008.jpg",
@@ -11,7 +11,7 @@
   },
   {
    "trait_type": "Theme",
-   "value": "Cyber King"
+   "value": "Skyline"
   },
   {
    "trait_type": "Chain",
@@ -19,7 +19,7 @@
   },
   {
    "trait_type": "Aura",
-   "value": "Cyber"
+   "value": "Skyline"
   },
   {
    "trait_type": "Edition",

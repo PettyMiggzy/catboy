@@ -1,5 +1,5 @@
 {
- "name": "Genesis Catboy \u2014 Winslow Dual",
+ "name": "Genesis Catboy \u2014 Frost King",
  "symbol": "CATBOYGEN",
  "description": "Catboy Genesis \u2014 the special launch collection of the Winslow Ecosystem. MonWolf (Monad) x Catboy (Solana). Genesis holders get top-tier utility: casino edge, Catboy City ownership, fighter skins, and treasury perks.",
  "image": "https://www.catboyonsol.fun/assets/nft/genesis/010.jpg",
@@ -11,15 +11,15 @@
   },
   {
    "trait_type": "Theme",
-   "value": "Winslow Dual"
+   "value": "Frost King"
   },
   {
    "trait_type": "Chain",
-   "value": "Winslow Dual"
+   "value": "Solana"
   },
   {
    "trait_type": "Aura",
-   "value": "Dual"
+   "value": "Frost"
   },
   {
    "trait_type": "Edition",

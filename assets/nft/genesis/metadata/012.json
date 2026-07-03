@@ -1,5 +1,5 @@
 {
- "name": "Genesis Monwolf \u2014 Bull Run",
+ "name": "Genesis Catboy \u2014 Winslow Dual",
  "symbol": "CATBOYGEN",
  "description": "Catboy Genesis \u2014 the special launch collection of the Winslow Ecosystem. MonWolf (Monad) x Catboy (Solana). Genesis holders get top-tier utility: casino edge, Catboy City ownership, fighter skins, and treasury perks.",
  "image": "https://www.catboyonsol.fun/assets/nft/genesis/012.jpg",
@@ -7,19 +7,19 @@
  "attributes": [
   {
    "trait_type": "Character",
-   "value": "MonWolf"
+   "value": "Catboy"
   },
   {
    "trait_type": "Theme",
-   "value": "Bull Run"
+   "value": "Winslow Dual"
   },
   {
    "trait_type": "Chain",
-   "value": "Monad"
+   "value": "Winslow Dual"
   },
   {
    "trait_type": "Aura",
-   "value": "Bull"
+   "value": "Dual"
   },
   {
    "trait_type": "Edition",
