@@ -71,7 +71,7 @@
   // ---------- FINAL BOSS: Winslow (the creator, in full Solana armor) ----------
   // Not player-selectable — always the last opponent, bigger and brutal.
   const BOSS = { id: "winslow", name: "WINSLOW", poses: true, posePrefix: "winslow", boss: true,
-    color: "#9945ff", hp: 300, pow: 1.6, spd: 1.05, special: "Solana Blast",
+    color: "#9945ff", hp: 300, pow: 1.4, spd: 1.05, special: "Solana Blast",
     blurb: "The creator. Full Solana armor. Beat the roster to face him." };
 
   // Per-fighter special moves — each its own archetype + visual.
@@ -105,6 +105,10 @@
   });
   loadPoses(BOSS.posePrefix);   // preload the boss's pose set
   const BG = load("assets/game/city-bg.png");
+  // fight stages — a different arena per opponent, plus a dramatic boss plaza
+  const STAGE_DIR = "assets/game/stages/";
+  const STAGES = ["rooftop", "alley", "skybridge", "arena", "subway"].map((n) => load(STAGE_DIR + n + ".jpg"));
+  const BOSS_STAGE = load(STAGE_DIR + "boss.jpg");
 
   function fimg(def, state) {
     if (def.poses) {
@@ -134,7 +138,7 @@
   function Fighter(def, x, facing, isCPU) {
     this.def = def; this.x = x; this.y = GROUND; this.vx = 0; this.vy = 0;
     this.facing = facing; this.cpu = isCPU;
-    this.maxhp = def.hp; this.hp = def.hp; this.meter = 0;
+    this.maxhp = Math.round(def.hp * 1.4); this.hp = this.maxhp; this.meter = 0;  // beefier HP = longer fights
     this.state = "idle"; this.st = 0;       // state timer (ms)
     this.cool = 0; this.hitstun = 0; this.invuln = 0; this.flash = 0;
     this.didHit = false; this.combo = 0; this.comboT = 0;
@@ -164,17 +168,18 @@
     return {
       player, oppQueue: oppList.slice(), oppIdx: 0, staked: 0, lastPay: 0,
       p1: null, p2: null, round: 1, w1: 0, w2: 0,
-      phase: "intro", phaseT: 0, roundTime: 60, shake: 0, sparks: [], shots: [], beams: [], pops: [], blood: [], splats: [], finFlash: 0, slow: 1,
+      phase: "intro", phaseT: 0, roundTime: 99, shake: 0, sparks: [], shots: [], beams: [], pops: [], blood: [], splats: [], finFlash: 0, slow: 1,
     };
   }
   function startRound(keepWins) {
     const pdef = G.player, odef = G.oppQueue[G.oppIdx];
+    G.stageImg = odef.boss ? BOSS_STAGE : STAGES[G.oppIdx % STAGES.length];   // arena per opponent
     G.p1 = new Fighter(pdef, W * 0.3, 1, false);
     G.p2 = new Fighter(odef, W * 0.7, -1, true);
     G.p2.maxhp = Math.round(G.p2.maxhp * (1 + G.oppIdx * 0.06));
     G.p2.hp = G.p2.maxhp;
     if (!keepWins) { G.w1 = 0; G.w2 = 0; G.round = 1; }
-    G.roundTime = 60; G.phase = "intro"; G.phaseT = 0; G.sparks = []; G.shots = []; G.beams = []; G.pops = []; G.blood = []; G.splats = []; G.finFlash = 0;
+    G.roundTime = 99; G.phase = "intro"; G.phaseT = 0; G.sparks = []; G.shots = []; G.beams = []; G.pops = []; G.blood = []; G.splats = []; G.finFlash = 0;
   }
 
   function spark(x, y, c, n) {
@@ -188,7 +193,8 @@
         vy: -(1.5 + Math.random() * 7), r: 1.4 + Math.random() * 3.2, life: 1 });
   }
   function koFighter(def, att, kb) {
-    def.set("ko", 4000); def.vx = kb * att.facing * 1.4; def.vy = -6;
+    // crumple to the ground in place — a small stagger, then fall (no launching off-screen)
+    def.set("ko", 4200); def.vx = att.facing * 1.4; def.vy = -3;
     G.shake = 16; G.slow = 0.35;
     bloodSpray(def.x, def.y - def.h * 0.55, att.facing, 24);
   }
@@ -203,7 +209,7 @@
   function doFinisher(f, foe) {
     f.set("special", 720); f.cool = 900; f.isFinisher = true; f.didHit = true;
     G.slow = 0.22; G.shake = 24; G.finFlash = 1;
-    foe.hp = 0; foe.set("ko", 5000); foe.vx = f.facing * 11; foe.vy = -9;
+    foe.hp = 0; foe.set("ko", 5200); foe.vx = f.facing * 2.4; foe.vy = -4;
     bloodSpray(foe.x, foe.y - foe.h * 0.6, f.facing, 60);
     bloodSpray(foe.x, foe.y - foe.h * 0.32, f.facing, 44);
     spark(foe.x, foe.y - foe.h * 0.5, "#ff2d4d", 30);
@@ -216,7 +222,7 @@
     // only an ACTUAL block (visible) reduces damage — no more invisible CPU blocking
     const blocked = def.state === "block" || (def === G.p1 && keys.block && def.onGround);
     let d = dmg;
-    if (def.def.boss) d = Math.round(d * 0.6);   // Solana armor — the boss shrugs off damage
+    if (def.def.boss) d = Math.round(d * 0.7);   // Solana armor — the boss shrugs off damage
     if (blocked) { d = Math.round(d * 0.25); spark(hitX, hitY, "#19e0ff", 7); G.shake = Math.max(G.shake, 4); }
     else {
       def.set("hurt", 260 + dmg * 6); def.hitstun = 260 + dmg * 6;
@@ -410,10 +416,11 @@
 
   // ---------- rendering ----------
   function drawBG() {
-    if (BG.complete && BG.naturalWidth) {
-      const s = Math.max(W / BG.naturalWidth, H / BG.naturalHeight);
-      const w = BG.naturalWidth * s, h = BG.naturalHeight * s;
-      ctx.globalAlpha = 0.55; ctx.drawImage(BG, (W - w) / 2, (H - h) / 2, w, h); ctx.globalAlpha = 1;
+    const bg = (G && G.stageImg && G.stageImg.complete && G.stageImg.naturalWidth) ? G.stageImg : BG;
+    if (bg.complete && bg.naturalWidth) {
+      const s = Math.max(W / bg.naturalWidth, H / bg.naturalHeight);
+      const w = bg.naturalWidth * s, h = bg.naturalHeight * s;
+      ctx.globalAlpha = 0.62; ctx.drawImage(bg, (W - w) / 2, (H - h) / 2, w, h); ctx.globalAlpha = 1;
     } else { ctx.fillStyle = "#0a0618"; ctx.fillRect(0, 0, W, H); }
     ctx.fillStyle = "rgba(8,4,20,0.55)"; ctx.fillRect(0, 0, W, H);
     // floor
@@ -609,7 +616,7 @@
         const a = 0.55 + 0.45 * Math.sin(G.phaseT / 110);
         ctx.globalAlpha = a; ctx.fillStyle = "#ff2d4d"; ctx.textAlign = "center";
         ctx.font = "900 32px Orbitron, sans-serif"; ctx.shadowColor = "#ff2d4d"; ctx.shadowBlur = 22;
-        ctx.fillText("FINISH THEM!  ▶ L", W / 2, 128); ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+        ctx.fillText("FINISH  ▶ L  (optional)", W / 2, 128); ctx.shadowBlur = 0; ctx.globalAlpha = 1;
       }
       // round end?
       const dead = G.p1.hp <= 0 || G.p2.hp <= 0 || G.roundTime <= 0;
@@ -793,6 +800,7 @@
   if (/[?&]capture\b/.test(location.search)) {
     window.CATBOY_FIGHT._chargeBoss = () => { if (G && G.p2 && G.p2.def.boss) { G.p2.meter = 100; G.p2.ai.t = 0; G.p2.ai.want = "special"; } };
     window.CATBOY_FIGHT._charge = (who) => { if (G && G[who]) G[who].meter = 100; };
+    window.CATBOY_FIGHT._lowHp = (who) => { if (G && G[who]) G[who].hp = Math.min(G[who].hp, 12); };
   }
 
   // stake the current wager at the start of a bout (one opponent, best of 3)

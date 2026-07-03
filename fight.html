@@ -122,10 +122,11 @@
     function pad(n) { return String(n).padStart(2, "0"); }
     function render() {
       if (CH.isClosed()) {
-        tag.textContent = "🏁 Challenge Closed";
-        body.innerHTML = `<div class="ch-closed">The 1 SOL has been claimed.${CH.winner ? ` Winner: <b>${CH.winner}</b>` : ""}<br><span>Only one winner — this promo is over. GG.</span></div>`;
+        tag.textContent = "🏆 Champion Crowned";
+        body.innerHTML = `<div class="ch-champ">🏆 WINSLOW SLAYER<br><b class="champ-name">${CH.winner || "Champion"}</b>
+          <span>Beat Winslow · won 1 SOL · featured forever.</span></div>`;
         actions.innerHTML = "";
-        note.textContent = "Watch the socials for the next Catboy tournament.";
+        note.textContent = "One winner only — this promo is done. Watch the socials for the next Catboy tournament.";
         return;
       }
       if (CH.isPractice()) {
@@ -172,9 +173,10 @@
       CH.markBeaten(CH.isLive() ? "live" : "practice");
       if (CH.isLive() && paidThisSession) {
         const code = "WIN-" + Math.abs((Date.now() ^ 0x9e37) % 1e8).toString(36).toUpperCase();
-        body.innerHTML = `<div class="ch-won">🏆 YOU BEAT WINSLOW!<br><span>Claim your <b class="ch-sol">1 SOL</b> — DM this proof code to the team:</span><code>${code}</code></div>`;
-        actions.innerHTML = `<a class="btn btn-primary" href="https://t.me/kingpetty317" target="_blank" rel="noopener">Claim 1 SOL ›</a>`;
-        note.textContent = "One winner only — if you're first, the 1 SOL is yours and the challenge closes.";
+        body.innerHTML = `<div class="ch-won">🏆 YOU BEAT WINSLOW — CHAMPION!<br>
+          <span>You win <b class="ch-sol">1 SOL</b> and get <b>featured as the Winslow Slayer</b>. DM this proof code to claim &amp; get featured:</span><code>${code}</code></div>`;
+        actions.innerHTML = `<a class="btn btn-primary" href="https://t.me/kingpetty317" target="_blank" rel="noopener">Claim 1 SOL &amp; get featured ›</a>`;
+        note.textContent = "One winner only — first to beat him takes the 1 SOL, gets featured, and the challenge closes.";
         try { localStorage.setItem("catboy_win_code", code); } catch {}
       } else {
         note.textContent = CH.isLive()

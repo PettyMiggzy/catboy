@@ -1442,3 +1442,8 @@ body.splash-open { overflow: hidden; }
 .ch-won { color: #fff; font-family: "Orbitron",sans-serif; font-weight: 900; font-size: 1.2rem; }
 .ch-won span { display: block; font-family: "Rajdhani",sans-serif; font-weight: 500; font-size: 0.95rem; color: var(--muted); margin: 0.5rem 0; }
 .ch-won code { display: inline-block; font-family: "Orbitron",sans-serif; font-size: 1.1rem; letter-spacing: 0.1em; color: var(--gold); background: rgba(255,205,90,0.1); border: 1px dashed var(--gold); border-radius: 8px; padding: 0.5rem 1rem; margin-top: 0.3rem; }
+
+/* challenge champion feature */
+.ch-champ { color: #fff; font-family: "Orbitron",sans-serif; font-weight: 900; font-size: 1.15rem; letter-spacing: 0.04em; }
+.ch-champ .champ-name { display: block; font-size: 2rem; color: var(--gold); text-shadow: 0 0 22px rgba(255,205,90,0.6); margin: 0.4rem 0; }
+.ch-champ span { display: block; font-family: "Rajdhani",sans-serif; font-weight: 500; font-size: 0.95rem; color: var(--muted); }
