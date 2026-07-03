@@ -8,6 +8,19 @@
   const GROUND = H - 64;
   const FP = "assets/game/fighters/";
 
+  // ---------- wagering (shared casino credits; free demo, real $CATBOY at launch) ----------
+  const CREDIT_KEY = "catboy_credits";
+  const getCredits = () => { const c = parseInt(localStorage.getItem(CREDIT_KEY) || "50", 10); return isNaN(c) ? 50 : c; };
+  const setCredits = (n) => { n = Math.max(0, Math.round(n)); localStorage.setItem(CREDIT_KEY, n); const el = document.getElementById("wgCredits"); if (el) el.textContent = n; };
+  const payMult = (oppIdx) => 1.8 + oppIdx * 0.2;   // tougher/later foes pay more (house edge baked in)
+  let WAGER = 0;
+  function wgNote(m) { const el = document.getElementById("wgNote"); if (el) el.textContent = m; }
+  document.querySelectorAll(".wg-chip").forEach((c) => c.addEventListener("click", () => {
+    document.querySelectorAll(".wg-chip").forEach((x) => x.classList.remove("active"));
+    c.classList.add("active"); WAGER = parseInt(c.dataset.w, 10) || 0;
+  }));
+  setCredits(getCredits());   // init the display
+
   // ---------- roster ----------
   const ROSTER = [
     { id: "catboy", name: "CATBOY", poses: true, color: "#9b4dff", hp: 100, pow: 1.05, spd: 1.15, special: "Nine Lives Fury", blurb: "The legend. Fast, relentless, nine chances." },
@@ -107,7 +120,7 @@
   let G = null;
   function newMatch(player, oppList) {
     return {
-      player, oppQueue: oppList.slice(), oppIdx: 0,
+      player, oppQueue: oppList.slice(), oppIdx: 0, staked: 0, lastPay: 0,
       p1: null, p2: null, round: 1, w1: 0, w2: 0,
       phase: "intro", phaseT: 0, roundTime: 60, shake: 0, sparks: [], shots: [], beams: [], pops: [], blood: [], splats: [], finFlash: 0, slow: 1,
     };
@@ -563,10 +576,12 @@
     } else if (G.phase === "matchwin") {
       drawWorld(dt);
       const more = G.oppIdx < G.oppQueue.length - 1;
-      center("VICTORY", more ? "Tap to face " + G.oppQueue[G.oppIdx + 1].name : "You cleared the roster!", "#ffd84d");
+      const won = G.lastPay > 0 ? "+" + G.lastPay + " credits · " : "";
+      center("VICTORY", won + (more ? "Tap to face " + G.oppQueue[G.oppIdx + 1].name : "You cleared the roster!"), "#ffd84d");
     } else if (G.phase === "matchlose") {
       drawWorld(dt);
-      center("DEFEATED", "Tap to rematch", "#ff3df0");
+      const lost = G.lastPay < 0 ? G.lastPay + " credits · " : "";
+      center("DEFEATED", lost + "Tap to rematch", "#ff3df0");
     }
     drawShake();
   }
@@ -582,9 +597,16 @@
     if (w === 1) G.w1++; else if (w === 2) G.w2++;
     if (G.w1 >= 2 || G.w2 >= 2) {
       if (G.w1 >= 2) {
+        // bout won — pay out the wager (house edge baked into the mult)
+        if (G.staked > 0) { const pay = Math.round(G.staked * payMult(G.oppIdx)); setCredits(getCredits() + pay); G.lastPay = pay; wgNote("You won " + pay + " credits! 🐾"); }
+        else G.lastPay = 0;
         if (G.oppIdx >= G.oppQueue.length - 1) { G.phase = "matchwin"; G.cleared = true; }
         else { G.phase = "matchwin"; }
-      } else { G.phase = "matchlose"; }
+      } else {
+        if (G.staked > 0) { G.lastPay = -G.staked; wgNote("Lost " + G.staked + " credits. Rematch to win it back."); }
+        else G.lastPay = 0;
+        G.phase = "matchlose";
+      }
       G.phaseT = 0; return;
     }
     G.round++; startRound(true);
@@ -594,9 +616,9 @@
   cv.addEventListener("pointerdown", () => {
     if (!G) return;
     if (G.phase === "matchwin") {
-      if (G.oppIdx < G.oppQueue.length - 1) { G.oppIdx++; startRound(false); }
+      if (G.oppIdx < G.oppQueue.length - 1) { G.oppIdx++; startRound(false); stakeBout(); }
       else { G.phase = "select"; }
-    } else if (G.phase === "matchlose") { startRound(false); }
+    } else if (G.phase === "matchlose") { startRound(false); stakeBout(); }
   });
 
   function drawSetup() { /* placeholder for camera */ }
@@ -693,7 +715,18 @@
     // shuffle deterministically-ish
     for (let i = opps.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [opps[i], opps[j]] = [opps[j], opps[i]]; }
     G = newMatch(player, opps);
-    G.phase = "intro"; startRound(false);
+    G.phase = "intro"; startRound(false); stakeBout();
+  }
+
+  // stake the current wager at the start of a bout (one opponent, best of 3)
+  function stakeBout() {
+    if (WAGER > 0 && getCredits() >= WAGER) {
+      setCredits(getCredits() - WAGER); G.staked = WAGER;
+      wgNote("Staked " + WAGER + " — win this bout for " + Math.round(WAGER * payMult(G.oppIdx)) + " credits.");
+    } else {
+      G.staked = 0;
+      if (WAGER > 0) wgNote("Not enough credits — playing this bout for free.");
+    }
   }
 
   // ---------- boot ----------
