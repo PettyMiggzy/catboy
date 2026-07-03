@@ -108,21 +108,30 @@ a { color: inherit; text-decoration: none; }
 
 .splash-word {
   font-family: "Orbitron", sans-serif; font-weight: 900;
-  font-size: clamp(2.8rem, 11vw, 6.2rem); line-height: 0.95;
-  letter-spacing: 0.06em; margin: 0;
-  background: linear-gradient(100deg, var(--cyan), #fff 40%, var(--magenta) 75%, var(--purple));
-  background-size: 220% 100%;
-  -webkit-background-clip: text; background-clip: text;
-  -webkit-text-fill-color: transparent; color: transparent;
+  font-size: clamp(2.9rem, 11.5vw, 6.6rem); line-height: 0.95;
+  letter-spacing: 0.05em; margin: 0;
+  color: #eafdff; -webkit-text-fill-color: #eafdff;
+  -webkit-text-stroke: 1px rgba(25,224,255,0.5);
+  text-shadow:
+    0 0 4px #ffffff,
+    0 0 12px rgba(120,240,255,0.95),
+    0 0 26px rgba(25,224,255,0.9),
+    0 0 52px rgba(155,77,255,0.75),
+    0 0 82px rgba(255,60,200,0.55);
   position: relative;
   opacity: 0;
-  animation: splashWord 0.8s ease 0.45s forwards, splashShine 4s linear 1.2s infinite;
+  animation: splashWord 0.8s ease 0.45s forwards, neonFlicker 5s steps(1, end) 1.4s infinite;
 }
 .splash-word::after {
   content: attr(data-text);
   position: absolute; left: 0; top: 0; z-index: -1;
   -webkit-text-fill-color: transparent; color: transparent;
-  text-shadow: 0 0 26px rgba(25,224,255,0.55), 0 0 46px rgba(155,77,255,0.45);
+  text-shadow: 0 0 40px rgba(25,224,255,0.6), 0 0 74px rgba(155,77,255,0.5);
+}
+@keyframes neonFlicker {
+  0%, 94%, 100% { opacity: 1; }
+  95% { opacity: 0.72; } 96% { opacity: 1; }
+  97% { opacity: 0.62; } 98% { opacity: 1; } 99% { opacity: 0.86; }
 }
 .splash-tag {
   font-family: "Rajdhani", sans-serif; font-weight: 600;
