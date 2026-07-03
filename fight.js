@@ -89,7 +89,7 @@
     this.bob = Math.random() * 6;
   }
   Fighter.prototype.reach = function () { return (this.def.poses || this.def.char) ? 150 : 120; };
-  Fighter.prototype.set = function (s, dur) { this.state = s; this.st = 0; this.dur = dur || 0; this.didHit = false; };
+  Fighter.prototype.set = function (s, dur) { this.state = s; this.st = 0; this.dur = dur || 0; this.didHit = false; this.isFinisher = false; };
   Fighter.prototype.busy = function () { return ["punch","kick","special","hurt","ko"].includes(this.state); };
 
   Fighter.prototype.tryAttack = function (kind) {
@@ -109,7 +109,7 @@
     return {
       player, oppQueue: oppList.slice(), oppIdx: 0,
       p1: null, p2: null, round: 1, w1: 0, w2: 0,
-      phase: "intro", phaseT: 0, roundTime: 60, shake: 0, sparks: [], shots: [], beams: [], pops: [], slow: 1,
+      phase: "intro", phaseT: 0, roundTime: 60, shake: 0, sparks: [], shots: [], beams: [], pops: [], blood: [], splats: [], finFlash: 0, slow: 1,
     };
   }
   function startRound(keepWins) {
@@ -119,24 +119,55 @@
     G.p2.maxhp = Math.round(G.p2.maxhp * (1 + G.oppIdx * 0.06));
     G.p2.hp = G.p2.maxhp;
     if (!keepWins) { G.w1 = 0; G.w2 = 0; G.round = 1; }
-    G.roundTime = 60; G.phase = "intro"; G.phaseT = 0; G.sparks = []; G.shots = []; G.beams = []; G.pops = [];
+    G.roundTime = 60; G.phase = "intro"; G.phaseT = 0; G.sparks = []; G.shots = []; G.beams = []; G.pops = []; G.blood = []; G.splats = []; G.finFlash = 0;
   }
 
   function spark(x, y, c, n) {
     for (let i = 0; i < (n || 10); i++) G.sparks.push({ x, y, vx: (Math.random()-0.5)*7, vy: (Math.random()-0.7)*7, life: 1, c });
   }
   function popText(x, y, t, c) { G.pops.push({ x, y, t, c, life: 1 }); }
+  function bloodSpray(x, y, dir, n) {
+    n = n || 10;
+    for (let i = 0; i < n; i++)
+      G.blood.push({ x, y, vx: dir * (0.5 + Math.random() * 4) + (Math.random() - 0.5) * 5,
+        vy: -(1.5 + Math.random() * 7), r: 1.4 + Math.random() * 3.2, life: 1 });
+  }
+  function koFighter(def, att, kb) {
+    def.set("ko", 4000); def.vx = kb * att.facing * 1.4; def.vy = -6;
+    G.shake = 16; G.slow = 0.35;
+    bloodSpray(def.x, def.y - def.h * 0.55, att.facing, 24);
+  }
+  // finisher: available when the foe is low + in range (player only)
+  function finishPromptable(f, foe) {
+    return f && foe && !f.cpu && foe.state !== "ko" && foe.hp > 0 &&
+      foe.hp <= foe.maxhp * 0.20 && Math.abs(f.x - foe.x) <= f.reach() + 44;
+  }
+  function canFinish(f, foe) {
+    return finishPromptable(f, foe) && !f.busy() && f.onGround;
+  }
+  function doFinisher(f, foe) {
+    f.set("special", 720); f.cool = 900; f.isFinisher = true; f.didHit = true;
+    G.slow = 0.22; G.shake = 24; G.finFlash = 1;
+    foe.hp = 0; foe.set("ko", 5000); foe.vx = f.facing * 11; foe.vy = -9;
+    bloodSpray(foe.x, foe.y - foe.h * 0.6, f.facing, 60);
+    bloodSpray(foe.x, foe.y - foe.h * 0.32, f.facing, 44);
+    spark(foe.x, foe.y - foe.h * 0.5, "#ff2d4d", 30);
+    popText(W / 2, H / 2 - 44, "FINISHED!", "#ff2d4d");
+    popText(f.x, f.y - f.h - 20, f.def.special.toUpperCase(), f.def.color);
+  }
 
   function applyHit(att, def, dmg, kb, hitX, hitY) {
     if (def.invuln > 0 || def.state === "ko") return;
-    let blocked = (keys.block && def === G.p1 && def.onGround) || (def.cpu && def.ai.want === "block");
-    if (def.state === "block") blocked = true;
+    // only an ACTUAL block (visible) reduces damage — no more invisible CPU blocking
+    const blocked = def.state === "block" || (def === G.p1 && keys.block && def.onGround);
     let d = dmg;
-    if (blocked) { d = Math.round(dmg * 0.18); spark(hitX, hitY, "#19e0ff", 6); G.shake = Math.max(G.shake, 4); }
+    if (blocked) { d = Math.round(dmg * 0.25); spark(hitX, hitY, "#19e0ff", 7); G.shake = Math.max(G.shake, 4); }
     else {
       def.set("hurt", 260 + dmg * 6); def.hitstun = 260 + dmg * 6;
       def.vx = kb * (att.facing); def.vy = -3;
-      spark(hitX, hitY, "#ff3df0", 14); G.shake = Math.max(G.shake, 9);
+      spark(hitX, hitY, "#ff3df0", 8);
+      bloodSpray(hitX, hitY, att.facing, Math.min(22, 5 + d));   // blood on a clean hit
+      G.shake = Math.max(G.shake, 9);
       att.combo++; att.comboT = 900;
       if (att.combo > 1) popText(def.x, def.y - def.h - 10, att.combo + " HIT", "#ffd84d");
     }
@@ -145,7 +176,7 @@
     def.meter = Math.min(100, def.meter + (blocked ? 3 : 6));
     def.flash = 1;
     popText(hitX, hitY - 18, "-" + d, blocked ? "#9fe8ff" : "#ff6b9d");
-    if (def.hp <= 0) { def.set("ko", 4000); def.vx = kb * att.facing * 1.4; def.vy = -6; G.shake = 16; G.slow = 0.35; }
+    if (def.hp <= 0) koFighter(def, att, kb);
   }
 
   // CPU brain
@@ -158,7 +189,7 @@
     if (ai.t <= 0) {
       ai.t = 220 + Math.random() * 380 * (1.3 - lvl);
       const r = Math.random();
-      if (foe.state === "punch" || foe.state === "kick") { ai.want = (r < lvl) ? "block" : "back"; }
+      if (foe.state === "punch" || foe.state === "kick") { ai.want = (r < Math.min(0.55, lvl)) ? "block" : "back"; }
       else if (dist > me.reach() + 30) ai.want = "approach";
       else if (me.meter >= 100 && r < 0.6) ai.want = "special";
       else if (r < 0.45) ai.want = "punch";
@@ -167,11 +198,13 @@
       else ai.want = "idle";
     }
     me.vx = 0;
+    if (me.state === "block" && ai.want !== "block") me.state = "idle";
     if (ai.want === "approach") me.vx = me.def.spd * 2.4 * me.facing;
     else if (ai.want === "back") me.vx = -me.def.spd * 1.8 * me.facing;
     else if (ai.want === "punch") me.tryAttack("punch");
     else if (ai.want === "kick") me.tryAttack("kick");
     else if (ai.want === "special") me.tryAttack("special");
+    else if (ai.want === "block") { if (!me.busy() && me.onGround) me.state = "block"; }
   }
 
   function updateFighter(f, foe, dt) {
@@ -192,7 +225,7 @@
           if (keys.block && mv === 0) f.state = "block"; else if (f.state === "block") f.state = "idle";
           if (keys.punch) f.tryAttack("punch");
           else if (keys.kick) f.tryAttack("kick");
-          else if (keys.special) f.tryAttack("special");
+          else if (keys.special) { if (canFinish(f, foe)) doFinisher(f, foe); else f.tryAttack("special"); }
         }
       }
       // attack active windows -> hit check
@@ -206,8 +239,8 @@
           applyHit(f, foe, dmg, kb, (f.x + foe.x) / 2, f.y - f.h * 0.55);
         }
       }
-      // special move — per-fighter archetype
-      if (f.state === "special") {
+      // special move — per-fighter archetype (skipped for a finisher)
+      if (f.state === "special" && !f.isFinisher) {
         const cfg = specOf(f.def);
         if (cfg.type === "rush") {
           if (f.st < f.dur * 0.78) f.vx = f.facing * f.def.spd * 4.4;
@@ -427,6 +460,14 @@
       ctx.globalAlpha = Math.max(0, p.life); ctx.fillStyle = p.c;
       ctx.fillRect(p.x, p.y, 4, 4);
     }
+    // blood droplets — arc, then splat on the ground as a decal
+    for (let i = G.blood.length - 1; i >= 0; i--) {
+      const b = G.blood[i]; b.x += b.vx; b.y += b.vy; b.vy += 0.5; b.life -= 0.014;
+      if (b.y >= GROUND) { G.splats.push({ x: b.x, y: GROUND, r: b.r * (1.6 + Math.random()), a: 0.55 }); G.blood.splice(i, 1); continue; }
+      if (b.life <= 0) { G.blood.splice(i, 1); continue; }
+      ctx.globalAlpha = Math.max(0, b.life); ctx.fillStyle = "#c81028";
+      ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, 7); ctx.fill();
+    }
     ctx.globalAlpha = 1;
     for (let i = G.pops.length - 1; i >= 0; i--) {
       const p = G.pops[i]; p.y -= 0.6; p.life -= 0.02;
@@ -504,6 +545,12 @@
       G.roundTime -= dt / 1000;
       drawWorld(dt);
       if (G.p1.combo > 1 && G.p1.comboT > 0) { ctx.fillStyle = "#ffd84d"; ctx.font = "900 26px Orbitron"; ctx.textAlign = "left"; ctx.fillText(G.p1.combo + " COMBO", 30, 110); }
+      if (finishPromptable(G.p1, G.p2)) {
+        const a = 0.55 + 0.45 * Math.sin(G.phaseT / 110);
+        ctx.globalAlpha = a; ctx.fillStyle = "#ff2d4d"; ctx.textAlign = "center";
+        ctx.font = "900 32px Orbitron, sans-serif"; ctx.shadowColor = "#ff2d4d"; ctx.shadowBlur = 22;
+        ctx.fillText("FINISH THEM!  ▶ L", W / 2, 128); ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+      }
       // round end?
       const dead = G.p1.hp <= 0 || G.p2.hp <= 0 || G.roundTime <= 0;
       if (dead) { G.phase = "roundend"; G.phaseT = 0; G.roundWinner = decideRound(); }
@@ -553,13 +600,23 @@
   });
 
   function drawSetup() { /* placeholder for camera */ }
+  function drawSplats() {
+    const arr = G.splats; if (arr.length > 80) arr.splice(0, arr.length - 80);
+    for (const s of arr) {
+      ctx.globalAlpha = s.a; ctx.fillStyle = "#6e0b18";
+      ctx.beginPath(); ctx.ellipse(s.x, s.y + 3, s.r, s.r * 0.4, 0, 0, 7); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
   function drawWorld(dt) {
     drawBG();
+    drawSplats();            // blood pools on the ground, behind fighters
     // draw back-to-front by y
     const order = [G.p1, G.p2].sort((a, b) => a.y - b.y);
     drawShots();
     order.forEach(drawFighter);
     drawFX();
+    if (G.finFlash > 0) { ctx.globalAlpha = G.finFlash * 0.5; ctx.fillStyle = "#c00018"; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; G.finFlash -= 0.02; }
     drawHUD();
   }
   function drawShake() {
