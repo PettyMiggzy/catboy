@@ -46,9 +46,9 @@
   <section class="page-hero" style="padding-bottom:0.5rem;">
     <div class="page-hero-inner">
       <a href="nft.html" class="back-link">&lsaquo; Back to NFTs</a>
-      <span class="eyebrow" style="display:block;margin-top:1rem;">Marketplace</span>
-      <h1>The <span class="grad">Nine Lives</span> Collection</h1>
-      <p>High-quality anime Catboy PFPs — each with its own traits and rarity. Browse the drop and mint your favorite at launch.</p>
+      <span class="eyebrow" style="display:block;margin-top:1rem;" id="mktEyebrow">Marketplace</span>
+      <h1 id="mktTitle">The <span class="grad">Nine Lives</span> Collection</h1>
+      <p id="mktIntro">High-quality anime Catboy PFPs — each with its own traits and rarity. Browse the drop and mint your favorite at launch.</p>
       <div class="hero-actions" style="margin-top:1rem;"><a href="mint.html" class="btn btn-primary">Mint &rsaquo;</a> <a href="trade.html" class="btn btn-ghost">Buy / Sell / Trade &rsaquo;</a></div>
       <div class="mkt-stats" id="mktStats"></div>
     </div>
@@ -134,13 +134,18 @@
       }
 
       const COLLS = {
-        nine:    { file: "assets/nft/collection/manifest.json", path: "assets/nft/collection/", note: "100-piece collection completes at mint" },
-        genesis: { file: "assets/nft/genesis/manifest.json",    path: "assets/nft/genesis/",    note: "Genesis — the special launch collection · all 1-of-1" },
+        nine:    { file: "assets/nft/collection/manifest.json", path: "assets/nft/collection/", note: "100-piece collection completes at mint",
+                   eyebrow: "Marketplace", title: "The <span class='grad'>Nine Lives</span> Collection", intro: "100 high-quality anime Catboy PFPs — each with its own traits and rarity. Browse the drop and mint at launch." },
+        genesis: { file: "assets/nft/genesis/manifest.json",    path: "assets/nft/genesis/",    note: "Genesis — the special launch collection · all 1-of-1",
+                   eyebrow: "✦ Special Launch Drop", title: "Catboy <span class='grad'>Genesis</span>", intro: "The special launch collection — 12 one-of-one Legends &amp; Founders. MonWolf ✕ Catboy · the Winslow Ecosystem." },
       };
       let PATH = COLLS.nine.path, NOTE = COLLS.nine.note;
       const TIER_ORDER = { Legendary: 0, Legend: 0, Founder: 1, Epic: 2, Rare: 3, Common: 4 };
       function load(key) {
         const c = COLLS[key]; PATH = c.path; NOTE = c.note; filter = "all"; traitFilter = {};
+        document.getElementById("mktEyebrow").textContent = c.eyebrow;
+        document.getElementById("mktTitle").innerHTML = c.title;
+        document.getElementById("mktIntro").innerHTML = c.intro;
         fetch(c.file).then((r) => r.json())
           .then((data) => { items = data; buildFreq(); buildTierChips(); buildTraitFilters(); render(); stats(); })
           .catch(() => { document.getElementById("mktNote").textContent = "Collection failed to load."; });
