@@ -787,6 +787,11 @@
     const shell = document.querySelector(".fight-shell"); if (shell) shell.scrollIntoView({ behavior: "smooth", block: "center" });
   }
   window.CATBOY_FIGHT = { startBossChallenge };
+  // capture-only helpers (promo recording) — gated so they can't be abused in a real challenge
+  if (/[?&]capture\b/.test(location.search)) {
+    window.CATBOY_FIGHT._chargeBoss = () => { if (G && G.p2 && G.p2.def.boss) { G.p2.meter = 100; G.p2.ai.t = 0; G.p2.ai.want = "special"; } };
+    window.CATBOY_FIGHT._charge = (who) => { if (G && G[who]) G[who].meter = 100; };
+  }
 
   // stake the current wager at the start of a bout (one opponent, best of 3)
   function stakeBout() {
