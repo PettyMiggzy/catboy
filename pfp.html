@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>PFP Generator — CATBOY</title>
-  <meta name="description" content="Describe it, pay a small SOL fee, and the Catboy AI PFP generator makes your profile picture with the top image model. Proceeds route to the treasury." />
+  <meta name="description" content="Describe it, pay a small SOL fee, and the Catboy AI PFP generator makes your one-of-a-kind Catboy profile picture with the top image model." />
   <link rel="icon" type="image/png" href="assets/solana.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -62,7 +62,7 @@
 
   <footer class="footer">
     <div class="footer-brand"><img src="assets/catboy.png" alt="Catboy" class="footer-logo" /><span>CATBOY</span></div>
-    <p class="footer-disclaimer">AI-generated images. Generation fees are non-refundable and route on-chain to the project wallets. Not financial advice.</p>
+    <p class="footer-disclaimer">AI-generated images. Generation fees are non-refundable. Not financial advice.</p>
     <p class="footer-copy">© <span id="year"></span> CATBOY · The Legend Evolves on Solana</p>
   </footer>
 
@@ -72,7 +72,7 @@
   (function () {
     const $ = (id) => document.getElementById(id);
     $("year").textContent = new Date().getFullYear();
-    let CFG = { feeSol: null, treasury: "", overhead: "" };
+    let CFG = { feeSol: null, payTo: "" };
 
     fetch("/api/pfp").then(r => r.json()).then(c => {
       CFG = c;
@@ -100,8 +100,7 @@
       const { transactionBuilder, publicKey, lamports } = await import("https://esm.sh/@metaplex-foundation/umi@0.9.2");
       const { transferSol } = await import("https://esm.sh/@metaplex-foundation/mpl-toolbox@0.9.4");
       const umi = createUmi(location.origin + ((window.CATBOY_MINT && window.CATBOY_MINT.rpc) || "/api/solrpc")).use(walletAdapterIdentity(p));
-      // Full fee to a single wallet (no split) — the ops/overhead wallet.
-      const dest = CFG.overhead || CFG.treasury;
+      const dest = CFG.payTo;
       const lam = Math.round(CFG.feeSol * 1e9);
       const tx = transactionBuilder().add(transferSol(umi, { destination: publicKey(dest), amount: lamports(lam) }));
       const res = await tx.sendAndConfirm(umi);

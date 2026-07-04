@@ -1,8 +1,8 @@
 // CATBOY PFP Generator — paid AI PFP generation via Venice (server-side).
 //
 // The Venice API key NEVER ships to the browser. The flow:
-//   1) GET  /api/pfp            -> { feeSol, treasury, overhead, model }
-//   2) client pays the full feeSol to the ops/overhead wallet (one tx, no split)
+//   1) GET  /api/pfp            -> { feeSol, feeUsd, payTo, model }
+//   2) client pays the full feeSol to payTo (one tx)
 //   3) POST /api/pfp { prompt, txSig } -> verifies the on-chain payment, then
 //      calls Venice with the top model and returns { image: <base64 png> }
 //
@@ -123,9 +123,8 @@ async function venice(prompt) {
 export default async function handler(req, res) {
   if (req.method === "GET") {
     const feeSol = await computeFeeSol();
-    const solPrice = await solPriceUsd();
     const feeUsd = Math.round((COST_USD * MARKUP + GAS_USD) * 100) / 100;
-    return res.status(200).json({ feeSol, feeUsd, solPrice, treasury: TREASURY, overhead: OVERHEAD, model: MODEL });
+    return res.status(200).json({ feeSol, feeUsd, payTo: OVERHEAD, model: MODEL });
   }
   if (req.method !== "POST") { res.setHeader("Allow", "GET, POST"); return res.status(405).json({ error: "method_not_allowed" }); }
 
