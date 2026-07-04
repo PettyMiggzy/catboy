@@ -134,16 +134,22 @@ async function verifyPayment(txSig) {
   return "ok";
 }
 
-// Resolve the Venice key from any reasonably-named env var. Tolerates odd names
-// like a trailing underscore (e.g. VENICE_INFERENCE_KEY_) so a small naming
-// mismatch in the dashboard doesn't silently break generation.
+// The full Venice key looks like "VENICE_INFERENCE_KEY_<rest>" — the prefix words
+// are PART of the key. In the dashboard it may be stored either as the whole
+// value, or split so "VENICE_INFERENCE_KEY_" is the variable NAME and the rest is
+// the value. Resolve the complete key in either case.
+const VK_PREFIX = "VENICE_INFERENCE_KEY_";
 function veniceKey() {
-  const known = process.env.VENICE_API_KEY || process.env.VENICE_KEY || process.env.VENICE_INFERENCE_KEY || process.env.VENICE;
-  if (known) return known;
-  for (const name of Object.keys(process.env)) {
-    if (/^VENICE/i.test(name) && process.env[name]) return process.env[name];
-  }
-  return "";
+  const direct = process.env.VENICE_API_KEY || process.env.VENICE_KEY || process.env.VENICE_INFERENCE_KEY || process.env.VENICE;
+  const venice = Object.entries(process.env).filter(([n, v]) => /^VENICE/i.test(n) && v);
+  // 1) a value that is already the complete key
+  for (const [, v] of venice) if (v.startsWith(VK_PREFIX)) return v;
+  if (direct && direct.startsWith(VK_PREFIX)) return direct;
+  // 2) split as name (VENICE_INFERENCE_KEY_) + value (the rest)
+  for (const [n, v] of venice) if (/^VENICE_INFERENCE_KEY_*$/i.test(n)) return VK_PREFIX + v;
+  // 3) fall back to whatever VENICE* value exists
+  if (venice.length) return venice[0][1];
+  return direct || "";
 }
 
 async function venice(prompt) {
