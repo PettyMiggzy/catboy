@@ -7,9 +7,8 @@ window.CATBOY_MINT = {
   rpc: "/api/solrpc",        // same-origin RPC proxy (already live)
   total: 100,                // collection size
   // Payment model: the candy guard mints with NO solPayment (free on-chain);
-  // the pack price is charged client-side and split 90/10 to the wallets in
-  // wallets.js (treasury / overhead) in the SAME transaction. Deploy the
-  // candy machine WITHOUT a solPayment guard so this split is authoritative.
+  // the pack price is charged client-side in the SAME transaction. Deploy the
+  // candy machine WITHOUT a solPayment guard so this charge is authoritative.
   treasury: (window.CATBOY_WALLETS && window.CATBOY_WALLETS.treasury) || "",
 
   // Tiered "loot box" packs — different price, different odds of each rarity.

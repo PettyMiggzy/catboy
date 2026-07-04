@@ -111,6 +111,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({ tx: swapTx, feeBps: usedFeeBps });
   } catch (e) {
-    return res.status(502).json({ error: "swap_unavailable", detail: String(e.message || e) });
+    console.error("swap failed:", e);
+    return res.status(502).json({ error: "swap_unavailable" });
   }
 }

@@ -36,6 +36,7 @@ export default async function handler(req, res) {
     const complete = data.readUInt8(48) === 1;
     let progress = Number(((PUMP_INIT_REAL_TOKEN - realToken) * 10000n) / PUMP_INIT_REAL_TOKEN) / 100;
     progress = Math.max(0, Math.min(100, progress));
+    res.setHeader("Cache-Control", "public, s-maxage=30, stale-while-revalidate=120");
     return res.status(200).json({ exists: true, complete, progress: +progress.toFixed(2) });
   } catch (e) {
     console.error("curve failed:", e);

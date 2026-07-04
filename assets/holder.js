@@ -76,8 +76,14 @@
   const API = {
     get,
     // preview mode: 'genesis' | 'nine' | '' (off). Persists across pages.
-    getPreview() { try { return localStorage.getItem(LS_PREVIEW) || ""; } catch { return ""; } },
+    getPreview() {
+      // Preview is a pre-launch demo only. Once real collection mints are set,
+      // ownership is verified on-chain and any client-set preview is ignored.
+      if (CFG.genesisMint || CFG.nineMint) return "";
+      try { return localStorage.getItem(LS_PREVIEW) || ""; } catch { return ""; }
+    },
     setPreview(kind) {
+      if (CFG.genesisMint || CFG.nineMint) return get(); // disabled once collections are live
       try { kind ? localStorage.setItem(LS_PREVIEW, kind) : localStorage.removeItem(LS_PREVIEW); } catch {}
       if (kind === "genesis") apply(3, 0, state.address || "PREVIEW", "preview");
       else if (kind === "nine") apply(0, 1, state.address || "PREVIEW", "preview");
@@ -90,12 +96,16 @@
       const r = await p.connect();
       const owner = (r && r.publicKey ? r.publicKey : p.publicKey).toString();
       state.connected = true; state.address = owner;
-      const preview = API.getPreview();
-      if (preview) { save(); return API.setPreview(preview); }   // preview wins for demo
+      // Real on-chain ownership is always authoritative for a connected wallet —
+      // a client-set preview can never override it.
       try {
         const h = await countHoldings(owner);
-        return apply(h.genesis, h.nine, owner, h.verifiable ? "chain" : "unverifiable");
+        if (h.verifiable) return apply(h.genesis, h.nine, owner, "chain");
       } catch (e) { save(); throw e; }
+      // Only pre-launch (no collections configured yet) fall back to the demo preview.
+      const preview = API.getPreview();
+      if (preview) return API.setPreview(preview);
+      return apply(0, 0, owner, "unverifiable");
     },
     // apply preview immediately (no wallet) for pure UI preview
     init() {

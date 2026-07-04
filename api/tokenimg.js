@@ -25,6 +25,20 @@ function toHttp(u) {
   return u;
 }
 
+// SSRF guard: only fetch public http(s) URLs, never internal/loopback/link-local hosts.
+function isSafeHttpUrl(u) {
+  try {
+    const url = new URL(u);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return false;
+    const h = url.hostname.toLowerCase();
+    if (h === "localhost" || h === "0.0.0.0" || h.endsWith(".local") || h.endsWith(".internal")) return false;
+    if (/^127\./.test(h) || /^10\./.test(h) || /^192\.168\./.test(h) ||
+        /^172\.(1[6-9]|2\d|3[01])\./.test(h) || /^169\.254\./.test(h) || /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(h) ||
+        h === "::1" || h.startsWith("fc") || h.startsWith("fd") || h.startsWith("fe80")) return false;
+    return true;
+  } catch { return false; }
+}
+
 async function uriFromMint(mint) {
   if (!process.env.SOLANA_RPC) return "";
   const pda = PublicKey.findProgramAddressSync(
@@ -53,16 +67,19 @@ export default async function handler(req, res) {
   try {
     if (!img && !uri && ca) { try { uri = await uriFromMint(ca); } catch {} }
     if (!img && uri) {
-      const r = await fetch(toHttp(uri), { headers: { accept: "application/json" } });
-      if (r.ok) { const j = await r.json(); img = j.image || j.image_url || j.imageUrl || ""; }
+      const metaUrl = toHttp(uri);
+      if (isSafeHttpUrl(metaUrl)) {
+        const r = await fetch(metaUrl, { headers: { accept: "application/json" } });
+        if (r.ok) { const j = await r.json(); img = j.image || j.image_url || j.imageUrl || ""; }
+      }
     }
     img = toHttp(img);
-    if (!img) return res.status(404).json({ error: "no_image" });
+    if (!img || !isSafeHttpUrl(img)) return res.status(404).json({ error: "no_image" });
 
-    // Stream the bytes (no cross-origin redirect for the <img> to follow).
+    // Always route the image through wsrv.nl (its egress, not ours) — no raw
+    // server-side fetch of a user-supplied URL, which would be an SSRF vector.
     const proxied = "https://wsrv.nl/?url=" + encodeURIComponent(img) + "&w=64&h=64&fit=cover&output=webp";
-    let up = await fetch(proxied);
-    if (!up.ok) up = await fetch(img); // fall back to the raw image
+    const up = await fetch(proxied);
     if (!up.ok) return res.status(404).json({ error: "img_fetch" });
 
     const buf = Buffer.from(await up.arrayBuffer());

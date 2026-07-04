@@ -12,11 +12,30 @@ import { neon } from "@neondatabase/serverless";
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const CONN = process.env.DATABASE_URL || process.env.POSTGRES_URL || "";
 
+// Best-effort abuse guards (per warm instance). Cuts casual cross-site spam of
+// the DB; a durable limiter would need Vercel KV.
+const HITS = new Map();
+function rateLimited(ip) {
+  const now = Date.now(), win = 60000, max = 5;
+  const arr = (HITS.get(ip) || []).filter((t) => now - t < win);
+  arr.push(now); HITS.set(ip, arr);
+  return arr.length > max;
+}
+function sameOrigin(req) {
+  const host = req.headers.host || "";
+  const o = req.headers.origin || req.headers.referer || "";
+  if (!o) return true; // no browser origin header (server-to-server) → rely on rate limit
+  try { return new URL(o).host === host; } catch { return false; }
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
     return res.status(405).json({ error: "method_not_allowed" });
   }
+  if (!sameOrigin(req)) return res.status(403).json({ error: "forbidden" });
+  const ip = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim() || "unknown";
+  if (rateLimited(ip)) return res.status(429).json({ error: "rate_limited" });
 
   // No database connected yet → tell the client to show "opens soon".
   if (!CONN) {

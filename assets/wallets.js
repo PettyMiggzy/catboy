@@ -1,13 +1,10 @@
-/* CATBOY — single source of truth for revenue routing.
-   EVERY fee or sale on the site is split 90% treasury / 10% ops.
-   Change an address here and it updates everywhere (mint, casino, ads, tips). */
+/* CATBOY — single source of truth for payment routing.
+   Change an address here and it updates everywhere. */
 window.CATBOY_WALLETS = {
-  // 90% — main treasury / project wallet
   treasury: "3DHwgk2T3tGxQRfD3p897eq1UV9rwvw1JNWa2rS3RdKw",
-  // 10% — overhead / operations ("nill money") wallet
   overhead: "EK8YS2haXFtKJ61phggC39m9RAG16B3NMx59uyMkP1PC",
-  treasuryBps: 9000,   // 90.00%
-  overheadBps: 1000,   // 10.00%
+  treasuryBps: 9000,
+  overheadBps: 1000,
 };
 
 /* Split any SOL total into the 90/10 legs. Returns lamports so rounding is exact

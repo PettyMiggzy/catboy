@@ -182,5 +182,7 @@ export default async function handler(req, res) {
     out.risk = { score, level: score >= 66 ? "high" : score >= 33 ? "med" : "low", flags };
   } catch (e) {}
 
+  // Edge-cache identical lookups so repeated requests don't re-hit the paid RPC.
+  res.setHeader("Cache-Control", "public, s-maxage=60, stale-while-revalidate=300");
   return res.status(200).json(out);
 }

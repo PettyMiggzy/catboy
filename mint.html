@@ -261,7 +261,6 @@
         const umi = createUmi(location.origin + C.rpc).use(mplCandyMachine()).use(walletAdapterIdentity(wallet));
         const cm = await fetchCandyMachine(umi, publicKey(C.candyMachineId));
         const nftMint = generateSigner(umi);
-        // hard-coded 90/10 revenue split (treasury / overhead), charged in-tx
         const legs = window.CATBOY_PAY.splitSol(sel.priceSol);
         status.textContent = "Approve the " + sel.priceSol + " SOL mint in your wallet…";
         let tx = transactionBuilder().add(setComputeUnitLimit(umi, { units: 800000 }));

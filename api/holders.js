@@ -54,6 +54,7 @@ export default async function handler(req, res) {
     holders.sort((a, b) => b.amount - a.amount);
 
     const sum = (arr) => arr.reduce((s, h) => s + h.pct, 0);
+    res.setHeader("Cache-Control", "public, s-maxage=60, stale-while-revalidate=300");
     return res.status(200).json({
       supply,
       top10: +sum(holders.slice(0, 10)).toFixed(2),
@@ -62,6 +63,7 @@ export default async function handler(req, res) {
       holders: holders.slice(0, 20),
     });
   } catch (e) {
-    return res.status(200).json({ error: "partial", detail: String(e.message || e) });
+    console.error("holders failed:", e);
+    return res.status(200).json({ error: "partial" });
   }
 }

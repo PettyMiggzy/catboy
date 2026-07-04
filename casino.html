@@ -340,7 +340,7 @@
     $("spinBtn").onclick = spin;
     $("autoBtn").onclick = async () => { for (let i = 0; i < 10 && credits >= 1; i++) { await spin(); await new Promise((r) => setTimeout(r, 250)); } };
 
-    // credit purchase — free demo now; real 90/10 split payment at launch
+    // credit purchase — free demo now; real payment at launch
     const CREDIT_PACK = { credits: 100, sol: 0.1 };   // launch pricing
     async function payWithSplit(totalSol) {
       const p = (window.solana && window.solana.isPhantom) ? window.solana : (window.solflare || window.backpack || null);
@@ -356,7 +356,7 @@
     }
     $("buyBtn").onclick = async () => {
       if (window.CATBOY_LAUNCHED) {
-        try { flash("Approve the " + CREDIT_PACK.sol + " SOL payment…"); await payWithSplit(CREDIT_PACK.sol); setCredits(credits + CREDIT_PACK.credits); flash("+" + CREDIT_PACK.credits + " credits! 90% to treasury, 10% to ops. Good luck 🐾"); }
+        try { flash("Approve the " + CREDIT_PACK.sol + " SOL payment…"); await payWithSplit(CREDIT_PACK.sol); setCredits(credits + CREDIT_PACK.credits); flash("+" + CREDIT_PACK.credits + " credits! Good luck 🐾"); }
         catch (e) { flash("Payment cancelled."); }
         return;
       }

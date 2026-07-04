@@ -26,6 +26,9 @@
 // used-sig cache that resets on cold start). For a high-volume paid service,
 // back it with a KV/DB store keyed on txSig.
 
+import { neon } from "@neondatabase/serverless";
+
+const CONN = process.env.DATABASE_URL || process.env.POSTGRES_URL || ""; // durable replay store
 const TREASURY = process.env.PFP_TREASURY || "3DHwgk2T3tGxQRfD3p897eq1UV9rwvw1JNWa2rS3RdKw"; // 90% dev
 const OVERHEAD = process.env.PFP_OVERHEAD || "EK8YS2haXFtKJ61phggC39m9RAG16B3NMx59uyMkP1PC"; // 10% ops
 const MODEL = process.env.PFP_MODEL || "nano-banana-pro";
@@ -71,7 +74,22 @@ async function computeFeeSol() {
   return Math.ceil(sol * 1e6) / 1e6; // round up to whole micro-SOL
 }
 
-const usedSigs = new Set(); // best-effort replay guard (per warm instance)
+const usedSigs = new Set(); // in-memory fallback if no DB is configured
+
+// Atomically claim a payment signature as single-use. With a DB this is durable
+// across instances/cold starts (real replay protection); without one it degrades
+// to a best-effort per-instance guard.
+async function claimSig(sig) {
+  if (CONN) {
+    const sql = neon(CONN);
+    await sql`CREATE TABLE IF NOT EXISTS pfp_used_sigs (sig TEXT PRIMARY KEY, used_at TIMESTAMPTZ DEFAULT now())`;
+    const rows = await sql`INSERT INTO pfp_used_sigs (sig) VALUES (${sig}) ON CONFLICT (sig) DO NOTHING RETURNING sig`;
+    return rows.length > 0;
+  }
+  if (usedSigs.has(sig)) return false;
+  usedSigs.add(sig);
+  return true;
+}
 
 const BANNED = /\b(nude|naked|nsfw|sex|sexual|porn|explicit|hentai|nipple|genital|underage|child|loli|shota|rape|gore)\b/i;
 
@@ -111,7 +129,8 @@ async function verifyPayment(txSig) {
   // so a legit payer is never rejected and we never lose money on a sale.
   const minLamports = Math.round(feeSol * 0.85 * 1e9);
   if (total < minLamports) return "underpaid";
-  usedSigs.add(txSig);
+  // Consume the signature exactly once (durable) before we generate anything.
+  if (!(await claimSig(txSig))) return "already_used";
   return "ok";
 }
 

@@ -117,29 +117,6 @@
     </div>
   </section>
 
-  <!-- TREASURY TRANSPARENCY -->
-  <section class="section" style="padding-top:0;">
-    <div class="section-head">
-      <span class="eyebrow">Transparency</span>
-      <h2>Where the <span class="grad">money goes</span></h2>
-      <p class="section-intro">Every fee and sale on Catboy — pack mints, casino credits, ad slots — is split automatically on-chain. Hard-coded, same for everyone.</p>
-    </div>
-    <div class="treasury-grid">
-      <div class="treasury-card">
-        <div class="tc-pct">90%</div>
-        <h3>Treasury</h3>
-        <p class="muted-note">Liquidity, buyback &amp; burn, prizes, growth.</p>
-        <code class="tc-addr" id="addrTreasury"></code>
-      </div>
-      <div class="treasury-card ops">
-        <div class="tc-pct">10%</div>
-        <h3>Operations</h3>
-        <p class="muted-note">Hosting, infra, tools — keeping the lights on.</p>
-        <code class="tc-addr" id="addrOverhead"></code>
-      </div>
-    </div>
-  </section>
-
   <footer class="footer">
     <div class="footer-brand">
       <img src="assets/catboy.png" alt="Catboy" class="footer-logo" />
@@ -155,14 +132,6 @@
   </footer>
 
   <script src="assets/wallets.js"></script>
-  <script>
-    (function () {
-      var W = window.CATBOY_WALLETS || {};
-      var t = document.getElementById("addrTreasury"), o = document.getElementById("addrOverhead");
-      if (t) t.textContent = W.treasury || "";
-      if (o) o.textContent = W.overhead || "";
-    })();
-  </script>
   <script src="script.js"></script>
   <script type="module">
     import {

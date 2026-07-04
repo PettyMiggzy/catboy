@@ -7,6 +7,18 @@
 // Set in Vercel env (NEVER in client code):
 //   SOLANA_RPC=https://mainnet.helius-rpc.com/?api-key=YOUR_KEY  (or Alchemy/QuickNode)
 
+// Only the read methods the frontend actually needs — blocks abusive/expensive
+// calls (e.g. getProgramAccounts) so the proxy can't be used to burn RPC quota.
+const ALLOWED = new Set([
+  "getLatestBlockhash", "isBlockhashValid", "getBlockHeight", "getSlot", "getEpochInfo",
+  "getVersion", "getGenesisHash", "getHealth", "getFeeForMessage", "getRecentPrioritizationFees",
+  "getMinimumBalanceForRentExemption", "getBalance", "getAccountInfo", "getMultipleAccounts",
+  "getParsedAccountInfo", "getTokenAccountsByOwner", "getTokenAccountBalance", "getTokenSupply",
+  "getSignatureStatuses", "getSignaturesForAddress", "getTransaction", "getParsedTransaction",
+  "getAsset", "getAssetsByOwner", "getAssetsByGroup", "searchAssets", "sendTransaction",
+]);
+const MAX_BATCH = 25;
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
@@ -16,8 +28,16 @@ export default async function handler(req, res) {
   if (!RPC) return res.status(503).json({ error: "rpc_not_configured" });
 
   try {
-    // web3.js sends a JSON object or a batch array — re-serialize either faithfully.
-    const payload = typeof req.body === "string" ? req.body : JSON.stringify(req.body || {});
+    let body = req.body;
+    if (typeof body === "string") { try { body = JSON.parse(body || "{}"); } catch { return res.status(400).json({ error: "bad_json" }); } }
+    const calls = Array.isArray(body) ? body : [body];
+    if (calls.length > MAX_BATCH) return res.status(413).json({ error: "batch_too_large" });
+    for (const c of calls) {
+      if (!c || typeof c.method !== "string" || !ALLOWED.has(c.method)) {
+        return res.status(403).json({ error: "method_not_allowed" });
+      }
+    }
+    const payload = JSON.stringify(body);
     const upstream = await fetch(RPC, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

@@ -37,7 +37,8 @@ export default async function handler(req, res) {
       default:         return res.status(400).json({ error: "unknown_action" });
     }
   } catch (err) {
-    return res.status(500).json({ error: "server_error", detail: String((err && err.message) || err) });
+    console.error("launch endpoint failed:", err);
+    return res.status(500).json({ error: "server_error" });
   }
 }
 
