@@ -134,8 +134,20 @@ async function verifyPayment(txSig) {
   return "ok";
 }
 
+// Resolve the Venice key from any reasonably-named env var. Tolerates odd names
+// like a trailing underscore (e.g. VENICE_INFERENCE_KEY_) so a small naming
+// mismatch in the dashboard doesn't silently break generation.
+function veniceKey() {
+  const known = process.env.VENICE_API_KEY || process.env.VENICE_KEY || process.env.VENICE_INFERENCE_KEY || process.env.VENICE;
+  if (known) return known;
+  for (const name of Object.keys(process.env)) {
+    if (/^VENICE/i.test(name) && process.env[name]) return process.env[name];
+  }
+  return "";
+}
+
 async function venice(prompt) {
-  const key = process.env.VENICE_API_KEY || process.env.VENICE_KEY || process.env.VENICE_INFERENCE_KEY || process.env.VENICE;
+  const key = veniceKey();
   if (!key) throw new Error("venice_not_configured");
   const body = { model: MODEL, prompt, width: 1024, height: 1024, format: "png", return_binary: false };
   const r = await fetch("https://api.venice.ai/api/v1/image/generate", {
