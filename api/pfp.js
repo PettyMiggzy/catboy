@@ -85,11 +85,19 @@ async function rpc(method, params = []) {
   return j.result;
 }
 
-// verify txSig paid at least FEE_SOL to treasury+overhead, recently, confirmed
+// verify txSig paid at least the fee to our wallet, recently, confirmed
 async function verifyPayment(txSig) {
   if (!txSig || typeof txSig !== "string" || txSig.length < 32) return "bad_sig";
   if (usedSigs.has(txSig)) return "already_used";
-  const tx = await rpc("getTransaction", [txSig, { maxSupportedTransactionVersion: 0, encoding: "jsonParsed" }]);
+  // The client waits for 'confirmed' before posting; getTransaction defaults to
+  // 'finalized' (~13s later) and would miss it, so query at 'confirmed' and
+  // retry briefly to absorb RPC propagation lag.
+  let tx = null;
+  for (let i = 0; i < 5; i++) {
+    tx = await rpc("getTransaction", [txSig, { commitment: "confirmed", maxSupportedTransactionVersion: 0, encoding: "jsonParsed" }]);
+    if (tx) break;
+    await new Promise((r) => setTimeout(r, 1500));
+  }
   if (!tx) return "tx_not_found";
   if (tx.meta && tx.meta.err) return "tx_failed";
   if (tx.blockTime && (Date.now() / 1000 - tx.blockTime) > MAX_TX_AGE_S) return "tx_too_old";
@@ -119,6 +127,10 @@ async function venice(prompt) {
   if (!r.ok || !j.images || !j.images[0]) throw new Error((j && j.error) || "venice_failed_" + r.status);
   return j.images[0];
 }
+
+// Payment verification (a few RPC retries) + image generation (~10-20s) can run
+// well past the default 10s limit, which would kill it mid-generation.
+export const config = { maxDuration: 60 };
 
 export default async function handler(req, res) {
   if (req.method === "GET") {
