@@ -3,7 +3,7 @@
 const CONFIG = {
   contractAddress: "", // paste the Solana mint address here at launch
   socials: {
-    x: "",        // e.g. "https://x.com/catboy_sol"
+    x: "https://x.com/CatBoyOnSolana",
     telegram: "", // e.g. "https://t.me/catboy_sol"
   },
   // NFT collection — paste your Crossmint / LaunchMyNFT / mint page URL at drop time.
