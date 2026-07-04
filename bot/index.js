@@ -52,6 +52,16 @@ const CFG = {
   matchSymbol: (process.env.MATCH_SYMBOL || "").trim().toUpperCase(), // fallback match by ticker symbol
   notifyChatId: (process.env.NOTIFY_CHAT_ID || "").trim(), // your personal chat for a priority "BUY NOW" ping
   adminId: (process.env.ADMIN_CHAT_ID || process.env.NOTIFY_CHAT_ID || "").trim(), // who can run /setmint etc.
+  // AI chat personality (optional, cheap/free — e.g. Groq). Off unless LLM_API_KEY is set.
+  llmKey: (process.env.LLM_API_KEY || "").trim(),
+  llmBase: process.env.LLM_BASE_URL || "https://api.groq.com/openai/v1/chat/completions", // OpenAI-compatible
+  llmModel: process.env.LLM_MODEL || "llama-3.3-70b-versatile",
+  replyChance: Math.min(1, Math.max(0, parseFloat(process.env.REPLY_CHANCE || "0.06"))), // odds of chiming in on a random post
+  llmMaxPerMin: parseInt(process.env.LLM_MAX_PER_MIN || "6", 10), // spam/cost guard
+  // Burn detection: poll supply, announce when it drops.
+  rpcUrl: process.env.RPC_URL || "https://api.mainnet-beta.solana.com",
+  burnPollMs: Math.max(30000, parseInt(process.env.BURN_POLL_MS || "60000", 10)),
+  announceBurns: (process.env.ANNOUNCE_BURNS ?? "1") !== "0",
 };
 
 const API = `https://api.telegram.org/bot${CFG.token}`;
@@ -83,6 +93,94 @@ async function tgSendTo(chatId, text) {
   } catch (e) { log("tgSend error", e.message); }
 }
 const tgSendMessage = (text) => tgSendTo(CFG.chatId, text);
+async function tgReplyTo(chatId, msgId, text) {
+  try {
+    await fetch(`${API}/sendMessage`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, text, reply_to_message_id: msgId, parse_mode: "HTML", disable_web_page_preview: true, allow_sending_without_reply: true }),
+    });
+  } catch (e) { log("tgReply error", e.message); }
+}
+
+// ---- bot identity (for @mention / reply detection) ----------------------
+let botId = 0, botUsername = "";
+async function getMe() {
+  try { const j = await (await fetch(`${API}/getMe`)).json(); if (j.ok) { botId = j.result.id; botUsername = (j.result.username || "").toLowerCase(); log("bot identity:", "@" + botUsername); } } catch {}
+}
+
+// ---- AI chat personality (optional; OpenAI-compatible, e.g. Groq) --------
+const PERSONA =
+  "You are Catboy, the mascot of $CATBOY — a meme coin on Solana. You're a witty, " +
+  "playful, degen cat-boy with cattitude and big community-hype energy. Reply SHORT " +
+  "(1-2 sentences), fun and meme-y, casual lowercase vibe, an occasional 🐾. Hype the " +
+  "holders and the raids. NEVER give financial advice, never predict or promise price, " +
+  "never share links unless asked. If you don't know something, be funny about it. Stay in character.";
+const _replyTimes = [];
+function llmRateOk() {
+  const now = Date.now();
+  while (_replyTimes.length && now - _replyTimes[0] > 60000) _replyTimes.shift();
+  if (_replyTimes.length >= CFG.llmMaxPerMin) return false;
+  _replyTimes.push(now); return true;
+}
+function addressedToBot(m) {
+  if (m.reply_to_message && m.reply_to_message.from && m.reply_to_message.from.id === botId) return true;
+  const t = (m.text || "").toLowerCase();
+  if (botUsername && t.includes("@" + botUsername)) return true;
+  if (/\bcatboy\b/i.test(m.text || "")) return true; // name-drop
+  return false;
+}
+async function llmReply(userText, name) {
+  if (!CFG.llmKey) return null;
+  try {
+    const r = await fetch(CFG.llmBase, {
+      method: "POST",
+      headers: { Authorization: "Bearer " + CFG.llmKey, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: CFG.llmModel, max_tokens: 120, temperature: 0.9,
+        messages: [{ role: "system", content: PERSONA }, { role: "user", content: `${name}: ${userText}` }],
+      }),
+    });
+    const j = await r.json();
+    const txt = j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;
+    return txt ? String(txt).trim().slice(0, 500) : null;
+  } catch (e) { log("llm error", e.message); return null; }
+}
+async function handleChat(m) {
+  if (!CFG.llmKey || !m.text) return;
+  if (m.from && m.from.is_bot) return;
+  const inGroup = m.chat && (m.chat.type === "group" || m.chat.type === "supergroup");
+  if (inGroup && CFG.chatId && String(m.chat.id) !== String(CFG.chatId)) return; // only our group
+  const addressed = addressedToBot(m);
+  if (!addressed && Math.random() >= CFG.replyChance) return; // sometimes chime in
+  if (!llmRateOk()) return;
+  try { fetch(`${API}/sendChatAction`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: m.chat.id, action: "typing" }) }); } catch {}
+  const who = (m.from && (m.from.first_name || m.from.username)) || "anon";
+  const reply = await llmReply(m.text, who);
+  if (reply) await tgReplyTo(m.chat.id, m.message_id, reply);
+}
+
+// ---- burn detection (supply drop -> announce) ---------------------------
+let _lastSupply = null;
+async function solRpc(method, params) {
+  try {
+    const r = await fetch(CFG.rpcUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) });
+    const j = await r.json(); return j.result;
+  } catch { return null; }
+}
+async function checkBurns() {
+  if (!CFG.mint || !CFG.announceBurns) return;
+  const s = await solRpc("getTokenSupply", [CFG.mint]);
+  const ui = s && s.value ? Number(s.value.uiAmount) : NaN;
+  if (!isFinite(ui) || ui <= 0) return;
+  if (_lastSupply == null) { _lastSupply = ui; return; } // prime silently
+  if (ui < _lastSupply - 1) {
+    const burned = _lastSupply - ui;
+    const pct = burned / _lastSupply * 100;
+    _lastSupply = ui;
+    await tgSendMessage(`🔥🔥 <b>${fmt(burned, 0)} ${CFG.ticker} BURNED!</b> (${pct >= 0.01 ? pct.toFixed(2) : "<0.01"}% of supply)\nSupply now <b>${fmt(ui, 0)}</b>. Deflationary cattitude 🐾🔥`);
+    log("burn announced:", burned);
+  } else if (ui > _lastSupply) { _lastSupply = ui; } // mint/rebase — just track
+}
 
 // ---- Telegram command listener (long-poll getUpdates) -------------------
 // Lets the owner DM the bot to control it at launch — most importantly
@@ -116,7 +214,9 @@ async function handleCommand(m) {
     return tgSendTo(m.chat.id,
       `mint: ${CFG.mint ? "<code>" + CFG.mint + "</code>" : "(unset — waiting)"}\n` +
       `watching: ${watchingNewTokens() ? "symbol " + (CFG.matchSymbol || "-") + (CFG.creator ? ", creator set" : "") : "—"}\n` +
-      `minBuy: ${CFG.minBuySol} SOL`);
+      `minBuy: ${CFG.minBuySol} SOL\n` +
+      `AI chat: ${CFG.llmKey ? "on (" + CFG.llmModel + ")" : "off"}\n` +
+      `burn alerts: ${CFG.announceBurns ? "on" : "off"}`);
   }
 }
 async function pollUpdates() {
@@ -126,7 +226,10 @@ async function pollUpdates() {
     const j = await r.json();
     if (j.ok) for (const u of j.result) {
       _updOffset = u.update_id + 1;
-      if (u.message) await handleCommand(u.message).catch((e) => log("cmd error", e.message));
+      const m = u.message;
+      if (!m || !m.text) continue;
+      if (m.text.startsWith("/")) await handleCommand(m).catch((e) => log("cmd error", e.message));
+      else await handleChat(m).catch((e) => log("chat error", e.message)); // AI reactions
     }
     setTimeout(pollUpdates, 200);
   } catch (e) { setTimeout(pollUpdates, 3000); }
@@ -436,5 +539,8 @@ if (CFG.mint) {
     `🐾 <b>${CFG.ticker} bot armed (private).</b>\nI'm watching quietly and will say nothing in the group until you go live.\n` +
     `At launch, DM me <code>/setmint &lt;CA&gt;</code> and I'll lock on + announce to the group. (I'll also DM you any $${CFG.ticker} launches I spot.)`);
 }
+getMe();      // learn our @username for mention detection
 connect();
-pollUpdates(); // listen for /setmint and other owner commands
+pollUpdates(); // listen for /setmint, owner commands, and AI chat
+if (CFG.announceBurns) setInterval(() => { checkBurns().catch((e) => log("burn error", e.message)); }, CFG.burnPollMs);
+if (CFG.llmKey) log(`AI chat ON (${CFG.llmModel}) — replies to @mentions/replies, ${Math.round(CFG.replyChance * 100)}% on random posts`);

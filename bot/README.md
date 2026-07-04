@@ -74,12 +74,25 @@ the token, set `CREATOR_WALLET` — the bot auto-locks the instant it launches, 
 > Telegram bots can't message first. The group post needs the bot added to
 > @CatBoyOnSolana as an **admin**.
 
-### Owner commands (DM the bot)
+### Owner commands (DM the bot, or in the group)
 | command | what it does |
 |---|---|
 | `/id` | replies with your chat id (use it for `NOTIFY_CHAT_ID`) |
 | `/setmint <CA>` | lock onto the token + start alerts (launch!) |
-| `/status` | show current mint / watch state |
+| `/status` | show mint / watch / AI / burn state (works in DM and group) |
+
+## 5. Extras
+**🔥 Burn alerts** — on by default. The bot polls the token supply and posts a
+🔥 alert whenever it drops. Off with `ANNOUNCE_BURNS=0`.
+
+**🐾 AI chat personality (optional, free)** — the bot talks as Catboy: it replies
+when tagged or replied-to, and randomly chimes in on posts (`REPLY_CHANCE`).
+1. Get a **free** Groq key at https://console.groq.com/keys → set `LLM_API_KEY`.
+2. To let it see normal group messages (for random replies), turn **off** the
+   bot's privacy mode: **@BotFather → /mybots → your bot → Bot Settings → Group
+   Privacy → Turn off**. (Tags/replies work even with privacy on.)
+3. `pm2 restart catboy-buybot`. `/status` shows `AI chat: on`.
+Rate-limited to `LLM_MAX_PER_MIN` replies/min so it never spams or runs up cost.
 
 ## Config reference (.env)
 | var | meaning |
