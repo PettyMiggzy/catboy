@@ -50,34 +50,36 @@ pm2 logs catboy-buybot   # watch it
 When you `pm2 start`, the bot posts "buy bot online" to your chat so you know it's live.
 
 ## 4. Launch day 🚀
-You have two ways to go live — pick one:
+Start the bot ahead of time (it posts **“Armed for launch”** and waits). Then,
+the moment the token is live, lock it on. Three ways, easiest first:
 
-**A) Auto-detect (recommended — you can't miss the open).** Before launch, set
-`CREATOR_WALLET` to the wallet that will create the token on pump.fun (and/or
-`MATCH_SYMBOL=CATBOY`). Optionally set `NOTIFY_CHAT_ID` to your personal chat.
-Start the bot now and walk away — the moment the token is created it will:
-1. DM you a priority **“BUY NOW”** ping with the pump.fun link (if `NOTIFY_CHAT_ID` set),
-2. post **“$CATBOY IS LIVE”** + the contract address + buy link to the group,
-3. flip on buy alerts automatically. No restart needed.
-
-```bash
-# .env before launch:
-#   CREATOR_WALLET=<the launching wallet>
-#   MATCH_SYMBOL=CATBOY
-#   NOTIFY_CHAT_ID=<your telegram user id>   (DM the bot + press Start first!)
-pm2 start ecosystem.config.cjs   # it posts "Armed for launch" and waits
+**A) Paste the CA to the bot (recommended — works even if you don't know the
+launch wallet).** DM the bot:
 ```
-
-**B) Manual.** Leave the auto-detect vars blank and just set the mint at launch:
-```bash
-# edit .env -> TOKEN_MINT=<your pump.fun mint>
-pm2 restart catboy-buybot
-# (or, without editing files: export TOKEN_MINT=... then `kill -HUP <pid>`)
+/setmint <contract address>
 ```
+It instantly locks on, DMs you a **BUY NOW** link, posts **“$CATBOY IS LIVE”** +
+the CA to the group, and starts buy alerts. Set `NOTIFY_CHAT_ID` to your user id
+so the bot recognizes you as the owner (DM the bot → `/id` → it replies with your
+id → put it in `.env`).
 
-> The bot can only DM you (`NOTIFY_CHAT_ID`) if you've opened a chat with it and
-> pressed **Start** — Telegram bots can't message you first. The group post
-> needs the bot added to @CatBoyOnSolana as an **admin**.
+**B) Creator-wallet auto-detect.** If you know the exact wallet that will create
+the token, set `CREATOR_WALLET` — the bot auto-locks the instant it launches, no
+`/setmint` needed. (It also DMs you candidate CAs for any token matching
+`MATCH_SYMBOL`, but never auto-locks on a symbol since copycats spoof it.)
+
+**C) Env + reload.** Set `TOKEN_MINT=<mint>` in `.env` and `pm2 restart catboy-buybot`.
+
+> The bot can only DM you if you've opened a chat with it and pressed **Start** —
+> Telegram bots can't message first. The group post needs the bot added to
+> @CatBoyOnSolana as an **admin**.
+
+### Owner commands (DM the bot)
+| command | what it does |
+|---|---|
+| `/id` | replies with your chat id (use it for `NOTIFY_CHAT_ID`) |
+| `/setmint <CA>` | lock onto the token + start alerts (launch!) |
+| `/status` | show current mint / watch state |
 
 ## Config reference (.env)
 | var | meaning |
