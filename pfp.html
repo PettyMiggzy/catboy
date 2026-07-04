@@ -75,7 +75,9 @@
     let CFG = { feeSol: null, treasury: "", overhead: "" };
 
     fetch("/api/pfp").then(r => r.json()).then(c => {
-      CFG = c; $("pfpFee").textContent = (c.feeSol != null ? c.feeSol : "—") + " SOL";
+      CFG = c;
+      $("pfpFee").textContent = (c.feeSol != null ? c.feeSol : "—") + " SOL"
+        + (c.feeUsd != null ? " (≈ $" + c.feeUsd + ")" : "");
     }).catch(() => { $("pfpFee").textContent = "unavailable"; });
 
     $("pfpPresets").addEventListener("click", (e) => {

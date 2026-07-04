@@ -9,8 +9,18 @@
 // Required Vercel env vars (NEVER in client code):
 //   VENICE_API_KEY = your Venice inference key
 //   SOLANA_RPC     = your private RPC (already used by /api/solrpc)
-//   PFP_FEE_SOL    = price per PFP in SOL (set to ~2x your Venice per-image cost). default 0.02
 //   PFP_MODEL      = Venice model id. default nano-banana-pro (top model)
+//
+// Pricing (dynamic): the fee always covers our cost to generate + gas, then
+// doubles it so we profit. It is computed live from the SOL/USD price so the
+// markup stays constant as SOL moves:
+//     fee(SOL) = (COST_USD * MARKUP + GAS_USD) / SOL_price_USD
+//   PFP_COST_USD          = our Venice per-image cost in USD. default 0.18 (nano-banana-pro @1024px)
+//   PFP_MARKUP            = multiple of cost to charge. default 2 (=> we keep ~1x as profit)
+//   PFP_GAS_USD           = small buffer for network gas/overhead. default 0.02
+//   PFP_FEE_FLOOR_SOL     = never charge below this. default 0.003
+//   PFP_SOL_PRICE_FALLBACK= used only if the price feed is unreachable. default 80
+//   PFP_FEE_SOL           = OPTIONAL hard override; if set, disables dynamic pricing
 //
 // Note: replay protection here is best-effort (recent-tx window + in-memory
 // used-sig cache that resets on cold start). For a high-volume paid service,
@@ -18,9 +28,41 @@
 
 const TREASURY = process.env.PFP_TREASURY || "3DHwgk2T3tGxQRfD3p897eq1UV9rwvw1JNWa2rS3RdKw"; // 90% dev
 const OVERHEAD = process.env.PFP_OVERHEAD || "EK8YS2haXFtKJ61phggC39m9RAG16B3NMx59uyMkP1PC"; // 10% ops
-const FEE_SOL = parseFloat(process.env.PFP_FEE_SOL || "0.02");
 const MODEL = process.env.PFP_MODEL || "nano-banana-pro";
 const MAX_TX_AGE_S = 15 * 60;
+
+// --- Dynamic pricing: cover cost to generate + gas, then charge double so we profit.
+const COST_USD = parseFloat(process.env.PFP_COST_USD || "0.18");
+const MARKUP = parseFloat(process.env.PFP_MARKUP || "2");
+const GAS_USD = parseFloat(process.env.PFP_GAS_USD || "0.02");
+const FEE_FLOOR_SOL = parseFloat(process.env.PFP_FEE_FLOOR_SOL || "0.003");
+const SOL_PRICE_FALLBACK = parseFloat(process.env.PFP_SOL_PRICE_FALLBACK || "80");
+const FEE_SOL_OVERRIDE = process.env.PFP_FEE_SOL ? parseFloat(process.env.PFP_FEE_SOL) : null;
+
+let _price = { usd: 0, at: 0 };
+async function solPriceUsd() {
+  if (_price.usd > 0 && Date.now() - _price.at < 5 * 60 * 1000) return _price.usd; // 5-min cache
+  const sources = [
+    ["https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd", (j) => j && j.solana && j.solana.usd],
+    ["https://price.jup.ag/v6/price?ids=SOL", (j) => j && j.data && j.data.SOL && j.data.SOL.price],
+  ];
+  for (const [url, pick] of sources) {
+    try {
+      const r = await fetch(url, { headers: { accept: "application/json" } });
+      if (!r.ok) continue;
+      const p = pick(await r.json());
+      if (p && p > 0) { _price = { usd: p, at: Date.now() }; return p; }
+    } catch (_) {}
+  }
+  return _price.usd || SOL_PRICE_FALLBACK;
+}
+async function computeFeeSol() {
+  if (FEE_SOL_OVERRIDE != null) return FEE_SOL_OVERRIDE;
+  const price = await solPriceUsd();
+  const usd = COST_USD * MARKUP + GAS_USD;
+  const sol = Math.max(usd / price, FEE_FLOOR_SOL);
+  return Math.ceil(sol * 1e6) / 1e6; // round up to whole micro-SOL
+}
 
 const usedSigs = new Set(); // best-effort replay guard (per warm instance)
 
@@ -48,8 +90,12 @@ async function verifyPayment(txSig) {
   const pre = tx.meta.preBalances || [], post = tx.meta.postBalances || [];
   const recv = (addr) => { const i = keys.indexOf(addr); return i < 0 ? 0 : Math.max(0, post[i] - pre[i]); };
   const total = recv(TREASURY) + recv(OVERHEAD);
-  const feeLamports = Math.round(FEE_SOL * 1e9);
-  if (total < feeLamports - 5000) return "underpaid";     // small tolerance
+  const feeSol = await computeFeeSol();
+  // Require at least 85% of the quoted fee. This absorbs SOL price drift between
+  // the client's quote and payment, while staying above our 1x generation cost,
+  // so a legit payer is never rejected and we never lose money on a sale.
+  const minLamports = Math.round(feeSol * 0.85 * 1e9);
+  if (total < minLamports) return "underpaid";
   usedSigs.add(txSig);
   return "ok";
 }
@@ -69,7 +115,10 @@ async function venice(prompt) {
 
 export default async function handler(req, res) {
   if (req.method === "GET") {
-    return res.status(200).json({ feeSol: FEE_SOL, treasury: TREASURY, overhead: OVERHEAD, model: MODEL });
+    const feeSol = await computeFeeSol();
+    const solPrice = await solPriceUsd();
+    const feeUsd = Math.round((COST_USD * MARKUP + GAS_USD) * 100) / 100;
+    return res.status(200).json({ feeSol, feeUsd, solPrice, treasury: TREASURY, overhead: OVERHEAD, model: MODEL });
   }
   if (req.method !== "POST") { res.setHeader("Allow", "GET, POST"); return res.status(405).json({ error: "method_not_allowed" }); }
 
