@@ -426,12 +426,15 @@ const watchNote = CFG.mint ? `mint=${CFG.mint}`
   : watchingNewTokens() ? `auto-detecting launch (creator=${CFG.creator || "-"}, symbol=${CFG.matchSymbol || "-"})`
   : "no mint — set TOKEN_MINT at launch";
 log(`CATBOY buy bot starting — token=${CFG.ticker} ${watchNote} minBuy=${CFG.minBuySol} SOL`);
-tgSendMessage(
-  `🐾 <b>${CFG.ticker} buy bot online.</b>\n` +
-  (CFG.mint
-    ? `Watching pump.fun + DexScreener for buys ≥ ${CFG.minBuySol} SOL.`
-    : watchingNewTokens()
-      ? `🕒 <b>Armed for launch.</b> The second it's live, DM me <code>/setmint &lt;CA&gt;</code> and I'll lock on + alert here. (I'll also DM you any $${CFG.ticker} launches I spot.)`
-      : `Waiting for the mint — set TOKEN_MINT at launch.`));
+if (CFG.mint) {
+  // Post-launch: fine to greet the group.
+  tgSendMessage(`🐾 <b>${CFG.ticker} buy bot online.</b>\nWatching pump.fun + DexScreener for buys ≥ ${CFG.minBuySol} SOL.`);
+} else {
+  // PRE-LAUNCH: stay completely silent in the public group — the launch is a
+  // secret. Only confirm privately to the owner that the bot is armed.
+  tgSendTo(CFG.notifyChatId,
+    `🐾 <b>${CFG.ticker} bot armed (private).</b>\nI'm watching quietly and will say nothing in the group until you go live.\n` +
+    `At launch, DM me <code>/setmint &lt;CA&gt;</code> and I'll lock on + announce to the group. (I'll also DM you any $${CFG.ticker} launches I spot.)`);
+}
 connect();
 pollUpdates(); // listen for /setmint and other owner commands
