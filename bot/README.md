@@ -49,13 +49,35 @@ pm2 logs catboy-buybot   # watch it
 ```
 When you `pm2 start`, the bot posts "buy bot online" to your chat so you know it's live.
 
-## 4. At launch (when you have the mint)
-Set the token address and reload — no redeploy needed:
+## 4. Launch day 🚀
+You have two ways to go live — pick one:
+
+**A) Auto-detect (recommended — you can't miss the open).** Before launch, set
+`CREATOR_WALLET` to the wallet that will create the token on pump.fun (and/or
+`MATCH_SYMBOL=CATBOY`). Optionally set `NOTIFY_CHAT_ID` to your personal chat.
+Start the bot now and walk away — the moment the token is created it will:
+1. DM you a priority **“BUY NOW”** ping with the pump.fun link (if `NOTIFY_CHAT_ID` set),
+2. post **“$CATBOY IS LIVE”** + the contract address + buy link to the group,
+3. flip on buy alerts automatically. No restart needed.
+
+```bash
+# .env before launch:
+#   CREATOR_WALLET=<the launching wallet>
+#   MATCH_SYMBOL=CATBOY
+#   NOTIFY_CHAT_ID=<your telegram user id>   (DM the bot + press Start first!)
+pm2 start ecosystem.config.cjs   # it posts "Armed for launch" and waits
+```
+
+**B) Manual.** Leave the auto-detect vars blank and just set the mint at launch:
 ```bash
 # edit .env -> TOKEN_MINT=<your pump.fun mint>
 pm2 restart catboy-buybot
 # (or, without editing files: export TOKEN_MINT=... then `kill -HUP <pid>`)
 ```
+
+> The bot can only DM you (`NOTIFY_CHAT_ID`) if you've opened a chat with it and
+> pressed **Start** — Telegram bots can't message you first. The group post
+> needs the bot added to @CatBoyOnSolana as an **admin**.
 
 ## Config reference (.env)
 | var | meaning |
@@ -71,6 +93,9 @@ pm2 restart catboy-buybot
 | `DEX_POLL_MS` | DexScreener poll interval (default 30000ms, min 15000) |
 | `ANNOUNCE_MIGRATION` | `1` announce graduation to a DEX, `0` off |
 | `MCAP_MILESTONES` | comma-separated USD milestones (blank to disable) |
+| `CREATOR_WALLET` | launching wallet — auto-detect the mint at creation |
+| `MATCH_SYMBOL` | fallback launch match by ticker (default CATBOY) |
+| `NOTIFY_CHAT_ID` | your DM chat for a priority “BUY NOW” launch ping |
 
 ## Notes
 - Works on the bonding curve (pre-graduation) via PumpPortal. After graduation to

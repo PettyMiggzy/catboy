@@ -46,6 +46,11 @@ const CFG = {
   announceMigration: (process.env.ANNOUNCE_MIGRATION ?? "1") !== "0",
   milestones: (process.env.MCAP_MILESTONES ?? "10000,25000,50000,100000,250000,500000,1000000")
     .split(",").map((s) => parseFloat(s.trim())).filter((n) => n > 0).sort((a, b) => a - b),
+  // Launch auto-detect: watch pump.fun's new-token stream and grab the mint the
+  // instant it's created — no manual TOKEN_MINT needed at launch.
+  creator: (process.env.CREATOR_WALLET || "").trim(), // the wallet that will create the token (most reliable match)
+  matchSymbol: (process.env.MATCH_SYMBOL || "").trim().toUpperCase(), // fallback match by ticker symbol
+  notifyChatId: (process.env.NOTIFY_CHAT_ID || "").trim(), // your personal chat for a priority "BUY NOW" ping
 };
 
 const API = `https://api.telegram.org/bot${CFG.token}`;
@@ -67,14 +72,16 @@ async function solPrice() {
 }
 
 // ---- Telegram senders ---------------------------------------------------
-async function tgSendMessage(text) {
+async function tgSendTo(chatId, text) {
+  if (!chatId) return;
   try {
     await fetch(`${API}/sendMessage`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: CFG.chatId, text, parse_mode: "HTML", disable_web_page_preview: true }),
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true }),
     });
-  } catch (e) { log("tgSendMessage error", e.message); }
+  } catch (e) { log("tgSend error", e.message); }
 }
+const tgSendMessage = (text) => tgSendTo(CFG.chatId, text);
 
 let _cachedFileId = null; // reuse the uploaded GIF so we only upload once
 async function tgSendBuy(caption) {
@@ -240,6 +247,46 @@ async function onBuy(t) {
   log(`BUY ${fmt(sol, 3)} SOL${usd ? " ($" + fmt(usd) + ")" : ""} by ${short(buyer)}`);
 }
 
+// ---- launch auto-detect -------------------------------------------------
+// When we don't yet have a mint but know the creator wallet (or ticker), watch
+// pump.fun's new-token firehose and grab the mint the instant it's created.
+const watchingNewTokens = () => !CFG.mint && (CFG.creator || CFG.matchSymbol);
+
+function matchesLaunch(t) {
+  const type = (t.txType || t.type || "").toLowerCase();
+  if (type && type !== "create") return false;
+  if (!t.mint) return false;
+  if (CFG.creator) {
+    const c = (t.traderPublicKey || t.creator || t.trader || "").trim();
+    if (c && c === CFG.creator) return true;
+    if (!CFG.matchSymbol) return false; // creator set but didn't match — not ours
+  }
+  if (CFG.matchSymbol) {
+    const sym = (t.symbol || t.ticker || "").trim().toUpperCase();
+    return sym === CFG.matchSymbol;
+  }
+  return false;
+}
+
+async function onLaunchDetected(t) {
+  CFG.mint = t.mint;
+  log("🚀 LAUNCH DETECTED — mint =", CFG.mint);
+  try { ws.send(JSON.stringify({ method: "unsubscribeNewToken" })); } catch {}
+  try { ws.send(JSON.stringify({ method: "subscribeTokenTrade", keys: [CFG.mint] })); } catch {}
+  resetDexState();
+  const buy = `https://pump.fun/coin/${CFG.mint}`;
+  // priority ping to your personal chat first (so you can ape in immediately)
+  if (CFG.notifyChatId) {
+    await tgSendTo(CFG.notifyChatId,
+      `🚨🚀 <b>${CFG.ticker} JUST LAUNCHED — BUY NOW</b> 🚀🚨\n` +
+      `<code>${CFG.mint}</code>\n<a href="${buy}">👉 BUY on Pump.fun</a>`);
+  }
+  await tgSendMessage(
+    `🚨🚀 <b>${CFG.ticker} IS LIVE ON PUMP.FUN!</b> 🚀🚨\n\nCA: <code>${CFG.mint}</code>\n\n` +
+    `<a href="${buy}">🟢 BUY NOW</a> · <a href="${chartUrl()}">📊 Chart</a> · <a href="${CFG.site}">🌐 Website</a>\n\nLFG 🐾`);
+  refreshDex().catch((e) => log("dex refresh error", e.message));
+}
+
 // ---- PumpPortal WebSocket (auto-reconnect) ------------------------------
 const seen = new Set(); // signature dedupe
 let ws, backoff = 1000;
@@ -250,17 +297,30 @@ function connect() {
 
   ws.on("open", () => {
     backoff = 1000;
-    log("connected. subscribing to token trades:", CFG.mint || "(no mint set)");
-    if (CFG.mint) ws.send(JSON.stringify({ method: "subscribeTokenTrade", keys: [CFG.mint] }));
+    if (CFG.mint) {
+      log("connected. subscribing to token trades:", CFG.mint);
+      ws.send(JSON.stringify({ method: "subscribeTokenTrade", keys: [CFG.mint] }));
+    } else if (watchingNewTokens()) {
+      log("connected. WATCHING FOR LAUNCH — creator:", CFG.creator || "(none)", "symbol:", CFG.matchSymbol || "(none)");
+      ws.send(JSON.stringify({ method: "subscribeNewToken" }));
+    } else {
+      log("connected. no mint set and no creator/symbol to watch — set TOKEN_MINT at launch.");
+    }
   });
 
   ws.on("message", async (data) => {
     let msg;
     try { msg = JSON.parse(data.toString()); } catch { return; }
     if (msg.message || msg.errors) return; // subscription ack / errors
-    const trades = Array.isArray(msg) ? msg : [msg];
-    for (const t of trades) {
-      if (!t || t.mint !== CFG.mint) continue;
+    const events = Array.isArray(msg) ? msg : [msg];
+    for (const t of events) {
+      if (!t) continue;
+      // launch detection (only while we don't have a mint yet)
+      if (!CFG.mint && watchingNewTokens() && matchesLaunch(t)) {
+        await onLaunchDetected(t).catch((e) => log("onLaunch error", e.message));
+        continue;
+      }
+      if (t.mint !== CFG.mint) continue;
       const type = (t.txType || t.type || "").toLowerCase();
       if (type !== "buy") continue;
       if (t.signature && seen.has(t.signature)) continue;
@@ -277,14 +337,17 @@ function scheduleReconnect() {
   backoff = Math.min(backoff * 2, 30000);
 }
 
-// allow changing the mint at runtime without a redeploy: TOKEN_MINT via SIGHUP reload
+// allow changing config at runtime without a redeploy: SIGHUP reloads .env
 process.on("SIGHUP", async () => {
   await loadEnv();
   const next = process.env.TOKEN_MINT || CFG.mint;
   if (next !== CFG.mint) { resetDexState(); seen.clear(); } // new token — start its lifecycle fresh
   CFG.mint = next;
-  log("reloaded env; mint =", CFG.mint);
-  try { ws.close(); } catch {}
+  CFG.creator = (process.env.CREATOR_WALLET || CFG.creator).trim();
+  CFG.matchSymbol = (process.env.MATCH_SYMBOL || CFG.matchSymbol).trim().toUpperCase();
+  CFG.notifyChatId = (process.env.NOTIFY_CHAT_ID || CFG.notifyChatId).trim();
+  log("reloaded env; mint =", CFG.mint || "(unset)");
+  try { ws.close(); } catch {} // reconnect picks the right subscription
   refreshDex().catch((e) => log("dex refresh error", e.message));
 });
 
@@ -292,6 +355,15 @@ process.on("SIGHUP", async () => {
 if (CFG.mint) refreshDex().catch((e) => log("dex refresh error", e.message));
 setInterval(() => { if (CFG.mint) refreshDex().catch((e) => log("dex refresh error", e.message)); }, CFG.dexPollMs);
 
-log(`CATBOY buy bot starting — token=${CFG.ticker} mint=${CFG.mint || "(unset)"} minBuy=${CFG.minBuySol} SOL`);
-tgSendMessage(`🐾 <b>${CFG.ticker} buy bot online.</b>\nWatching pump.fun + DexScreener for buys ≥ ${CFG.minBuySol} SOL.`);
+const watchNote = CFG.mint ? `mint=${CFG.mint}`
+  : watchingNewTokens() ? `auto-detecting launch (creator=${CFG.creator || "-"}, symbol=${CFG.matchSymbol || "-"})`
+  : "no mint — set TOKEN_MINT at launch";
+log(`CATBOY buy bot starting — token=${CFG.ticker} ${watchNote} minBuy=${CFG.minBuySol} SOL`);
+tgSendMessage(
+  `🐾 <b>${CFG.ticker} buy bot online.</b>\n` +
+  (CFG.mint
+    ? `Watching pump.fun + DexScreener for buys ≥ ${CFG.minBuySol} SOL.`
+    : watchingNewTokens()
+      ? `🕒 <b>Armed for launch</b> — I'll auto-detect the token the moment it's created and ping the buy link here.`
+      : `Waiting for the mint — set TOKEN_MINT at launch.`));
 connect();
