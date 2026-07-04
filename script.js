@@ -47,10 +47,11 @@ const CONFIG = {
     if (tryPlay && tryPlay.catch) tryPlay.catch(() => {}); // autoplay may be blocked; user can skip
   }
   if (skip) skip.addEventListener("click", dismiss);
-  // The splash video runs ~6.25s (original Catboy -> dissolve -> NFT crew on the
-  // CATBOY letters). Reveal the site right after it ends; 'ended' normally wins,
-  // this is the fallback if autoplay is blocked (Enter is always available).
-  setTimeout(dismiss, 6600);
+  // The splash video runs ~9.2s (original Catboy animated -> dissolve -> NFT crew
+  // on the neon CATBOY letters). Reveal the site right after it ends; 'ended'
+  // normally wins, this is the fallback if autoplay is blocked (Enter is always
+  // available meanwhile).
+  setTimeout(dismiss, 9500);
 })();
 
 // ----- Footer year -----
