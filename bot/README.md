@@ -1,10 +1,21 @@
 # CATBOY Buy Bot 🐾
 
 Real-time **pump.fun buy alerts** to your Telegram, powered by PumpPortal's free
-WebSocket. No paid API. Node 18+. Built to run on your DigitalOcean droplet.
+WebSocket + DexScreener. No paid API. Node 18+. Built to run on your DigitalOcean droplet.
 
 Each buy over your threshold posts the buy GIF + amount (SOL & USD), tokens
 received, market cap, buyer, and quick links (TX / Pump.fun / Chart / Website).
+
+**Covers the whole launch lifecycle:**
+- **Bonding curve** buys stream live from PumpPortal the moment you set the mint.
+- **DexScreener** is polled for accurate USD price & market cap (used in every alert).
+- Auto-announces **📈 "chart is LIVE"** the instant DexScreener indexes the token.
+- Auto-announces **🎓 "GRADUATED"** when it migrates to Raydium/PumpSwap/etc.
+- Posts **🎯 market-cap milestone** hype ($10k → $25k → $50k → $100k → …).
+- Post-graduation trades keep streaming (PumpPortal covers PumpSwap/Raydium too).
+
+All lifecycle alerts are edge-triggered and primed on first poll, so restarting
+the bot mid-run never re-spams events that already happened.
 
 ---
 
@@ -57,10 +68,16 @@ pm2 restart catboy-buybot
 | `BUY_EMOJI` / `EMOJI_STEP_SOL` / `EMOJI_MAX` | the buy bar |
 | `BUY_MEDIA` | local path (`media/buy.gif`) or an https URL |
 | `SITE_URL` | website link in alerts |
+| `DEX_POLL_MS` | DexScreener poll interval (default 30000ms, min 15000) |
+| `ANNOUNCE_MIGRATION` | `1` announce graduation to a DEX, `0` off |
+| `MCAP_MILESTONES` | comma-separated USD milestones (blank to disable) |
 
 ## Notes
 - Works on the bonding curve (pre-graduation) via PumpPortal. After graduation to
-  Raydium, PumpPortal still streams trades for the same mint.
+  Raydium/PumpSwap, PumpPortal still streams trades for the same mint.
+- DexScreener has no public per-trade stream, so it enriches alerts (price/mcap)
+  and drives the chart-live / graduation / milestone announcements — the actual
+  per-buy feed is always PumpPortal.
 - The GIF is uploaded once, then reused by Telegram `file_id` (fast, no re-upload).
 - Alternative to pm2: a `systemd` service — ask and I'll drop in a unit file.
 

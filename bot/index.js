@@ -40,6 +40,12 @@ const CFG = {
   site: process.env.SITE_URL || "https://www.catboyonsol.fun",
   emojiStepSol: parseFloat(process.env.EMOJI_STEP_SOL || "0.1"), // one emoji per this many SOL
   emojiMax: parseInt(process.env.EMOJI_MAX || "96", 10),
+  // DexScreener: real price/mcap + "chart live" / "graduated" / milestone alerts
+  dexApi: process.env.DEXSCREENER_API || "https://api.dexscreener.com/latest/dex/tokens/",
+  dexPollMs: Math.max(15000, parseInt(process.env.DEX_POLL_MS || "30000", 10)),
+  announceMigration: (process.env.ANNOUNCE_MIGRATION ?? "1") !== "0",
+  milestones: (process.env.MCAP_MILESTONES ?? "10000,25000,50000,100000,250000,500000,1000000")
+    .split(",").map((s) => parseFloat(s.trim())).filter((n) => n > 0).sort((a, b) => a - b),
 };
 
 const API = `https://api.telegram.org/bot${CFG.token}`;
@@ -110,6 +116,96 @@ function emojiBar(sol) {
   const n = Math.max(3, Math.min(CFG.emojiMax, Math.round(sol / CFG.emojiStepSol)));
   return CFG.emoji.repeat(n);
 }
+const usd0 = (n) => "$" + fmt(n, 0);
+function chartUrl() { return dex.pairUrl || `https://dexscreener.com/solana/${CFG.mint}`; }
+
+// ---- DexScreener (real price/mcap + chart-live / graduation / milestones) --
+// PumpPortal is the live per-trade feed (bonding curve AND post-graduation).
+// DexScreener is polled for accurate USD numbers and lifecycle events. It has
+// no public per-trade stream, so it enriches — it doesn't replace — the WS feed.
+const MAJOR_DEXES = new Set(["raydium", "raydium-clmm", "pumpswap", "meteora", "orca", "fluxbeam"]);
+let dex = { at: 0, priceUsd: 0, marketCap: 0, liqUsd: 0, vol24: 0, pairUrl: "", dexId: "", pairs: 0 };
+let dexPrimed = false, dexLiveAnnounced = false, migratedAnnounced = false;
+let milestonesHit = new Set();
+
+function resetDexState() {
+  dex = { at: 0, priceUsd: 0, marketCap: 0, liqUsd: 0, vol24: 0, pairUrl: "", dexId: "", pairs: 0 };
+  dexPrimed = false; dexLiveAnnounced = false; migratedAnnounced = false; milestonesHit = new Set();
+}
+
+async function refreshDex() {
+  if (!CFG.mint) return dex;
+  let pairs = [];
+  try {
+    const r = await fetch(CFG.dexApi + CFG.mint, { headers: { accept: "application/json" } });
+    if (r.ok) {
+      const j = await r.json();
+      pairs = Array.isArray(j?.pairs) ? j.pairs.filter((p) => p?.chainId === "solana") : [];
+    }
+  } catch (e) { log("dex refresh error", e.message); return dex; }
+
+  if (pairs.length) {
+    pairs.sort((a, b) => (b?.liquidity?.usd || 0) - (a?.liquidity?.usd || 0)); // best = deepest liquidity
+    const p = pairs[0];
+    dex = {
+      at: Date.now(),
+      priceUsd: Number(p.priceUsd) || 0,
+      marketCap: Number(p.marketCap || p.fdv) || 0,
+      liqUsd: Number(p?.liquidity?.usd) || 0,
+      vol24: Number(p?.volume?.h24) || 0,
+      pairUrl: p.url || "",
+      dexId: (p.dexId || "").toLowerCase(),
+      pairs: pairs.length,
+    };
+  } else {
+    dex.at = Date.now();
+  }
+  const majorPair = pairs.find((p) => MAJOR_DEXES.has((p.dexId || "").toLowerCase()));
+
+  // First successful poll = prime silently to current state, so a restart mid-run
+  // never re-fires "chart live"/graduation/milestones for events already in the past.
+  if (!dexPrimed) {
+    dexPrimed = true;
+    if (dex.priceUsd > 0) dexLiveAnnounced = true;
+    if (majorPair) migratedAnnounced = true;
+    for (const m of CFG.milestones) if (dex.marketCap >= m) milestonesHit.add(m);
+    log(`dex primed — live=${dexLiveAnnounced} mcap=${dex.marketCap ? usd0(dex.marketCap) : "n/a"} on=${majorPair ? majorPair.dexId : "bonding"}`);
+    return dex;
+  }
+
+  // Edge-triggered launch events -------------------------------------------
+  if (!dexLiveAnnounced && dex.priceUsd > 0) {
+    dexLiveAnnounced = true;
+    tgSendMessage(
+      `📈 <b>${CFG.ticker} chart is LIVE on DexScreener!</b>\n` +
+      `Price <b>$${fmt(dex.priceUsd, 6)}</b>${dex.marketCap ? ` · MC <b>${usd0(dex.marketCap)}</b>` : ""}\n` +
+      `<a href="${chartUrl()}">📊 Chart</a> · <a href="https://pump.fun/coin/${CFG.mint}">Pump.fun</a> · <a href="${CFG.site}">Website</a>`
+    );
+    log("announced: chart live");
+  }
+  if (CFG.announceMigration && !migratedAnnounced && majorPair) {
+    migratedAnnounced = true;
+    const name = (majorPair.dexId || "a DEX").replace(/-clmm$/, "").toUpperCase();
+    tgSendMessage(
+      `🎓🚀 <b>${CFG.ticker} HAS GRADUATED!</b>\nNow trading on <b>${name}</b>.${dex.liqUsd ? ` Liquidity <b>${usd0(dex.liqUsd)}</b>.` : ""}\n` +
+      `<a href="${majorPair.url || chartUrl()}">📊 Chart</a> · <a href="${CFG.site}">Website</a>`
+    );
+    log("announced: graduation to", majorPair.dexId);
+  }
+  if (dex.marketCap > 0) {
+    for (const m of CFG.milestones) {
+      if (dex.marketCap >= m && !milestonesHit.has(m)) {
+        milestonesHit.add(m);
+        tgSendMessage(
+          `🎯🔥 <b>${CFG.ticker} just crossed ${usd0(m)} market cap!</b>\n` +
+          `Now at <b>${usd0(dex.marketCap)}</b>. Keep raiding. 🐾\n<a href="${chartUrl()}">📊 Chart</a>`
+        );
+        log("announced: milestone", usd0(m));
+      }
+    }
+  }
+  return dex;
+}
 
 async function onBuy(t) {
   const sol = Number(t.solAmount ?? t.sol_amount ?? 0);
@@ -119,8 +215,9 @@ async function onBuy(t) {
   const buyer = t.traderPublicKey || t.trader || t.owner || "";
   const sig = t.signature || "";
   const px = await solPrice();
-  const usd = px ? sol * px : 0;
-  const mcUsd = px && mcSol ? mcSol * px : 0;
+  // Prefer DexScreener's live USD numbers; fall back to SOL-price math.
+  const usd = px ? sol * px : (dex.priceUsd && tokens ? dex.priceUsd * tokens : 0);
+  const mcUsd = dex.marketCap || (px && mcSol ? mcSol * px : 0);
   const isNew = (t.newTokenBalance != null && tokens && Math.abs(Number(t.newTokenBalance) - tokens) < 1);
 
   const lines = [];
@@ -129,12 +226,13 @@ async function onBuy(t) {
   lines.push("");
   lines.push(`💵 <b>${fmt(sol, 3)} SOL</b>${usd ? ` ($${fmt(usd)})` : ""}`);
   if (tokens) lines.push(`🪙 Got <b>${fmt(tokens, 0)} ${CFG.ticker}</b>`);
-  if (mcSol) lines.push(`📊 Market Cap: <b>${mcUsd ? "$" + fmt(mcUsd) : fmt(mcSol, 1) + " SOL"}</b>`);
+  if (mcUsd) lines.push(`📊 Market Cap: <b>$${fmt(mcUsd)}</b>`);
+  else if (mcSol) lines.push(`📊 Market Cap: <b>${fmt(mcSol, 1)} SOL</b>`);
   if (buyer) lines.push(`👤 <a href="https://solscan.io/account/${buyer}">${short(buyer)}</a>${isNew ? " · new holder" : ""}`);
   const links = [];
   if (sig) links.push(`<a href="https://solscan.io/tx/${sig}">TX</a>`);
   if (CFG.mint) links.push(`<a href="https://pump.fun/coin/${CFG.mint}">Pump.fun</a>`);
-  if (CFG.mint) links.push(`<a href="https://dexscreener.com/solana/${CFG.mint}">Chart</a>`);
+  if (CFG.mint) links.push(`<a href="${chartUrl()}">Chart</a>`);
   links.push(`<a href="${CFG.site}">Website</a>`);
   lines.push(links.join(" · "));
 
@@ -180,8 +278,20 @@ function scheduleReconnect() {
 }
 
 // allow changing the mint at runtime without a redeploy: TOKEN_MINT via SIGHUP reload
-process.on("SIGHUP", async () => { await loadEnv(); CFG.mint = process.env.TOKEN_MINT || CFG.mint; log("reloaded env; mint =", CFG.mint); try { ws.close(); } catch {} });
+process.on("SIGHUP", async () => {
+  await loadEnv();
+  const next = process.env.TOKEN_MINT || CFG.mint;
+  if (next !== CFG.mint) { resetDexState(); seen.clear(); } // new token — start its lifecycle fresh
+  CFG.mint = next;
+  log("reloaded env; mint =", CFG.mint);
+  try { ws.close(); } catch {}
+  refreshDex().catch((e) => log("dex refresh error", e.message));
+});
+
+// ---- DexScreener poll loop ----------------------------------------------
+if (CFG.mint) refreshDex().catch((e) => log("dex refresh error", e.message));
+setInterval(() => { if (CFG.mint) refreshDex().catch((e) => log("dex refresh error", e.message)); }, CFG.dexPollMs);
 
 log(`CATBOY buy bot starting — token=${CFG.ticker} mint=${CFG.mint || "(unset)"} minBuy=${CFG.minBuySol} SOL`);
-tgSendMessage(`🐾 <b>${CFG.ticker} buy bot online.</b> Watching for buys ≥ ${CFG.minBuySol} SOL.`);
+tgSendMessage(`🐾 <b>${CFG.ticker} buy bot online.</b>\nWatching pump.fun + DexScreener for buys ≥ ${CFG.minBuySol} SOL.`);
 connect();
