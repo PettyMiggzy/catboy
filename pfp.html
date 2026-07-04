@@ -110,29 +110,69 @@
       tx.recentBlockhash = (await conn.getLatestBlockhash()).blockhash;
       const res = await p.signAndSendTransaction(tx);
       const signature = res && res.signature ? res.signature : res;
-      await conn.confirmTransaction(signature, "confirmed");
+      // Poll the signature status ourselves instead of conn.confirmTransaction —
+      // that helper hard-fails at ~30s on a congested network even when the tx
+      // actually lands. We wait up to ~90s and only throw on an explicit on-chain
+      // error; a timeout is non-fatal because the server re-verifies on-chain.
+      await waitConfirmed(conn, signature);
       return signature;
     }
 
+    async function waitConfirmed(conn, signature, timeoutMs = 90000) {
+      const start = Date.now();
+      while (Date.now() - start < timeoutMs) {
+        try {
+          const { value } = await conn.getSignatureStatuses([signature], { searchTransactionHistory: true });
+          const s = value && value[0];
+          if (s) {
+            if (s.err) throw new Error("Transaction failed on-chain.");
+            if (s.confirmationStatus === "confirmed" || s.confirmationStatus === "finalized") return true;
+          }
+        } catch (e) { if (/failed on-chain/.test(e.message || "")) throw e; }
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+      return false; // not confirmed in time — let the server be the source of truth
+    }
+
+    async function generate(prompt, txSig) {
+      let lastErr = "generation failed";
+      for (let attempt = 0; attempt < 4; attempt++) {
+        const r = await fetch("/api/pfp", { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt, txSig }) });
+        const d = await r.json().catch(() => ({}));
+        if (r.ok && d.image) return d;
+        lastErr = (d && d.error) || ("http_" + r.status);
+        // The tx may not have propagated to the server's RPC yet — back off and retry.
+        if (/tx_not_found/i.test(lastErr) && attempt < 3) { await new Promise((r) => setTimeout(r, 3500)); continue; }
+        break;
+      }
+      throw new Error(lastErr);
+    }
+
+    let paidSig = null; // keep a successful payment so a retry never charges twice
     $("pfpGo").addEventListener("click", async () => {
       const prompt = $("pfpPrompt").value.trim();
       if (!prompt) { st("Describe your PFP first.", true); return; }
       $("pfpGo").disabled = true;
       try {
-        st("Approve the " + CFG.feeSol + " SOL fee in your wallet…");
-        const txSig = await payFee();
+        let txSig = paidSig;
+        if (!txSig) {
+          st("Approve the " + CFG.feeSol + " SOL fee in your wallet…");
+          txSig = await payFee();
+          paidSig = txSig; // paid — remember it in case generation needs a retry
+        }
         st("Paid ✓ — generating your PFP with the top model (this takes ~10–20s)…");
         $("pfpCanvas").classList.add("loading");
-        const r = await fetch("/api/pfp", { method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ prompt, txSig }) });
-        const d = await r.json();
-        if (!r.ok || !d.image) throw new Error((d && d.error) || "generation failed");
+        const d = await generate(prompt, txSig);
         const url = "data:image/png;base64," + d.image;
         $("pfpCanvas").innerHTML = '<img src="' + url + '" alt="Your PFP">';
         const dl = $("pfpDownload"); dl.href = url; dl.hidden = false;
         st("Done! Your PFP is ready — download it below. 🐾");
+        paidSig = null; // consumed
       } catch (e) {
-        st("Failed: " + (e.message || e), true);
+        const msg = (e && e.message) || String(e);
+        if (paidSig) st("Payment went through, but generating didn't finish (" + msg + "). Click Generate again — you won't be charged twice.", true);
+        else st("Failed: " + msg, true);
       } finally {
         $("pfpGo").disabled = false; $("pfpCanvas").classList.remove("loading");
       }

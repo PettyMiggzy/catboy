@@ -111,10 +111,10 @@ async function verifyPayment(txSig) {
   // 'finalized' (~13s later) and would miss it, so query at 'confirmed' and
   // retry briefly to absorb RPC propagation lag.
   let tx = null;
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < 8; i++) {
     tx = await rpc("getTransaction", [txSig, { commitment: "confirmed", maxSupportedTransactionVersion: 0, encoding: "jsonParsed" }]);
     if (tx) break;
-    await new Promise((r) => setTimeout(r, 1500));
+    await new Promise((r) => setTimeout(r, 2000));
   }
   if (!tx) return "tx_not_found";
   if (tx.meta && tx.meta.err) return "tx_failed";
