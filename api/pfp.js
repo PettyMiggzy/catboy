@@ -2,7 +2,7 @@
 //
 // The Venice API key NEVER ships to the browser. The flow:
 //   1) GET  /api/pfp            -> { feeSol, treasury, overhead, model }
-//   2) client pays feeSol, split 90/10 to treasury/overhead (one tx)
+//   2) client pays the full feeSol to the ops/overhead wallet (one tx, no split)
 //   3) POST /api/pfp { prompt, txSig } -> verifies the on-chain payment, then
 //      calls Venice with the top model and returns { image: <base64 png> }
 //
@@ -30,6 +30,13 @@ const TREASURY = process.env.PFP_TREASURY || "3DHwgk2T3tGxQRfD3p897eq1UV9rwvw1JN
 const OVERHEAD = process.env.PFP_OVERHEAD || "EK8YS2haXFtKJ61phggC39m9RAG16B3NMx59uyMkP1PC"; // 10% ops
 const MODEL = process.env.PFP_MODEL || "nano-banana-pro";
 const MAX_TX_AGE_S = 15 * 60;
+
+// Every PFP stays on-brand: Catboy is always the reference character, and the
+// user's prompt is treated as customization (outfit / theme / background) on top.
+// (Venice's image endpoint can't take a reference image, so we anchor identity
+// in the prompt.) Tunable via PFP_CHARACTER.
+const CHARACTER = process.env.PFP_CHARACTER ||
+  "The character is CATBOY, the mascot — a young male anime hero with spiky blonde hair, black cat ears, a long black cat tail, and glowing cyan cat-like eyes, in a neon cyberpunk Solana aesthetic. Always keep these Catboy features recognizable.";
 
 // --- Dynamic pricing: cover cost to generate + gas, then charge double so we profit.
 const COST_USD = parseFloat(process.env.PFP_COST_USD || "0.18");
@@ -89,7 +96,7 @@ async function verifyPayment(txSig) {
   const keys = (tx.transaction.message.accountKeys || []).map((k) => (typeof k === "string" ? k : k.pubkey));
   const pre = tx.meta.preBalances || [], post = tx.meta.postBalances || [];
   const recv = (addr) => { const i = keys.indexOf(addr); return i < 0 ? 0 : Math.max(0, post[i] - pre[i]); };
-  const total = recv(TREASURY) + recv(OVERHEAD);
+  const total = recv(OVERHEAD); // full fee to the ops wallet (no split)
   const feeSol = await computeFeeSol();
   // Require at least 85% of the quoted fee. This absorbs SOL price drift between
   // the client's quote and payment, while staying above our 1x generation cost,
@@ -132,8 +139,9 @@ export default async function handler(req, res) {
     const v = await verifyPayment(txSig);
     if (v !== "ok") return res.status(402).json({ error: "payment_" + v });
 
-    // style guardrails: keep it a clean, high-quality PFP
-    const full = prompt + ". High quality profile picture, clean square PFP, centered portrait, detailed, vibrant, safe for work, no text, no watermark.";
+    // Anchor the Catboy identity, then apply the user's prompt as customization.
+    const full = CHARACTER + " Customization: " + prompt +
+      ". High quality anime profile picture, clean square PFP, centered head-and-shoulders portrait, detailed, vibrant neon lighting, safe for work, no text, no watermark.";
     const image = await venice(full);
     return res.status(200).json({ image, model: MODEL });
   } catch (e) {

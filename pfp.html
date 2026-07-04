@@ -29,15 +29,15 @@
     <div class="page-hero-inner">
       <span class="eyebrow" style="display:block;margin-top:1rem;">AI · Powered by the top model</span>
       <h1>PFP <span class="grad">Generator</span></h1>
-      <p>Describe your dream profile picture, pay a small SOL fee, and the Catboy AI forges it with the best image model available. Every generation funds the treasury.</p>
+      <p>Every PFP is a <b>Catboy</b> — you customize the outfit, theme, and vibe. Describe your style, pay a small SOL fee, and the Catboy AI forges your one-of-a-kind Catboy with the best image model available.</p>
     </div>
   </section>
 
   <section class="section" style="padding-top:1rem;">
     <div class="pfp-shell">
       <div class="pfp-controls">
-        <label class="pfp-label">Describe your PFP</label>
-        <textarea id="pfpPrompt" class="pfp-input" rows="3" maxlength="500" placeholder="e.g. a cool anime catboy with neon cyberpunk armor, glowing cyan eyes, city at night"></textarea>
+        <label class="pfp-label">Customize your Catboy</label>
+        <textarea id="pfpPrompt" class="pfp-input" rows="3" maxlength="500" placeholder="e.g. gold samurai armor, cherry blossoms, sunset city — the Catboy stays, you set the style"></textarea>
         <div class="pfp-presets" id="pfpPresets">
           <button type="button" data-add="anime catboy with cat ears, blonde spiky hair, glowing cyan eyes">🐱 Catboy</button>
           <button type="button" data-add="cyberpunk neon style, city at night">🌆 Cyberpunk</button>
@@ -47,7 +47,7 @@
           <button type="button" data-add="pixel art retro style">🕹️ Pixel</button>
         </div>
         <div class="pfp-payline">
-          <span class="pfp-fee">Fee: <b id="pfpFee">…</b> <span class="muted-note" style="margin:0;">· 90% treasury / 10% ops</span></span>
+          <span class="pfp-fee">Fee: <b id="pfpFee">…</b></span>
           <button class="btn btn-primary" id="pfpGo" type="button">Generate</button>
         </div>
         <p class="form-status" id="pfpStatus" role="status" aria-live="polite"></p>
@@ -100,9 +100,10 @@
       const { transactionBuilder, publicKey, lamports } = await import("https://esm.sh/@metaplex-foundation/umi@0.9.2");
       const { transferSol } = await import("https://esm.sh/@metaplex-foundation/mpl-toolbox@0.9.4");
       const umi = createUmi(location.origin + ((window.CATBOY_MINT && window.CATBOY_MINT.rpc) || "/api/solrpc")).use(walletAdapterIdentity(p));
-      const legs = window.CATBOY_PAY.splitSol(CFG.feeSol); // 90/10
-      let tx = transactionBuilder();
-      legs.forEach((l) => { if (l.lamports > 0) tx = tx.add(transferSol(umi, { destination: publicKey(l.to), amount: lamports(l.lamports) })); });
+      // Full fee to a single wallet (no split) — the ops/overhead wallet.
+      const dest = CFG.overhead || CFG.treasury;
+      const lam = Math.round(CFG.feeSol * 1e9);
+      const tx = transactionBuilder().add(transferSol(umi, { destination: publicKey(dest), amount: lamports(lam) }));
       const res = await tx.sendAndConfirm(umi);
       // umi returns signature bytes; base58-encode
       const sig = res.signature;
