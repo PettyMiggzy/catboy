@@ -1,0 +1,17 @@
+{
+  "name": "catboy-buybot",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "CATBOY pump.fun Telegram buy bot — real-time buy alerts via PumpPortal.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
