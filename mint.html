@@ -288,7 +288,7 @@
           status.style.color = "var(--muted)"; status.textContent = "Approve the " + sel.priceSol + " SOL for " + sel.name + "…";
           const web3 = await import("https://esm.sh/@solana/web3.js@1.95.3");
           const conn = new web3.Connection(location.origin + (C.rpc || "/api/solrpc"), "confirmed");
-          const tx = new web3.Transaction().add(web3.SystemProgram.transfer({ fromPubkey: new web3.PublicKey(from), toPubkey: new web3.PublicKey(cfg.payTo), lamports: Math.round(sel.priceSol * 1e9) }));
+          const tx = new web3.Transaction().add(web3.SystemProgram.transfer({ fromPubkey: new web3.PublicKey(from), toPubkey: new web3.PublicKey(String(cfg.payTo).trim()), lamports: Math.round(sel.priceSol * 1e9) }));
           tx.feePayer = new web3.PublicKey(from);
           tx.recentBlockhash = (await conn.getLatestBlockhash()).blockhash;
           const res = await p.signAndSendTransaction(tx);

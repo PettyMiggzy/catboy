@@ -35,11 +35,11 @@ import { create, fetchCollection, mplCore } from "@metaplex-foundation/mpl-core"
 
 export const config = { maxDuration: 60 };
 
-const CONN = process.env.DATABASE_URL || process.env.POSTGRES_URL || "";
-const RPC = process.env.SOLANA_RPC || "";
-const MINT_WALLET = process.env.NFT_MINT_WALLET || "";
-const COLLECTION = process.env.NFT_COLLECTION || "";
-const MINT_SECRET = process.env.NFT_MINT_SECRET || "";
+const CONN = (process.env.DATABASE_URL || process.env.POSTGRES_URL || "").trim();
+const RPC = (process.env.SOLANA_RPC || "").trim();
+const MINT_WALLET = (process.env.NFT_MINT_WALLET || "").trim();
+const COLLECTION = (process.env.NFT_COLLECTION || "").trim();
+const MINT_SECRET = (process.env.NFT_MINT_SECRET || "").trim();
 const MAX_TX_AGE_S = 20 * 60;
 const PRICE_TOLERANCE = 0.97; // accept >=97% of quoted price (absorbs SOL drift)
 
