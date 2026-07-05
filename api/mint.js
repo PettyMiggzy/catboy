@@ -47,11 +47,14 @@ const PRICE_TOLERANCE = 0.97; // accept >=97% of quoted price (absorbs SOL drift
 // Single flat-price random mint: odds are proportional to supply, so every one
 // of the 100 Catboys is equally likely (a true random pull).
 const PACKS = {
-  random: { name: "Random Catboy", priceSol: 1, odds: { Common: 60, Rare: 25, Epic: 12, Legendary: 3 } },
-  // legacy pack ids kept as aliases so old links / the casino don't 400
-  alley:     { name: "Random Catboy", priceSol: 1, odds: { Common: 60, Rare: 25, Epic: 12, Legendary: 3 } },
-  ninelives: { name: "Random Catboy", priceSol: 1, odds: { Common: 60, Rare: 25, Epic: 12, Legendary: 3 } },
-  alpha:     { name: "Random Catboy", priceSol: 1, odds: { Common: 60, Rare: 25, Epic: 12, Legendary: 3 } },
+  standard: { name: "Standard Pack", priceSol: 1,    odds: { Common: 65, Rare: 24, Epic: 9,  Legendary: 2 } },
+  rare:     { name: "Rare Pack",     priceSol: 1.25, odds: { Common: 45, Rare: 35, Epic: 16, Legendary: 4 } },
+  elite:    { name: "Elite Pack",    priceSol: 1.5,  odds: { Common: 25, Rare: 40, Epic: 27, Legendary: 8 } },
+  // legacy pack ids kept as aliases (= Standard) so old links / the casino don't 400
+  random:    { name: "Standard Pack", priceSol: 1, odds: { Common: 65, Rare: 24, Epic: 9, Legendary: 2 } },
+  alley:     { name: "Standard Pack", priceSol: 1, odds: { Common: 65, Rare: 24, Epic: 9, Legendary: 2 } },
+  ninelives: { name: "Standard Pack", priceSol: 1, odds: { Common: 65, Rare: 24, Epic: 9, Legendary: 2 } },
+  alpha:     { name: "Standard Pack", priceSol: 1, odds: { Common: 65, Rare: 24, Epic: 9, Legendary: 2 } },
 };
 
 const B58 = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;

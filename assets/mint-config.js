@@ -1,19 +1,30 @@
 /* CATBOY mint config — flip enabled:true at launch (see MINT.md).
    Minting runs through our own /api/mint (Metaplex Core, server-side): it
-   verifies payment on-chain and enforces the odds. The mint wallet, price and
-   odds are authoritative on the SERVER (api/mint.js); fields here are UI. */
+   verifies payment on-chain and enforces the odds. Price and odds are
+   authoritative on the SERVER (api/mint.js); fields here are UI only. */
 window.CATBOY_MINT = {
   enabled: true,             // LIVE — /api/mint configured + collection on mainnet
   rpc: "/api/solrpc",        // same-origin RPC proxy (already live)
   total: 100,                // collection size (display)
   collectionMint: "33kxQv4Jo7u9edC4RipZckwkpRRdxg863b6cw2UGfh6S", // Core collection — holder verify + perks
 
-  // Single flat-price random mint. MUST match the server PACKS in api/mint.js.
+  // Tiered foil packs — pay more, better odds of a rare pull. Every pack mints a
+  // random Catboy straight to your wallet. MUST match server PACKS in api/mint.js.
   packs: [
     {
-      id: "random", name: "Random Catboy", emoji: "🎲", icon: "alpha", priceSol: 1,
-      blurb: "One random Catboy from the 100-piece Nine Lives collection. Could be a floor cat, could be a Legendary — it mints straight to your wallet. Same odds for everyone.",
-      odds: { Common: 60, Rare: 25, Epic: 12, Legendary: 3 },
+      id: "standard", name: "Standard Pack", pack: "pack-standard", priceSol: 1,
+      blurb: "One random Catboy. Solid odds, floor-friendly — rip it and see.",
+      odds: { Common: 65, Rare: 24, Epic: 9, Legendary: 2 },
+    },
+    {
+      id: "rare", name: "Rare Pack", pack: "pack-rare", priceSol: 1.25,
+      blurb: "Better odds — real shot at an Epic, doubled Legendary chance.",
+      odds: { Common: 45, Rare: 35, Epic: 16, Legendary: 4 },
+    },
+    {
+      id: "elite", name: "Elite Pack", pack: "pack-elite", priceSol: 1.5,
+      blurb: "Best odds in the shop. Fat Epic/Legendary chances for the chads.",
+      odds: { Common: 25, Rare: 40, Epic: 27, Legendary: 8 },
     },
   ],
 };
