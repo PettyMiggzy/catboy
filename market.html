@@ -185,6 +185,35 @@
         load(t.dataset.c);
       }));
 
+      // Flip Genesis/Pride from "SOON" to "LIVE" automatically once their on-chain
+      // collection is deployed + seeded (the /api/mint GET reports which are live).
+      (async () => {
+        const LIVE_COPY = {
+          genesis: { eyebrow: "✦ Special Edition · LIVE · Mintable", note: "Genesis · mintable now · 2 SOL a pack · 3 Legendary (animated) / 12 Epic / 25 Rare / 60 Common",
+                     intro: "The special launch edition — 100 pieces (3 animated 3D Legendaries). Browse them all, then <b>mint a random Genesis</b> for 2 SOL straight to your wallet." },
+          pride:   { eyebrow: "🏳️‍🌈 Pride Edition · LIVE · Mintable", note: "Pride Edition 2026 · mintable now · 1.5 SOL · 10 limited pieces 🏳️‍🌈",
+                     intro: "10 limited rainbow Catboys. Love is love. 🏳️‍🌈 Browse them, then <b>mint a random Pride</b> for 1.5 SOL to your wallet." },
+        };
+        try {
+          const r = await fetch("/api/mint"); if (!r.ok) return;
+          const d = await r.json();
+          const liveColls = new Set((d.packs || []).map((p) => p.coll));
+          for (const key of ["genesis", "pride"]) {
+            if (!liveColls.has(key) || !LIVE_COPY[key]) continue;
+            Object.assign(COLLS[key], LIVE_COPY[key], { live: true });
+            const tab = document.querySelector(`.mkt-colltab[data-c="${key}"] .tab-new`);
+            if (tab) { tab.textContent = "LIVE"; tab.style.background = "#14f195"; tab.style.color = "#04120a"; }
+            // if the user is already viewing this tab, refresh its copy in place
+            const active = document.querySelector(".mkt-colltab.active");
+            if (active && active.dataset.c === key) {
+              document.getElementById("mktEyebrow").textContent = COLLS[key].eyebrow;
+              document.getElementById("mktIntro").innerHTML = COLLS[key].intro;
+              NOTE = COLLS[key].note;
+            }
+          }
+        } catch {}
+      })();
+
       function stats() {
         const n = items.length;
         const topTier = items.some((i) => i.tier === "Legend") ? "Legend" : "Legendary";

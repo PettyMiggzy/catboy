@@ -59,10 +59,39 @@ NFT and it shows in your wallet. `GET /api/mint` should show the counts dropping
   `NFT_COLLECTION`. Fund the mint wallet with real SOL.
 - Flip `enabled: true` in `assets/mint-config.js`, commit + push.
 
+## Deploying the Genesis + Pride collections
+The same engine serves multiple collections — each pack in `api/mint.js` has a
+`coll` and mints from its own on-chain collection + inventory subset. Nine Lives
+is live; here's how to light up Genesis (100) and Pride (10):
+
+1. **DB column** (one-time, already run once): `node scripts/migrate-collections.mjs`
+   adds a `collection` column to `nft_inventory` / `nft_orders`.
+2. **Create each collection on-chain** (mainnet), then set the matching env var:
+   ```bash
+   COLLECTION_NAME="Catboy — Genesis Collection" \
+   COLLECTION_URI="https://www.catboyonsol.fun/assets/nft/genesis/metadata/collection.json" \
+   RPC=<mainnet> KEYPAIR=./mint-wallet.json CREATOR_WALLET=<payout> ROYALTY_PCT=5 \
+   node scripts/create-collection.mjs        # NFT_COLLECTION=<addr> -> set NFT_COLLECTION_GENESIS
+
+   COLLECTION_NAME="Catboy — Pride Edition 2026" \
+   COLLECTION_URI="https://www.catboyonsol.fun/assets/nft/pride/metadata/collection.json" \
+   RPC=<mainnet> KEYPAIR=./mint-wallet.json CREATOR_WALLET=<payout> ROYALTY_PCT=5 \
+   node scripts/create-collection.mjs        # NFT_COLLECTION=<addr> -> set NFT_COLLECTION_PRIDE
+   ```
+3. **Seed each inventory** (separate id ranges, never collide):
+   ```bash
+   DATABASE_URL="<neon url>" COLLECTION=genesis node scripts/seed-inventory.mjs
+   DATABASE_URL="<neon url>" COLLECTION=pride   node scripts/seed-inventory.mjs
+   ```
+4. That's it. The site self-gates: the Genesis/Pride packs on `mint.html` and the
+   "LIVE" badges on `market.html` appear **only** once the collection env var is
+   set AND its inventory is seeded (both come from `GET /api/mint`). No collection
+   env set → the pack is hidden and a stray POST returns `collection_not_live`.
+
 ## Pricing / odds
 Authoritative in **`api/mint.js`** (`PACKS`). The values in `assets/mint-config.js`
-are display only — keep them in sync. Current: Alley 0.05 / Nine Lives 0.2 / Alpha
-0.6 SOL, with rarity odds per pack.
+are display only — keep them in sync. Current: Standard 1 / Rare 1.5 / Elite 2 SOL
+(Nine Lives), Genesis 2 SOL, Pride 1.5 SOL — each with its own rarity odds.
 
 ## Notes
 - **Idempotent:** a retry or double-click with the same payment never double-mints

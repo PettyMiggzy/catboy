@@ -10,6 +10,18 @@
 //
 // It prints:  NFT_COLLECTION=<address>   -> put that in Vercel env.
 // TEST ON DEVNET FIRST (default RPC is devnet). Switch RPC to mainnet when ready.
+//
+// For the GENESIS + PRIDE collections, pass their name + metadata URI and set the
+// matching Vercel env var (NFT_COLLECTION_GENESIS / NFT_COLLECTION_PRIDE):
+//   COLLECTION_NAME="Catboy — Genesis Collection" \
+//   COLLECTION_URI="https://www.catboyonsol.fun/assets/nft/genesis/metadata/collection.json" \
+//   RPC=<mainnet> KEYPAIR=./mint-wallet.json CREATOR_WALLET=<payout> ROYALTY_PCT=5 \
+//   node scripts/create-collection.mjs        # -> NFT_COLLECTION=<addr> => set NFT_COLLECTION_GENESIS
+//
+//   COLLECTION_NAME="Catboy — Pride Edition 2026" \
+//   COLLECTION_URI="https://www.catboyonsol.fun/assets/nft/pride/metadata/collection.json" \
+//   RPC=<mainnet> KEYPAIR=./mint-wallet.json CREATOR_WALLET=<payout> ROYALTY_PCT=5 \
+//   node scripts/create-collection.mjs        # -> NFT_COLLECTION=<addr> => set NFT_COLLECTION_PRIDE
 
 import fs from "node:fs";
 import { createUmi } from "@metaplex-foundation/umi-bundle-defaults";

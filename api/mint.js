@@ -20,7 +20,9 @@
 //   DATABASE_URL / POSTGRES_URL  Neon connection (inventory + orders)
 //   SOLANA_RPC                   full RPC url (also used by /api/solrpc)
 //   NFT_MINT_WALLET              PUBLIC key buyers pay to (the mint/treasury wallet)
-//   NFT_COLLECTION               the Core collection address (from create-collection.mjs)
+//   NFT_COLLECTION               Nine Lives Core collection address (create-collection.mjs)
+//   NFT_COLLECTION_GENESIS       Genesis Core collection address (optional, when live)
+//   NFT_COLLECTION_PRIDE         Pride Core collection address (optional, when live)
 //   NFT_MINT_SECRET              JSON array secret key (id.json) of the mint authority
 //                                — a DEDICATED low-value wallet, funded with ~1 SOL
 //   SITE_URL                     e.g. https://www.catboyonsol.fun
@@ -38,23 +40,30 @@ export const config = { maxDuration: 60 };
 const CONN = (process.env.DATABASE_URL || process.env.POSTGRES_URL || "").trim();
 const RPC = (process.env.SOLANA_RPC || "").trim();
 const MINT_WALLET = (process.env.NFT_MINT_WALLET || "").trim();
-const COLLECTION = (process.env.NFT_COLLECTION || "").trim();
 const MINT_SECRET = (process.env.NFT_MINT_SECRET || "").trim();
 const MAX_TX_AGE_S = 20 * 60;
 const PRICE_TOLERANCE = 0.97; // accept >=97% of quoted price (absorbs SOL drift)
 
-// Price + odds live server-side so the client can't tamper with them.
-// Single flat-price random mint: odds are proportional to supply, so every one
-// of the 100 Catboys is equally likely (a true random pull).
+// On-chain Core collection address per collection key (from env).
+const COLL = {
+  nine:    (process.env.NFT_COLLECTION || "").trim(),
+  genesis: (process.env.NFT_COLLECTION_GENESIS || "").trim(),
+  pride:   (process.env.NFT_COLLECTION_PRIDE || "").trim(),
+};
+
+// Price + odds live server-side so the client can't tamper. Each pack maps to a
+// collection (coll) + its own inventory subset + on-chain collection address.
 const PACKS = {
-  standard: { name: "Standard Pack", priceSol: 1,    odds: { Common: 65, Rare: 24, Epic: 9,  Legendary: 2 } },
-  rare:     { name: "Rare Pack",     priceSol: 1.5,  odds: { Common: 45, Rare: 35, Epic: 16, Legendary: 4 } },
-  elite:    { name: "Elite Pack",    priceSol: 2,    odds: { Common: 25, Rare: 40, Epic: 27, Legendary: 8 } },
-  // legacy pack ids kept as aliases (= Standard) so old links / the casino don't 400
-  random:    { name: "Standard Pack", priceSol: 1, odds: { Common: 65, Rare: 24, Epic: 9, Legendary: 2 } },
-  alley:     { name: "Standard Pack", priceSol: 1, odds: { Common: 65, Rare: 24, Epic: 9, Legendary: 2 } },
-  ninelives: { name: "Standard Pack", priceSol: 1, odds: { Common: 65, Rare: 24, Epic: 9, Legendary: 2 } },
-  alpha:     { name: "Standard Pack", priceSol: 1, odds: { Common: 65, Rare: 24, Epic: 9, Legendary: 2 } },
+  standard: { coll: "nine", name: "Standard Pack", priceSol: 1,    odds: { Common: 65, Rare: 24, Epic: 9,  Legendary: 2 } },
+  rare:     { coll: "nine", name: "Rare Pack",     priceSol: 1.5,  odds: { Common: 45, Rare: 35, Epic: 16, Legendary: 4 } },
+  elite:    { coll: "nine", name: "Elite Pack",    priceSol: 2,    odds: { Common: 25, Rare: 40, Epic: 27, Legendary: 8 } },
+  genesis:  { coll: "genesis", name: "Genesis Pack", priceSol: 2,   odds: { Common: 60, Rare: 25, Epic: 12, Legendary: 3 } },
+  pride:    { coll: "pride",   name: "Pride Pack",   priceSol: 1.5, odds: { Pride: 100 } },
+  // legacy aliases (= nine Standard) so old links / the casino don't 400
+  random:    { coll: "nine", name: "Standard Pack", priceSol: 1, odds: { Common: 65, Rare: 24, Epic: 9, Legendary: 2 } },
+  alley:     { coll: "nine", name: "Standard Pack", priceSol: 1, odds: { Common: 65, Rare: 24, Epic: 9, Legendary: 2 } },
+  ninelives: { coll: "nine", name: "Standard Pack", priceSol: 1, odds: { Common: 65, Rare: 24, Epic: 9, Legendary: 2 } },
+  alpha:     { coll: "nine", name: "Standard Pack", priceSol: 1, odds: { Common: 65, Rare: 24, Epic: 9, Legendary: 2 } },
 };
 
 const B58 = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
@@ -73,10 +82,12 @@ async function ensureTables() {
   const s = sql();
   await s`CREATE TABLE IF NOT EXISTS nft_inventory (
     id INT PRIMARY KEY, tier TEXT NOT NULL, name TEXT NOT NULL, uri TEXT NOT NULL,
-    image TEXT, minted BOOLEAN DEFAULT false, asset TEXT )`;
+    image TEXT, minted BOOLEAN DEFAULT false, asset TEXT,
+    collection TEXT NOT NULL DEFAULT 'nine' )`;
   await s`CREATE TABLE IF NOT EXISTS nft_orders (
     sig TEXT PRIMARY KEY, pack TEXT, buyer TEXT, item_id INT, tier TEXT,
-    status TEXT DEFAULT 'pending', asset TEXT, created_at TIMESTAMPTZ DEFAULT now() )`;
+    status TEXT DEFAULT 'pending', asset TEXT, collection TEXT DEFAULT 'nine',
+    created_at TIMESTAMPTZ DEFAULT now() )`;
 }
 
 // Verify the buyer paid at least the pack price to MINT_WALLET, recently, confirmed.
@@ -118,10 +129,10 @@ function getUmi() {
   return umi;
 }
 
-async function mintTo(buyer, item) {
+async function mintTo(buyer, item, collAddr) {
   const umi = getUmi();
   const asset = generateSigner(umi);
-  const collection = await fetchCollection(umi, publicKey(COLLECTION));
+  const collection = await fetchCollection(umi, publicKey(collAddr));
   await create(umi, { asset, collection, name: item.name, uri: item.uri, owner: publicKey(buyer) }).sendAndConfirm(umi);
   return asset.publicKey.toString();
 }
@@ -131,18 +142,25 @@ export default async function handler(req, res) {
     if (req.method === "GET") {
       await ensureTables();
       const s = sql();
-      const tiers = await s`SELECT tier, COUNT(*) FILTER (WHERE NOT minted)::int AS remaining, COUNT(*)::int AS total FROM nft_inventory GROUP BY tier`;
+      const tiers = await s`SELECT collection, tier, COUNT(*) FILTER (WHERE NOT minted)::int AS remaining, COUNT(*)::int AS total FROM nft_inventory GROUP BY collection, tier`;
+      const byColl = await s`SELECT collection, COUNT(*)::int AS total, COUNT(*) FILTER (WHERE minted)::int AS minted FROM nft_inventory GROUP BY collection`;
       const minted = (await s`SELECT COUNT(*)::int AS n FROM nft_inventory WHERE minted`)[0].n;
       const total = (await s`SELECT COUNT(*)::int AS n FROM nft_inventory`)[0].n;
-      const packs = Object.entries(PACKS).map(([id, p]) => ({ id, name: p.name, priceSol: p.priceSol, odds: p.odds }));
-      return res.status(200).json({ payTo: MINT_WALLET, packs, minted, total, tiers });
+      // Only advertise packs whose collection is deployed on-chain AND stocked.
+      const stocked = new Set(byColl.filter((c) => c.total > c.minted).map((c) => c.collection));
+      const packs = Object.entries(PACKS)
+        .filter(([, p]) => COLL[p.coll] && stocked.has(p.coll))
+        .map(([id, p]) => ({ id, name: p.name, priceSol: p.priceSol, odds: p.odds, coll: p.coll }));
+      return res.status(200).json({ payTo: MINT_WALLET, packs, minted, total, tiers, collections: byColl });
     }
     if (req.method !== "POST") { res.setHeader("Allow", "GET, POST"); return res.status(405).json({ error: "method_not_allowed" }); }
-    if (!CONN || !RPC || !MINT_WALLET || !COLLECTION || !MINT_SECRET) return res.status(500).json({ error: "mint_not_configured" });
+    if (!CONN || !RPC || !MINT_WALLET || !MINT_SECRET) return res.status(500).json({ error: "mint_not_configured" });
 
     const { pack, txSig, buyer } = req.body || {};
     const P = PACKS[pack];
     if (!P) return res.status(400).json({ error: "bad_pack" });
+    const collAddr = COLL[P.coll];
+    if (!collAddr) return res.status(503).json({ error: "collection_not_live" });
     if (!B58.test(buyer || "")) return res.status(400).json({ error: "bad_buyer" });
     if (!txSig || typeof txSig !== "string" || txSig.length < 32) return res.status(400).json({ error: "bad_sig" });
     await ensureTables();
@@ -159,7 +177,7 @@ export default async function handler(req, res) {
     if (!order) {
       const v = await verifyPayment(txSig, P.priceSol);
       if (!v.ok) return res.status(402).json({ error: "payment_" + v.err });
-      await s`INSERT INTO nft_orders (sig, pack, buyer) VALUES (${txSig},${pack},${buyer}) ON CONFLICT (sig) DO NOTHING`;
+      await s`INSERT INTO nft_orders (sig, pack, buyer, collection) VALUES (${txSig},${pack},${buyer},${P.coll}) ON CONFLICT (sig) DO NOTHING`;
       order = (await s`SELECT * FROM nft_orders WHERE sig=${txSig}`)[0];
     }
 
@@ -169,12 +187,12 @@ export default async function handler(req, res) {
     if (order.item_id) {
       item = (await s`SELECT * FROM nft_inventory WHERE id=${order.item_id}`)[0];
     } else {
-      const avail = await s`SELECT tier, COUNT(*)::int AS n FROM nft_inventory WHERE NOT minted GROUP BY tier`;
+      const avail = await s`SELECT tier, COUNT(*)::int AS n FROM nft_inventory WHERE NOT minted AND collection=${P.coll} GROUP BY tier`;
       const availableTiers = avail.filter((r) => r.n > 0).map((r) => r.tier);
       if (!availableTiers.length) return res.status(409).json({ error: "sold_out" });
       const tier = rollTier(P.odds, availableTiers) || availableTiers[0];
-      let claimed = await s`UPDATE nft_inventory SET minted=true WHERE id=(SELECT id FROM nft_inventory WHERE NOT minted AND tier=${tier} ORDER BY random() LIMIT 1 FOR UPDATE SKIP LOCKED) RETURNING *`;
-      if (!claimed.length) claimed = await s`UPDATE nft_inventory SET minted=true WHERE id=(SELECT id FROM nft_inventory WHERE NOT minted ORDER BY random() LIMIT 1 FOR UPDATE SKIP LOCKED) RETURNING *`;
+      let claimed = await s`UPDATE nft_inventory SET minted=true WHERE id=(SELECT id FROM nft_inventory WHERE NOT minted AND collection=${P.coll} AND tier=${tier} ORDER BY random() LIMIT 1 FOR UPDATE SKIP LOCKED) RETURNING *`;
+      if (!claimed.length) claimed = await s`UPDATE nft_inventory SET minted=true WHERE id=(SELECT id FROM nft_inventory WHERE NOT minted AND collection=${P.coll} ORDER BY random() LIMIT 1 FOR UPDATE SKIP LOCKED) RETURNING *`;
       if (!claimed.length) return res.status(409).json({ error: "sold_out" });
       item = claimed[0];
       const won = await s`UPDATE nft_orders SET item_id=${item.id}, tier=${item.tier} WHERE sig=${txSig} AND item_id IS NULL RETURNING item_id`;
@@ -188,7 +206,7 @@ export default async function handler(req, res) {
     // Mint on-chain to the buyer. On failure, leave the order pending + item
     // claimed so a retry with the same txSig resumes (no re-charge, no dup).
     let asset;
-    try { asset = await mintTo(buyer, item); }
+    try { asset = await mintTo(buyer, item, collAddr); }
     catch (e) { return res.status(502).json({ error: "mint_failed", detail: String(e.message || e) }); }
     await s`UPDATE nft_orders SET status='minted', asset=${asset} WHERE sig=${txSig}`;
     await s`UPDATE nft_inventory SET asset=${asset} WHERE id=${item.id}`;

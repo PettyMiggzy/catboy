@@ -152,29 +152,39 @@
     const P = "assets/nft/collection/";
     const TIERS = ["Legendary", "Epic", "Rare", "Common"];
     const TIER_COL = { Legendary: "#ffd84d", Epic: "#ff3df0", Rare: "#19e0ff", Common: "#b9b2cf" };
-    const PACKS = C.packs || [];
-    let sel = PACKS[1] || PACKS[0] || null;   // default: middle pack
+    let PACKS = C.packs || [];
+    let sel = null;
     let items = [], opening = false, wallet = null;
 
     fetch(P + "manifest.json").then((r) => r.json()).then((d) => { items = d; }).catch(() => {});
 
     // ---- render pack cards ----
+    // Odds bars adapt to the pack's own tiers (Nine Lives/Genesis use the 4-tier
+    // ladder; Pride is a single "Pride" tier).
+    const PRIDE_COL = "#ff4dd2";
     function oddsBars(o) {
-      return TIERS.map((t) => {
-        const v = o[t] || 0;
-        return `<div class="odds-row"><span class="odds-lbl" style="color:${TIER_COL[t]}">${t}</span>
-          <span class="odds-bar"><span class="odds-fill" style="width:${v}%;background:${TIER_COL[t]};box-shadow:0 0 8px ${TIER_COL[t]}"></span></span>
+      const keys = Object.keys(o);
+      const isStd = keys.every((k) => TIERS.includes(k));
+      const rows = isStd ? TIERS : keys;
+      return rows.map((t) => {
+        const v = o[t] || 0, col = TIER_COL[t] || PRIDE_COL;
+        return `<div class="odds-row"><span class="odds-lbl" style="color:${col}">${t}</span>
+          <span class="odds-bar"><span class="odds-fill" style="width:${v}%;background:${col};box-shadow:0 0 8px ${col}"></span></span>
           <span class="odds-pct">${v}%</span></div>`;
       }).join("");
     }
-    $("packGrid").innerHTML = PACKS.map((p) => `
-      <button class="pack-card${sel && p.id === sel.id ? " sel" : ""}" data-id="${p.id}" type="button">
-        <div class="pack-foil-wrap"><img src="assets/nft/packs/${p.pack || p.id}.jpg" alt="${p.name}" loading="lazy" onerror="this.outerHTML='${p.emoji || "🎲"}'" style="width:100%;max-height:250px;object-fit:contain;filter:drop-shadow(0 10px 24px rgba(0,0,0,.6))"></div>
-        <div class="pack-name">${p.name}</div>
-        <div class="pack-price">${p.priceSol} SOL ${C.enabled ? "" : '<span class="pack-free">free demo</span>'}</div>
-        <p class="pack-blurb">${p.blurb}</p>
-        <div class="odds">${oddsBars(p.odds)}</div>
-      </button>`).join("");
+    function renderPacks() {
+      $("packGrid").innerHTML = PACKS.map((p) => `
+        <button class="pack-card${sel && p.id === sel.id ? " sel" : ""}" data-id="${p.id}" type="button">
+          <div class="pack-foil-wrap"><img src="assets/nft/packs/${p.pack || p.id}.jpg" alt="${p.name}" loading="lazy" onerror="this.outerHTML='${p.emoji || "🎲"}'" style="width:100%;max-height:250px;object-fit:contain;filter:drop-shadow(0 10px 24px rgba(0,0,0,.6))"></div>
+          <div class="pack-name">${p.name}</div>
+          <div class="pack-price">${p.priceSol} SOL ${C.enabled ? "" : '<span class="pack-free">free demo</span>'}</div>
+          <p class="pack-blurb">${p.blurb}</p>
+          <div class="odds">${oddsBars(p.odds)}</div>
+        </button>`).join("");
+      document.querySelectorAll(".pack-card").forEach((c) => c.onclick = () => selectPack(c.dataset.id));
+      if (sel) selectPack(sel.id);
+    }
 
     function selectPack(id) {
       sel = PACKS.find((p) => p.id === id) || sel;
@@ -191,11 +201,30 @@
     // When the mint is live, swap all the "demo" copy for real-mint wording.
     if (C.enabled) {
       const pill = $("modePill"); if (pill) { pill.textContent = "LIVE"; pill.style.background = "var(--cyan, #35e0ff)"; pill.style.color = "#04121a"; }
-      const intro = $("mintIntro"); if (intro) intro.innerHTML = "Three packs, three price points, wildly different odds. Cheap pack = mostly floor cats with a lotto shot at glory. Whale pack = fat Epic/Legendary odds. <b>Live now — pick your risk, pay in SOL, and the NFT mints straight to your wallet.</b>";
+      const intro = $("mintIntro"); if (intro) intro.innerHTML = "Every pack rips a random Catboy. Cheap pack = mostly floor cats with a lotto shot at glory. Whale pack = fat Epic/Legendary odds. <b>Live now — pick your risk, pay in SOL, and the NFT mints straight to your wallet.</b>";
       const note = $("mintFootnote"); if (note) note.textContent = "You pay in SOL and the NFT is minted to your wallet on Solana. Rarity is random, weighted by the pack you pick. All sales final. Not financial advice.";
     }
-    document.querySelectorAll(".pack-card").forEach((c) => c.onclick = () => selectPack(c.dataset.id));
-    if (sel) selectPack(sel.id);
+
+    // Self-gate: only show packs whose collection is actually deployed on-chain.
+    // The /api/mint GET returns just the live+stocked packs; we intersect and keep
+    // our static display fields (foil art, blurb). If the API is unreachable we
+    // fall back to the Nine Lives packs so the shop never breaks.
+    (async () => {
+      try {
+        const r = await fetch("/api/mint");
+        if (r.ok) {
+          const d = await r.json();
+          const live = new Set((d.packs || []).map((p) => p.id));
+          if (live.size) {
+            const filtered = (C.packs || []).filter((p) => live.has(p.id));
+            if (filtered.length) PACKS = filtered;
+          }
+        }
+      } catch {}
+      if (!PACKS.length) PACKS = (C.packs || []).filter((p) => (p.coll || "nine") === "nine");
+      sel = PACKS.find((p) => p.id === "standard") || PACKS[1] || PACKS[0] || null;
+      renderPacks();
+    })();
 
     // ---- pity: dry-streak protection since your last Epic+ ----
     const PITY_MAX = 30;   // guaranteed Epic+ at this many dry opens
