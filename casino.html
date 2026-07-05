@@ -337,8 +337,89 @@
     const closeWin = () => $("winModal").hidden = true;
     $("winClose").onclick = closeWin; $("winBg").onclick = closeWin;
 
-    $("spinBtn").onclick = spin;
-    $("autoBtn").onclick = async () => { for (let i = 0; i < 10 && credits >= 1; i++) { await spin(); await new Promise((r) => setTimeout(r, 250)); } };
+    // ---- LIVE slot-mint: every spin mints a real random Catboy (always a win,
+    //      priced like the Alley pack). Not gambling — you always receive an NFT.
+    const MINT_LIVE = !!(window.CATBOY_MINT && window.CATBOY_MINT.enabled);
+    const SPIN_PRICE = 0.05; // = Alley pack
+    const TIER_SYM = { Legendary: "cat", Epic: "gold", Rare: "seven", Common: "sol" };
+    function getWallet() { return (window.solana && window.solana.isPhantom) ? window.solana : (window.solflare || window.backpack || (window.xnft && window.xnft.solana) || null); }
+    async function waitConfirmed(conn, sig, timeoutMs = 90000) {
+      const start = Date.now();
+      while (Date.now() - start < timeoutMs) {
+        try { const { value } = await conn.getSignatureStatuses([sig], { searchTransactionHistory: true }); const s = value && value[0];
+          if (s) { if (s.err) throw new Error("Transaction failed on-chain."); if (s.confirmationStatus === "confirmed" || s.confirmationStatus === "finalized") return true; } }
+        catch (e) { if (/failed on-chain/.test(e.message || "")) throw e; }
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+      return false;
+    }
+    async function mintReq(pack, txSig, buyer) {
+      let lastErr = "mint failed";
+      for (let i = 0; i < 4; i++) {
+        const r = await fetch("/api/mint", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pack, txSig, buyer }) });
+        const d = await r.json().catch(() => ({}));
+        if (r.ok && d.ok) return d;
+        lastErr = (d && d.error) || ("http_" + r.status);
+        if (/tx_not_found/i.test(lastErr) && i < 3) { await new Promise((x) => setTimeout(x, 3500)); continue; }
+        break;
+      }
+      throw new Error(lastErr);
+    }
+    let paidSpinSig = null; // reuse a paid spin so a retry never double-charges
+    async function slotMint() {
+      if (spinning) return;
+      const p = getWallet();
+      if (!p) { $("slotResult").textContent = "No Solana wallet — install Phantom."; return; }
+      spinning = true; $("spinBtn").disabled = true; $("autoBtn").disabled = true;
+      $("slotResult").className = "slot-result";
+      try {
+        const cfg = await (await fetch("/api/mint")).json();
+        if (!cfg || !cfg.payTo) throw new Error("Mint isn't open yet.");
+        if (cfg.minted >= cfg.total) throw new Error("Sold out! 🐾");
+        const cr = await p.connect(); const from = (cr && cr.publicKey) ? cr.publicKey : p.publicKey;
+        let sig = paidSpinSig;
+        if (!sig) {
+          $("slotResult").textContent = "Approve the " + SPIN_PRICE + " SOL spin…";
+          const web3 = await import("https://esm.sh/@solana/web3.js@1.95.3");
+          const conn = new web3.Connection(location.origin + "/api/solrpc", "confirmed");
+          const tx = new web3.Transaction().add(web3.SystemProgram.transfer({ fromPubkey: new web3.PublicKey(from), toPubkey: new web3.PublicKey(String(cfg.payTo).trim()), lamports: Math.round(SPIN_PRICE * 1e9) }));
+          tx.feePayer = new web3.PublicKey(from); tx.recentBlockhash = (await conn.getLatestBlockhash()).blockhash;
+          const res = await p.signAndSendTransaction(tx); sig = res && res.signature ? res.signature : res;
+          $("slotResult").textContent = "Paid ✓ — spinning…";
+          await waitConfirmed(conn, sig); paidSpinSig = sig;
+        }
+        recordSpin();
+        // spin the reels while the mint resolves
+        const mintP = mintReq("alley", sig, String(from));
+        await Promise.all([reelSpin(reels[0], "cat", 900), reelSpin(reels[1], "cat", 1250), reelSpin(reels[2], "gold", 1600)]);
+        const d = await mintP;
+        const sym = TIER_SYM[d.tier] || "sol";
+        reels.forEach((rl) => rl.innerHTML = symHTML(sym));
+        $("slotResult").textContent = "Minted " + d.name + " · " + d.tier + "!"; $("slotResult").className = "slot-result win big";
+        $("winImg").src = d.image; $("winName").textContent = d.name;
+        const b = $("winBadge"); b.textContent = d.tier; b.className = "nft-badge b-" + d.tier;
+        $("winNote").textContent = "Minted straight to your wallet 🐾 It's yours on Solana.";
+        $("winModal").hidden = false; recordNftWin();
+        try { localStorage.setItem("catboy_last_win", JSON.stringify({ name: d.name, tier: d.tier, file: (d.image || "").split("/").pop(), t: Date.now() })); } catch {}
+        paidSpinSig = null;
+      } catch (e) {
+        const msg = (e && e.message) || String(e);
+        $("slotResult").textContent = paidSpinSig ? ("Paid — finishing mint failed (" + msg + "). Spin again, you won't be charged twice.") : ("Spin cancelled: " + msg);
+      } finally { $("spinBtn").disabled = false; $("autoBtn").disabled = false; spinning = false; }
+    }
+
+    $("spinBtn").onclick = MINT_LIVE ? slotMint : spin;
+    $("autoBtn").onclick = async () => {
+      if (MINT_LIVE) return slotMint(); // no free auto-spam when each spin costs SOL
+      for (let i = 0; i < 10 && credits >= 1; i++) { await spin(); await new Promise((r) => setTimeout(r, 250)); }
+    };
+    // Live mode: this is a real mint, not a free demo — update the slot copy.
+    if (MINT_LIVE) {
+      const pill = document.querySelector(".demo-pill"); if (pill) pill.textContent = "LIVE";
+      $("slotResult").textContent = "Spin to mint a random Catboy · " + SPIN_PRICE + " SOL — you always get one 🐾";
+      $("spinBtn").textContent = "SPIN · " + SPIN_PRICE + " SOL";
+      const auto = $("autoBtn"); if (auto) auto.style.display = "none";
+    }
 
     // credit purchase — free demo now; real payment at launch
     const CREDIT_PACK = { credits: 100, sol: 0.1 };   // launch pricing
