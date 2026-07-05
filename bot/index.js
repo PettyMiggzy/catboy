@@ -33,7 +33,7 @@ const CFG = {
   chatId: process.env.TELEGRAM_CHAT_ID || "",
   mint: process.env.TOKEN_MINT || "",
   minBuySol: parseFloat(process.env.MIN_BUY_SOL || "0.05"),
-  emoji: process.env.BUY_EMOJI || "🐾",
+  emoji: process.env.BUY_EMOJI || "❤️",
   media: process.env.BUY_MEDIA || path.join(__dirname, "media", "buy.mp4"), // local path or http(s) URL (mp4 or gif)
   ticker: process.env.TOKEN_TICKER || "CATBOY",
   ws: process.env.PUMPPORTAL_WS || "wss://pumpportal.fun/api/data",
