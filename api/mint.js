@@ -48,8 +48,8 @@ const PRICE_TOLERANCE = 0.97; // accept >=97% of quoted price (absorbs SOL drift
 // of the 100 Catboys is equally likely (a true random pull).
 const PACKS = {
   standard: { name: "Standard Pack", priceSol: 1,    odds: { Common: 65, Rare: 24, Epic: 9,  Legendary: 2 } },
-  rare:     { name: "Rare Pack",     priceSol: 1.25, odds: { Common: 45, Rare: 35, Epic: 16, Legendary: 4 } },
-  elite:    { name: "Elite Pack",    priceSol: 1.5,  odds: { Common: 25, Rare: 40, Epic: 27, Legendary: 8 } },
+  rare:     { name: "Rare Pack",     priceSol: 1.5,  odds: { Common: 45, Rare: 35, Epic: 16, Legendary: 4 } },
+  elite:    { name: "Elite Pack",    priceSol: 2,    odds: { Common: 25, Rare: 40, Epic: 27, Legendary: 8 } },
   // legacy pack ids kept as aliases (= Standard) so old links / the casino don't 400
   random:    { name: "Standard Pack", priceSol: 1, odds: { Common: 65, Rare: 24, Epic: 9, Legendary: 2 } },
   alley:     { name: "Standard Pack", priceSol: 1, odds: { Common: 65, Rare: 24, Epic: 9, Legendary: 2 } },

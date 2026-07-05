@@ -17,12 +17,12 @@ window.CATBOY_MINT = {
       odds: { Common: 65, Rare: 24, Epic: 9, Legendary: 2 },
     },
     {
-      id: "rare", name: "Rare Pack", pack: "pack-rare", priceSol: 1.25,
+      id: "rare", name: "Rare Pack", pack: "pack-rare", priceSol: 1.5,
       blurb: "Better odds — real shot at an Epic, doubled Legendary chance.",
       odds: { Common: 45, Rare: 35, Epic: 16, Legendary: 4 },
     },
     {
-      id: "elite", name: "Elite Pack", pack: "pack-elite", priceSol: 1.5,
+      id: "elite", name: "Elite Pack", pack: "pack-elite", priceSol: 2,
       blurb: "Best odds in the shop. Fat Epic/Legendary chances for the chads.",
       odds: { Common: 25, Rare: 40, Epic: 27, Legendary: 8 },
     },
