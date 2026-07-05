@@ -490,8 +490,17 @@
     if (f.state === "ko") { rot = Math.min(1.45, f.st / 600 * 1.45); }
     else if (f.state === "hurt") { rot = -0.18; }
     else if (f.state === "punch" || f.state === "kick") {
-      const p = Math.sin(Math.min(1, f.st / f.dur) * Math.PI); sc = 1 + p * 0.06;
-      ctx.translate(p * (f.state === "kick" ? 34 : 26), 0);
+      // wind-up (pull back) -> explosive thrust -> recover, so even a single-image
+      // fighter reads as throwing a real strike instead of sliding.
+      const t = Math.min(1, f.st / f.dur), isKick = f.state === "kick";
+      let thr;
+      if (t < 0.22) thr = -(t / 0.22) * 0.42;                 // coil back
+      else if (t < 0.48) thr = (t - 0.22) / 0.26;             // snap forward
+      else thr = 1 - (t - 0.48) / 0.52 * 0.85;                // recover
+      ctx.translate(thr * (isKick ? 48 : 36), isKick ? -Math.max(0, thr) * 12 : 0);
+      rot = thr * (isKick ? 0.17 : 0.10);                     // lean into the blow
+      scx = 1 + Math.max(0, thr) * (isKick ? 0.10 : 0.20);    // stretch/smear on extension
+      sc = 1 + Math.max(0, thr) * 0.05;
     } else if (f.state === "special") {
       sc = 1 + Math.sin(Math.min(1, f.st / f.dur) * Math.PI) * 0.1;
     } else if (f.state === "walk") {
@@ -520,6 +529,41 @@
       ctx.save(); ctx.globalAlpha = 0.5; ctx.strokeStyle = "#19e0ff"; ctx.lineWidth = 3;
       ctx.beginPath(); ctx.arc(f.x + f.facing * 22, f.y - h * 0.5, h * 0.42, -1, 1); ctx.stroke(); ctx.restore();
     }
+  }
+
+  // Neon strike arc — draws the actual punch/kick "limb" so single-image fighters
+  // read as striking. Punch = fast straight jab streak; kick = sweeping low arc.
+  function drawStrike(f) {
+    if (f.state !== "punch" && f.state !== "kick") return;
+    const t = f.st / f.dur;
+    if (t < 0.24 || t > 0.72) return;
+    const isKick = f.state === "kick";
+    const prog = (t - 0.24) / 0.48;                    // 0..1 across the active window
+    const a = Math.sin(Math.max(0, Math.min(1, prog)) * Math.PI);
+    const reach = f.reach() * (isKick ? 0.95 : 0.82);
+    const ox = f.x + f.facing * (f.h * 0.14);
+    const oy = f.y - f.h * (isKick ? 0.30 : 0.56);
+    const tipx = f.x + f.facing * reach * (0.45 + prog * 0.55);
+    const tipy = isKick ? oy + 20 : oy;
+    ctx.save();
+    ctx.lineCap = "round"; ctx.strokeStyle = f.def.color;
+    ctx.shadowColor = f.def.color; ctx.shadowBlur = 16;
+    // main streak
+    ctx.globalAlpha = a * 0.9; ctx.lineWidth = isKick ? 8 : 5;
+    ctx.beginPath(); ctx.moveTo(ox, oy);
+    if (isKick) ctx.quadraticCurveTo(f.x + f.facing * reach * 0.55, oy - 10, tipx, tipy);
+    else ctx.lineTo(tipx, tipy);
+    ctx.stroke();
+    // bright knuckle/heel flash at the tip
+    ctx.globalAlpha = a; ctx.fillStyle = "#fff";
+    ctx.beginPath(); ctx.arc(tipx, tipy, isKick ? 9 : 6.5, 0, 7); ctx.fill();
+    // speed lines trailing the strike
+    ctx.globalAlpha = a * 0.45; ctx.lineWidth = 2;
+    for (let i = -1; i <= 1; i++) {
+      ctx.beginPath(); ctx.moveTo(ox - f.facing * 6, oy + i * 9);
+      ctx.lineTo(tipx - f.facing * 12, tipy + i * 7); ctx.stroke();
+    }
+    ctx.restore();
   }
 
   function drawShots() {
@@ -750,7 +794,7 @@
     // draw back-to-front by y
     const order = [G.p1, G.p2].sort((a, b) => a.y - b.y);
     drawShots();
-    order.forEach(drawFighter);
+    order.forEach((f) => { drawFighter(f); drawStrike(f); });
     drawFX();
     // finisher: a red vignette (dark edges) instead of a flat red box
     if (G.finFlash > 0) {
