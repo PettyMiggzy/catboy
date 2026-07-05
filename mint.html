@@ -43,9 +43,9 @@
   <section class="page-hero" style="padding-bottom:0.5rem;">
     <div class="page-hero-inner">
       <a href="market.html" class="back-link">&lsaquo; Back to Marketplace</a>
-      <span class="eyebrow" style="display:block;margin-top:1rem;">Loot Box Mint <span class="demo-pill" style="margin-left:.5rem;">FREE DEMO</span></span>
+      <span class="eyebrow" style="display:block;margin-top:1rem;">Loot Box Mint <span class="demo-pill" id="modePill" style="margin-left:.5rem;">FREE DEMO</span></span>
       <h1>Open a <span class="grad">Catboy Pack</span></h1>
-      <p>Three packs, three price points, wildly different odds. Cheap pack = mostly floor cats with a lotto shot at glory. Whale pack = fat Epic/Legendary odds. Pick your risk, rip it open. <b>Free to open right now</b> — real SOL packs go live at launch.</p>
+      <p id="mintIntro">Three packs, three price points, wildly different odds. Cheap pack = mostly floor cats with a lotto shot at glory. Whale pack = fat Epic/Legendary odds. Pick your risk, rip it open. <b>Free to open right now</b> — real SOL packs go live at launch.</p>
     </div>
   </section>
 
@@ -76,7 +76,7 @@
       </div>
       <p class="form-status" id="mintStatus" role="status" aria-live="polite"></p>
       <div class="pulls" id="pulls" aria-label="Your recent pulls"></div>
-      <p class="muted-note" style="text-align:center;">Demo pulls are for fun and preview real rarity odds. At launch, packs mint on Solana for the prices shown — you sign every mint yourself, non-custodial. Not financial advice.</p>
+      <p class="muted-note" id="mintFootnote" style="text-align:center;">Demo pulls are for fun and preview real rarity odds. At launch, packs mint on Solana for the prices shown — you sign every mint yourself, non-custodial. Not financial advice.</p>
     </div>
   </section>
 
@@ -115,7 +115,7 @@
       <button class="pack-card${sel && p.id === sel.id ? " sel" : ""}" data-id="${p.id}" type="button">
         <div class="pack-emoji">${p.emoji}</div>
         <div class="pack-name">${p.name}</div>
-        <div class="pack-price">${p.priceSol} SOL <span class="pack-free">free demo</span></div>
+        <div class="pack-price">${p.priceSol} SOL ${C.enabled ? "" : '<span class="pack-free">free demo</span>'}</div>
         <p class="pack-blurb">${p.blurb}</p>
         <div class="odds">${oddsBars(p.odds)}</div>
       </button>`).join("");
@@ -124,8 +124,19 @@
       sel = PACKS.find((p) => p.id === id) || sel;
       document.querySelectorAll(".pack-card").forEach((c) => c.classList.toggle("sel", c.dataset.id === sel.id));
       $("openPackName").textContent = sel.name;
-      $("openPackPrice").textContent = "FREE DEMO";
-      openBtn.textContent = "Open " + sel.name + " · FREE";
+      if (C.enabled) {
+        $("openPackPrice").textContent = sel.priceSol + " SOL";
+        openBtn.textContent = "Mint " + sel.name + " · " + sel.priceSol + " SOL";
+      } else {
+        $("openPackPrice").textContent = "FREE DEMO";
+        openBtn.textContent = "Open " + sel.name + " · FREE";
+      }
+    }
+    // When the mint is live, swap all the "demo" copy for real-mint wording.
+    if (C.enabled) {
+      const pill = $("modePill"); if (pill) { pill.textContent = "LIVE"; pill.style.background = "var(--cyan, #35e0ff)"; pill.style.color = "#04121a"; }
+      const intro = $("mintIntro"); if (intro) intro.innerHTML = "Three packs, three price points, wildly different odds. Cheap pack = mostly floor cats with a lotto shot at glory. Whale pack = fat Epic/Legendary odds. <b>Live now — pick your risk, pay in SOL, and the NFT mints straight to your wallet.</b>";
+      const note = $("mintFootnote"); if (note) note.textContent = "You pay in SOL and the NFT is minted to your wallet on Solana. Rarity is random, weighted by the pack you pick. All sales final. Not financial advice.";
     }
     document.querySelectorAll(".pack-card").forEach((c) => c.onclick = () => selectPack(c.dataset.id));
     if (sel) selectPack(sel.id);
