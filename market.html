@@ -50,7 +50,7 @@
       <span class="eyebrow" style="display:block;margin-top:1rem;" id="mktEyebrow">Marketplace</span>
       <h1 id="mktTitle">The <span class="grad">Nine Lives</span> Collection</h1>
       <p id="mktIntro">High-quality anime Catboy PFPs — each with its own traits and rarity. Browse the drop and mint your favorite at launch.</p>
-      <div class="hero-actions" style="margin-top:1rem;"><a href="mint.html" class="btn btn-primary">Mint &rsaquo;</a> <a href="trade.html" class="btn btn-ghost">Buy / Sell / Trade &rsaquo;</a> <a href="genesis.html" class="btn btn-ghost" style="border-color:var(--gold);color:var(--gold);">✦ Genesis Drop &rsaquo;</a></div>
+      <div class="hero-actions" style="margin-top:1rem;"><a href="mint.html" class="btn btn-primary">🎲 Mint a Random &rsaquo;</a> <a href="genesis.html" class="btn btn-ghost" style="border-color:var(--gold);color:var(--gold);">✦ Genesis Drop &rsaquo;</a></div>
       <div class="mkt-stats" id="mktStats"></div>
     </div>
   </section>
@@ -84,9 +84,9 @@
       <div class="nft-modal-info">
         <div class="nft-modal-head"><span class="nft-badge" id="mBadge"></span><span class="nft-rank-chip" id="mRank"></span></div>
         <h3 id="mName"></h3>
-        <div class="nft-price-row"><span class="muted-note" style="margin:0;">Price</span><b id="mPrice"></b></div>
         <div class="nft-traits" id="mTraits"></div>
-        <button class="btn btn-primary" id="mMint" type="button" style="width:100%;margin-top:1rem;">Mint at launch</button>
+        <a class="btn btn-primary" id="mMint" href="mint.html" style="width:100%;margin-top:1rem;display:block;text-align:center;box-sizing:border-box;">🎲 Mint a Random Catboy &rsaquo;</a>
+        <p class="muted-note" style="text-align:center;margin-top:.6rem;">Preview gallery — you can't buy a specific one. Mint a random Catboy to collect.</p>
         <p class="form-status" id="mStatus" role="status" aria-live="polite"></p>
       </div>
     </div>
@@ -201,7 +201,7 @@
             <div class="nft-thumb">${animSrc(i) ? `<span class="nft-anim-badge">● ANIMATED</span>` : ``}<span class="nft-rank" title="Rarity rank">＃${i.rank}</span>${animSrc(i) ? `<video src="${animSrc(i)}" autoplay muted loop playsinline poster="${PATH}${i.file}"></video>` : `<img loading="lazy" src="${PATH}${i.file}" alt="${i.name}" />`}</div>
             <div class="nft-meta">
               <div class="nft-row"><span class="nft-name">${i.name}</span><span class="nft-badge b-${i.tier}">${i.tier}</span></div>
-              <div class="nft-row"><span class="nft-price">${i.price} SOL</span><span class="nft-buy">Mint</span></div>
+              <div class="nft-row"><span class="nft-price" style="color:var(--muted);">Rank ＃${i.rank}</span><span class="nft-buy">View</span></div>
             </div>
           </div>`).join("");
         document.getElementById("mktNote").textContent = a.length + " of " + items.length + " shown · " + NOTE;
@@ -222,7 +222,6 @@
         document.getElementById("mName").textContent = i.name;
         const b = document.getElementById("mBadge"); b.textContent = i.tier; b.className = "nft-badge b-" + i.tier;
         document.getElementById("mRank").textContent = "Rarity Rank ＃" + i.rank + " / " + items.length;
-        document.getElementById("mPrice").textContent = i.price + " SOL";
         document.getElementById("mTraits").innerHTML = Object.entries(i.traits).map(([k, v]) =>
           `<div class="nft-trait"><span>${k}</span><b>${v}</b><i class="trait-pct">${pct(k, v)}%</i></div>`).join("");
         document.getElementById("mStatus").textContent = "";
@@ -231,18 +230,7 @@
       function close() { modal.hidden = true; document.body.style.overflow = ""; }
       document.getElementById("nftModalX").addEventListener("click", close);
       document.getElementById("nftModalBg").addEventListener("click", close);
-      document.getElementById("mMint").addEventListener("click", async () => {
-        const s = document.getElementById("mStatus");
-        const p = (window.solana && window.solana.isPhantom) ? window.solana : (window.solflare || window.backpack || (window.xnft && window.xnft.solana));
-        if (!p) { s.style.color = "var(--magenta)"; s.textContent = "No Solana wallet found — install Phantom, or use the Wallet page."; return; }
-        try {
-          s.style.color = "var(--muted)"; s.textContent = "Connecting…";
-          const r = await p.connect();
-          const addr = (r && r.publicKey ? r.publicKey : p.publicKey).toString();
-          s.style.color = "var(--cyan)";
-          s.textContent = "Wallet " + addr.slice(0, 4) + "…" + addr.slice(-4) + " ready. Mint goes live at launch — you're on deck.";
-        } catch { s.style.color = "var(--magenta)"; s.textContent = "Connection cancelled."; }
-      });
+      // #mMint is now a plain link to the random-mint page — no per-item buying.
       addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
     })();
   </script>
