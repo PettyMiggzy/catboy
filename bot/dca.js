@@ -109,16 +109,18 @@ async function readHolding(retries) {
   for (let i = 0; i < retries; i++) {
     try {
       const res = await conn.getParsedTokenAccountsByOwner(OWNER, { mint: new PublicKey(MINT) });
-      for (const v of res.value) { const ta = v.account.data.parsed.info.tokenAmount; const raw = BigInt(ta.amount); if (raw > 0n) return { raw, dec: ta.decimals, ata: v.pubkey }; }
+      for (const v of res.value) { const ta = v.account.data.parsed.info.tokenAmount; const raw = BigInt(ta.amount); if (raw > 0n) return { raw, dec: ta.decimals, ata: v.pubkey, prog: v.account.owner }; }
     } catch (e) { if (i === retries - 1) log("balance read err", e.message); }
     if (i < retries - 1) await new Promise((r) => setTimeout(r, 1800));
   }
-  return { raw: 0n, dec: 6, ata: null };
+  return { raw: 0n, dec: 6, ata: null, prog: null };
 }
 async function burnHolding(retries) {
-  const { raw, dec, ata } = await readHolding(retries);
+  const { raw, dec, ata, prog } = await readHolding(retries);
   if (raw <= 0n || !ata) return { burned: 0n, dec };
-  const ix = createBurnCheckedInstruction(ata, new PublicKey(MINT), OWNER, raw, dec);
+  // Use the token account's ACTUAL owning program (classic SPL Token OR Token-2022)
+  // — pump.fun mints can be Token-2022; the classic program gave InvalidAccountData.
+  const ix = createBurnCheckedInstruction(ata, new PublicKey(MINT), OWNER, raw, dec, [], prog || undefined);
   const tx = new Transaction().add(ix);
   tx.feePayer = OWNER; tx.recentBlockhash = (await conn.getLatestBlockhash()).blockhash;
   tx.sign(kp);
