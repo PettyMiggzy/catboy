@@ -1,0 +1,192 @@
+// CATBOY NFT mint — our own code, non-launchpad, custodial mint-on-demand.
+//
+// Flow (mirrors the PFP generator's trust model):
+//   1) GET  /api/mint                       -> { payTo, packs, minted, total, tiers }
+//   2) client pays pack.priceSol to `payTo` (one tx), gets txSig
+//   3) POST /api/mint { pack, txSig, buyer } -> verifies the on-chain payment,
+//      rolls a rarity by the pack's odds, atomically claims an unminted NFT of
+//      that tier, and mints a Metaplex **Core** NFT straight to the buyer.
+//
+// Why this shape:
+//   - Payment is verified on-chain (no free-mint bypass like a client-only flow).
+//   - Tiered packs get REAL different odds (the server picks the tier) — a plain
+//     Candy Machine can't do that.
+//   - Metaplex Core = ~0.0029 SOL rent per NFT, minted only when sold, recovered
+//     from the price. Cheap. Uses the existing Vercel + Neon stack.
+//   - Idempotent by txSig: a retry (or double-click) never double-mints or
+//     double-charges — it resumes/returns the same NFT.
+//
+// Required Vercel env (NEVER in client code):
+//   DATABASE_URL / POSTGRES_URL  Neon connection (inventory + orders)
+//   SOLANA_RPC                   full RPC url (also used by /api/solrpc)
+//   NFT_MINT_WALLET              PUBLIC key buyers pay to (the mint/treasury wallet)
+//   NFT_COLLECTION               the Core collection address (from create-collection.mjs)
+//   NFT_MINT_SECRET              JSON array secret key (id.json) of the mint authority
+//                                — a DEDICATED low-value wallet, funded with ~1 SOL
+//   SITE_URL                     e.g. https://www.catboyonsol.fun
+//
+// Setup once (see MINT.md): fund the mint wallet, run scripts/create-collection.mjs
+// and scripts/seed-inventory.mjs, then set the env vars. TEST ON DEVNET FIRST.
+
+import { neon } from "@neondatabase/serverless";
+import { createUmi } from "@metaplex-foundation/umi-bundle-defaults";
+import { keypairIdentity, generateSigner, publicKey } from "@metaplex-foundation/umi";
+import { create, fetchCollection, mplCore } from "@metaplex-foundation/mpl-core";
+
+export const config = { maxDuration: 60 };
+
+const CONN = process.env.DATABASE_URL || process.env.POSTGRES_URL || "";
+const RPC = process.env.SOLANA_RPC || "";
+const MINT_WALLET = process.env.NFT_MINT_WALLET || "";
+const COLLECTION = process.env.NFT_COLLECTION || "";
+const MINT_SECRET = process.env.NFT_MINT_SECRET || "";
+const MAX_TX_AGE_S = 20 * 60;
+const PRICE_TOLERANCE = 0.97; // accept >=97% of quoted price (absorbs SOL drift)
+
+// Pack odds live server-side so the client can't tamper with them.
+const PACKS = {
+  alley:     { name: "Alley Cat Pack",   priceSol: 0.05, odds: { Common: 80, Rare: 16, Epic: 3.5, Legendary: 0.5 } },
+  ninelives: { name: "Nine Lives Pack",  priceSol: 0.2,  odds: { Common: 50, Rare: 35, Epic: 12,  Legendary: 3 } },
+  alpha:     { name: "Alpha Whale Pack", priceSol: 0.6,  odds: { Common: 18, Rare: 42, Epic: 32,  Legendary: 8 } },
+};
+
+const B58 = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+function sql() { if (!CONN) throw new Error("db_not_configured"); return neon(CONN); }
+
+async function rpc(method, params = []) {
+  if (!RPC) throw new Error("rpc_not_configured");
+  const r = await fetch(RPC, { method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) });
+  const j = await r.json();
+  if (j.error) throw new Error(j.error.message || "rpc_error");
+  return j.result;
+}
+
+async function ensureTables() {
+  const s = sql();
+  await s`CREATE TABLE IF NOT EXISTS nft_inventory (
+    id INT PRIMARY KEY, tier TEXT NOT NULL, name TEXT NOT NULL, uri TEXT NOT NULL,
+    image TEXT, minted BOOLEAN DEFAULT false, asset TEXT )`;
+  await s`CREATE TABLE IF NOT EXISTS nft_orders (
+    sig TEXT PRIMARY KEY, pack TEXT, buyer TEXT, item_id INT, tier TEXT,
+    status TEXT DEFAULT 'pending', asset TEXT, created_at TIMESTAMPTZ DEFAULT now() )`;
+}
+
+// Verify the buyer paid at least the pack price to MINT_WALLET, recently, confirmed.
+async function verifyPayment(txSig, priceSol) {
+  if (!txSig || typeof txSig !== "string" || txSig.length < 32) return { ok: false, err: "bad_sig" };
+  let tx = null;
+  for (let i = 0; i < 8; i++) {
+    tx = await rpc("getTransaction", [txSig, { commitment: "confirmed", maxSupportedTransactionVersion: 0, encoding: "jsonParsed" }]);
+    if (tx) break;
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+  if (!tx) return { ok: false, err: "tx_not_found" };
+  if (tx.meta && tx.meta.err) return { ok: false, err: "tx_failed" };
+  if (tx.blockTime && (Date.now() / 1000 - tx.blockTime) > MAX_TX_AGE_S) return { ok: false, err: "tx_too_old" };
+  const keys = (tx.transaction.message.accountKeys || []).map((k) => (typeof k === "string" ? k : k.pubkey));
+  const pre = tx.meta.preBalances || [], post = tx.meta.postBalances || [];
+  const i = keys.indexOf(MINT_WALLET);
+  const recv = i < 0 ? 0 : Math.max(0, post[i] - pre[i]);
+  if (recv < Math.round(priceSol * PRICE_TOLERANCE * 1e9)) return { ok: false, err: "underpaid" };
+  return { ok: true };
+}
+
+function rollTier(odds, availableTiers) {
+  const entries = Object.entries(odds).filter(([t, w]) => availableTiers.includes(t) && w > 0);
+  if (!entries.length) return null;
+  const total = entries.reduce((a, [, w]) => a + w, 0);
+  let r = Math.random() * total;
+  for (const [t, w] of entries) if ((r -= w) <= 0) return t;
+  return entries[entries.length - 1][0];
+}
+
+let _umi = null;
+function getUmi() {
+  if (_umi) return _umi;
+  const secret = new Uint8Array(JSON.parse(MINT_SECRET));
+  const umi = createUmi(RPC).use(mplCore());
+  umi.use(keypairIdentity(umi.eddsa.createKeypairFromSecretKey(secret)));
+  _umi = umi;
+  return umi;
+}
+
+async function mintTo(buyer, item) {
+  const umi = getUmi();
+  const asset = generateSigner(umi);
+  const collection = await fetchCollection(umi, publicKey(COLLECTION));
+  await create(umi, { asset, collection, name: item.name, uri: item.uri, owner: publicKey(buyer) }).sendAndConfirm(umi);
+  return asset.publicKey.toString();
+}
+
+export default async function handler(req, res) {
+  try {
+    if (req.method === "GET") {
+      await ensureTables();
+      const s = sql();
+      const tiers = await s`SELECT tier, COUNT(*) FILTER (WHERE NOT minted)::int AS remaining, COUNT(*)::int AS total FROM nft_inventory GROUP BY tier`;
+      const minted = (await s`SELECT COUNT(*)::int AS n FROM nft_inventory WHERE minted`)[0].n;
+      const total = (await s`SELECT COUNT(*)::int AS n FROM nft_inventory`)[0].n;
+      const packs = Object.entries(PACKS).map(([id, p]) => ({ id, name: p.name, priceSol: p.priceSol, odds: p.odds }));
+      return res.status(200).json({ payTo: MINT_WALLET, packs, minted, total, tiers });
+    }
+    if (req.method !== "POST") { res.setHeader("Allow", "GET, POST"); return res.status(405).json({ error: "method_not_allowed" }); }
+    if (!CONN || !RPC || !MINT_WALLET || !COLLECTION || !MINT_SECRET) return res.status(500).json({ error: "mint_not_configured" });
+
+    const { pack, txSig, buyer } = req.body || {};
+    const P = PACKS[pack];
+    if (!P) return res.status(400).json({ error: "bad_pack" });
+    if (!B58.test(buyer || "")) return res.status(400).json({ error: "bad_buyer" });
+    if (!txSig || typeof txSig !== "string" || txSig.length < 32) return res.status(400).json({ error: "bad_sig" });
+    await ensureTables();
+    const s = sql();
+
+    // Idempotent by txSig: already fully minted -> return that same NFT.
+    let order = (await s`SELECT * FROM nft_orders WHERE sig=${txSig}`)[0];
+    if (order && order.status === "minted") {
+      const it = (await s`SELECT * FROM nft_inventory WHERE id=${order.item_id}`)[0];
+      return res.status(200).json({ ok: true, asset: order.asset, name: it.name, image: it.image, tier: order.tier, reused: true });
+    }
+
+    // First time for this sig: verify payment, then claim the sig (unique row).
+    if (!order) {
+      const v = await verifyPayment(txSig, P.priceSol);
+      if (!v.ok) return res.status(402).json({ error: "payment_" + v.err });
+      await s`INSERT INTO nft_orders (sig, pack, buyer) VALUES (${txSig},${pack},${buyer}) ON CONFLICT (sig) DO NOTHING`;
+      order = (await s`SELECT * FROM nft_orders WHERE sig=${txSig}`)[0];
+    }
+
+    // Assign an NFT to this order (once). Race-safe: only the request that wins
+    // the `item_id IS NULL` update keeps its claimed item; a loser releases it.
+    let item;
+    if (order.item_id) {
+      item = (await s`SELECT * FROM nft_inventory WHERE id=${order.item_id}`)[0];
+    } else {
+      const avail = await s`SELECT tier, COUNT(*)::int AS n FROM nft_inventory WHERE NOT minted GROUP BY tier`;
+      const availableTiers = avail.filter((r) => r.n > 0).map((r) => r.tier);
+      if (!availableTiers.length) return res.status(409).json({ error: "sold_out" });
+      const tier = rollTier(P.odds, availableTiers) || availableTiers[0];
+      let claimed = await s`UPDATE nft_inventory SET minted=true WHERE id=(SELECT id FROM nft_inventory WHERE NOT minted AND tier=${tier} ORDER BY random() LIMIT 1 FOR UPDATE SKIP LOCKED) RETURNING *`;
+      if (!claimed.length) claimed = await s`UPDATE nft_inventory SET minted=true WHERE id=(SELECT id FROM nft_inventory WHERE NOT minted ORDER BY random() LIMIT 1 FOR UPDATE SKIP LOCKED) RETURNING *`;
+      if (!claimed.length) return res.status(409).json({ error: "sold_out" });
+      item = claimed[0];
+      const won = await s`UPDATE nft_orders SET item_id=${item.id}, tier=${item.tier} WHERE sig=${txSig} AND item_id IS NULL RETURNING item_id`;
+      if (!won.length) { // another request already assigned an item to this sig — release ours
+        await s`UPDATE nft_inventory SET minted=false WHERE id=${item.id}`;
+        order = (await s`SELECT * FROM nft_orders WHERE sig=${txSig}`)[0];
+        item = (await s`SELECT * FROM nft_inventory WHERE id=${order.item_id}`)[0];
+      }
+    }
+
+    // Mint on-chain to the buyer. On failure, leave the order pending + item
+    // claimed so a retry with the same txSig resumes (no re-charge, no dup).
+    let asset;
+    try { asset = await mintTo(buyer, item); }
+    catch (e) { return res.status(502).json({ error: "mint_failed", detail: String(e.message || e) }); }
+    await s`UPDATE nft_orders SET status='minted', asset=${asset} WHERE sig=${txSig}`;
+    await s`UPDATE nft_inventory SET asset=${asset} WHERE id=${item.id}`;
+    return res.status(200).json({ ok: true, asset, name: item.name, image: item.image, tier: item.tier });
+  } catch (e) {
+    return res.status(500).json({ error: String((e && e.message) || e) });
+  }
+}

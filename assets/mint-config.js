@@ -1,19 +1,14 @@
-/* CATBOY mint config — fill these in at launch, then set enabled:true.
-   Values come from the Metaplex "sugar" deploy (see MINT.md). */
+/* CATBOY mint config — flip enabled:true at launch (see MINT.md).
+   Minting runs through our own /api/mint (Metaplex Core, server-side): it
+   verifies payment on-chain and enforces the pack odds. The mint wallet, price
+   and odds are authoritative on the SERVER (api/mint.js); fields here are UI. */
 window.CATBOY_MINT = {
-  enabled: false,            // flip to true once the candy machine is live
-  candyMachineId: "",        // sugar -> cache.json "candyMachine"
-  collectionMint: "",        // sugar -> cache.json "collectionMint"
+  enabled: false,            // flip to true once /api/mint is configured + tested
   rpc: "/api/solrpc",        // same-origin RPC proxy (already live)
-  total: 100,                // collection size
-  // Payment model: the candy guard mints with NO solPayment (free on-chain);
-  // the pack price is charged client-side in the SAME transaction. Deploy the
-  // candy machine WITHOUT a solPayment guard so this charge is authoritative.
-  treasury: (window.CATBOY_WALLETS && window.CATBOY_WALLETS.treasury) || "",
+  total: 100,                // collection size (display)
 
-  // Tiered "loot box" packs — different price, different odds of each rarity.
-  // Odds are percentages and must add up to 100 per pack. At launch each pack
-  // maps to a candy-guard group label (guardGroup) with its own solPayment.
+  // Tiered "loot box" packs — UI copy + the price/odds shown to buyers. These
+  // MUST match the server PACKS in api/mint.js (that's what actually runs).
   packs: [
     {
       id: "alley", name: "Alley Cat Pack", emoji: "🐈", priceSol: 0.05,

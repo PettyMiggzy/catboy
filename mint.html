@@ -239,41 +239,73 @@
     updatePity(getPity());
 
     openBtn.addEventListener("click", () => {
-      if (C.enabled && C.candyMachineId) return doRealMint();   // real SOL mint at launch
-      openPack();                                                // free demo reveal
+      if (C.enabled) return doRealMint();   // real SOL mint at launch
+      openPack();                            // free demo reveal
     });
 
-    // ---- real on-chain mint (activates at launch when C.enabled) ----
+    // ---- real mint (activates at launch when C.enabled) --------------------
+    // Pay the pack price to the mint wallet, then our /api/mint verifies the
+    // payment and mints a random NFT (weighted by the pack's odds) to you.
     function getProvider() { return (window.solana && window.solana.isPhantom) ? window.solana : (window.solflare || window.backpack || (window.xnft && window.xnft.solana) || null); }
+    async function waitConfirmed(conn, sig, timeoutMs = 90000) {
+      const start = Date.now();
+      while (Date.now() - start < timeoutMs) {
+        try {
+          const { value } = await conn.getSignatureStatuses([sig], { searchTransactionHistory: true });
+          const s = value && value[0];
+          if (s) { if (s.err) throw new Error("Transaction failed on-chain."); if (s.confirmationStatus === "confirmed" || s.confirmationStatus === "finalized") return true; }
+        } catch (e) { if (/failed on-chain/.test(e.message || "")) throw e; }
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+      return false;
+    }
+    async function mintReq(pack, txSig, buyer) {
+      let lastErr = "mint failed";
+      for (let i = 0; i < 4; i++) {
+        const r = await fetch("/api/mint", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pack, txSig, buyer }) });
+        const d = await r.json().catch(() => ({}));
+        if (r.ok && d.ok) return d;
+        lastErr = (d && d.error) || ("http_" + r.status);
+        if (/tx_not_found/i.test(lastErr) && i < 3) { await new Promise((r) => setTimeout(r, 3500)); continue; }
+        break;
+      }
+      throw new Error(lastErr);
+    }
+    let paidMintSig = null; // reuse a successful payment so a retry never re-charges
     async function doRealMint() {
       if (!sel) return;
       const p = getProvider();
       if (!p) { status.style.color = "var(--magenta)"; status.textContent = "No Solana wallet found — install Phantom or use the Wallet page."; return; }
+      openBtn.disabled = true;
       try {
-        if (!wallet) { await p.connect(); wallet = p; }
-        status.style.color = "var(--muted)"; status.textContent = "Preparing " + sel.name + "…";
-        const { createUmi } = await import("https://esm.sh/@metaplex-foundation/umi-bundle-defaults@0.9.2");
-        const { mplCandyMachine, fetchCandyMachine, mintV2 } = await import("https://esm.sh/@metaplex-foundation/mpl-candy-machine@6.0.1");
-        const { walletAdapterIdentity } = await import("https://esm.sh/@metaplex-foundation/umi-signer-wallet-adapters@0.9.2");
-        const { generateSigner, transactionBuilder, some, publicKey, lamports } = await import("https://esm.sh/@metaplex-foundation/umi@0.9.2");
-        const { setComputeUnitLimit, transferSol } = await import("https://esm.sh/@metaplex-foundation/mpl-toolbox@0.9.4");
-        const { TokenStandard } = await import("https://esm.sh/@metaplex-foundation/mpl-token-metadata@3.2.1");
-        const umi = createUmi(location.origin + C.rpc).use(mplCandyMachine()).use(walletAdapterIdentity(wallet));
-        const cm = await fetchCandyMachine(umi, publicKey(C.candyMachineId));
-        const nftMint = generateSigner(umi);
-        const legs = window.CATBOY_PAY.splitSol(sel.priceSol);
-        status.textContent = "Approve the " + sel.priceSol + " SOL mint in your wallet…";
-        let tx = transactionBuilder().add(setComputeUnitLimit(umi, { units: 800000 }));
-        legs.forEach((l) => { if (l.lamports > 0) tx = tx.add(transferSol(umi, { destination: publicKey(l.to), amount: lamports(l.lamports) })); });
-        tx = tx.add(mintV2(umi, {
-          candyMachine: cm.publicKey, nftMint,
-          collectionMint: publicKey(C.collectionMint), collectionUpdateAuthority: cm.authority,
-          tokenStandard: TokenStandard.NonFungible, candyGuard: cm.mintAuthority,
-          group: sel.guardGroup ? some(sel.guardGroup) : undefined,
-        }));
-        await tx.sendAndConfirm(umi);
-        status.style.color = "var(--cyan)"; status.textContent = "Minted from " + sel.name + "! Check your wallet.";
-      } catch (e) { status.style.color = "var(--magenta)"; status.textContent = "Mint failed: " + (e.message || e); }
+        const cfgR = await fetch("/api/mint"); const cfg = cfgR.ok ? await cfgR.json() : null;
+        if (!cfg || !cfg.payTo) throw new Error("Mint isn't open yet.");
+        if (cfg.minted >= cfg.total) throw new Error("Sold out! 🐾");
+        const r = await p.connect(); const from = (r && r.publicKey) ? r.publicKey : p.publicKey;
+        const buyer = String(from);
+        let txSig = paidMintSig;
+        if (!txSig) {
+          status.style.color = "var(--muted)"; status.textContent = "Approve the " + sel.priceSol + " SOL for " + sel.name + "…";
+          const web3 = await import("https://esm.sh/@solana/web3.js@1.95.3");
+          const conn = new web3.Connection(location.origin + (C.rpc || "/api/solrpc"), "confirmed");
+          const tx = new web3.Transaction().add(web3.SystemProgram.transfer({ fromPubkey: new web3.PublicKey(from), toPubkey: new web3.PublicKey(cfg.payTo), lamports: Math.round(sel.priceSol * 1e9) }));
+          tx.feePayer = new web3.PublicKey(from);
+          tx.recentBlockhash = (await conn.getLatestBlockhash()).blockhash;
+          const res = await p.signAndSendTransaction(tx);
+          txSig = res && res.signature ? res.signature : res;
+          await waitConfirmed(conn, txSig);
+          paidMintSig = txSig;
+        }
+        status.textContent = "Paid ✓ — minting your Catboy…";
+        const d = await mintReq(sel.id, txSig, buyer);
+        status.style.color = "var(--cyan)"; status.textContent = "Minted " + d.name + " · " + d.tier + "! 🐾 Check your wallet.";
+        try { const pulls = JSON.parse(localStorage.getItem("catboy_pulls") || "[]"); pulls.unshift({ name: d.name, tier: d.tier, img: d.image }); localStorage.setItem("catboy_pulls", JSON.stringify(pulls.slice(0, 60))); renderPulls(pulls); } catch {}
+        paidMintSig = null;
+      } catch (e) {
+        const msg = (e && e.message) || String(e);
+        status.style.color = "var(--magenta)";
+        status.textContent = paidMintSig ? ("Paid, but minting didn't finish (" + msg + "). Click again — you won't be charged twice.") : ("Mint failed: " + msg);
+      } finally { openBtn.disabled = false; }
     }
   </script>
 </body>
