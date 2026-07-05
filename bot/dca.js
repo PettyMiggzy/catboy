@@ -74,8 +74,13 @@ const conn = new Connection(RPC, "confirmed");
 const OWNER = kp.publicKey;
 
 async function tg(chatId, text) {
-  if (!TG || !chatId) return;
-  try { await fetch(`https://api.telegram.org/bot${TG}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true }) }); } catch (e) { log("tg error", e.message); }
+  if (!TG) { log("tg skipped: TELEGRAM_BOT_TOKEN not set"); return; }
+  if (!chatId) { log("tg skipped: no chat id (set TELEGRAM_CHAT_ID in bot/.env)"); return; }
+  try {
+    const r = await fetch(`https://api.telegram.org/bot${TG}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true }) });
+    const j = await r.json();
+    if (!j.ok) log("tg send failed:", j.description || r.status, "chat=" + chatId);
+  } catch (e) { log("tg error", e.message); }
 }
 const fmt = (n, d = 3) => Number(n || 0).toLocaleString("en-US", { maximumFractionDigits: d });
 
@@ -175,6 +180,7 @@ async function check() {
 
 (async () => {
   log(`CATBOY DCA burn bot — wallet ${OWNER.toBase58()} · buy+burn every ${INTERVAL_HOURS}h over ~${DAYS}d · checks every ${CHECK_MS / 60000}min · reserve ${RESERVE} SOL`);
+  log(`config: TELEGRAM_BOT_TOKEN=${TG ? "set" : "MISSING"} · TELEGRAM_CHAT_ID=${CHAT || "MISSING (group announces will NOT post)"} · NOTIFY_CHAT_ID=${NOTIFY || "none"}`);
   await tg(NOTIFY,
     `🔥 <b>CATBOY DCA burn bot online.</b>\nSend <b>SOL</b> here to auto buy-&amp;-burn $CATBOY, or send <b>$CATBOY</b> to burn it directly:\n<code>${OWNER.toBase58()}</code>\nBuy+burn every ${INTERVAL_HOURS}h · reserve ${RESERVE} SOL kept for fees.`);
   check(); // run one now

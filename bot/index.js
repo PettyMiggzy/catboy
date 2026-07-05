@@ -68,6 +68,7 @@ const CFG = {
   rpcUrl: process.env.RPC_URL || "https://api.mainnet-beta.solana.com",
   burnPollMs: Math.max(30000, parseInt(process.env.BURN_POLL_MS || "60000", 10)),
   announceBurns: (process.env.ANNOUNCE_BURNS ?? "1") !== "0",
+  totalSupply: parseFloat(process.env.TOTAL_SUPPLY || "1000000000"), // pump.fun launches at 1B; used to compute total burned
   // On-chain buy detection via YOUR RPC — reliable primary source (PumpPortal's
   // free WS drops trades). Polls the mint's recent signatures and parses buys.
   useChain: (process.env.USE_CHAIN_TRADES ?? "1") !== "0",
@@ -258,7 +259,13 @@ async function handleCommand(m) {
     const s = await solRpc("getTokenSupply", [CFG.mint]);
     const ui = s && s.value ? Number(s.value.uiAmount) : NaN;
     if (!isFinite(ui)) return tgSendTo(m.chat.id, "Supply unavailable right now — try again shortly.");
-    return tgSendTo(m.chat.id, `🔥 <b>$${CFG.ticker} Supply</b>\nCirculating: <b>${fmt(ui, 0)}</b>\nBurn alerts: ${CFG.announceBurns ? "on 🔥" : "off"}`);
+    const burned = Math.max(0, CFG.totalSupply - ui);
+    const pct = CFG.totalSupply ? (burned / CFG.totalSupply) * 100 : 0;
+    return tgSendTo(m.chat.id,
+      `🔥 <b>$${CFG.ticker} Burns</b>\n` +
+      `Circulating: <b>${fmt(ui, 0)}</b>\n` +
+      `Total burned: <b>${fmt(burned, 0)}</b> (${pct >= 0.01 ? pct.toFixed(2) : "<0.01"}%)\n` +
+      `Burn alerts: ${CFG.announceBurns ? "on 🔥" : "off"}`);
   }
 
   if (!isAdmin(m)) return; // only the owner can run the rest
