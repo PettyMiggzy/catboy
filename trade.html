@@ -37,7 +37,7 @@
       <a href="merch.html">Merch</a>
       <a href="index.html#faq">FAQ</a>
     </nav>
-    <a href="index.html#waitlist" class="btn btn-primary nav-cta">Join Allowlist</a>
+    <a href="mint.html" class="btn btn-primary nav-cta">🐾 Mint</a>
   </header>
 
   <section class="page-hero" style="padding-bottom:0.5rem;">
@@ -110,7 +110,7 @@
     // wire marketplace cards
     function setVenue(card, go, state, url) {
       if (M.enabled && url) { card.href = url; state.textContent = "● Live"; state.classList.add("live"); }
-      else { card.href = "index.html#waitlist"; card.removeAttribute("target"); go.textContent = "Opens at mint — join allowlist ›"; }
+      else { card.href = "mint.html"; card.removeAttribute("target"); go.textContent = "Mint a random Catboy ›"; }
     }
     setVenue($("meCard"), $("meGo"), $("meState"), M.magicEden);
     setVenue($("tsCard"), $("tsGo"), $("tsState"), M.tensor);
