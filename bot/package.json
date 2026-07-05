@@ -6,10 +6,13 @@
   "description": "CATBOY pump.fun Telegram buy bot — real-time buy alerts via PumpPortal.",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "dca": "node dca.js"
   },
   "dependencies": {
-    "ws": "^8.18.0"
+    "ws": "^8.18.0",
+    "@solana/web3.js": "^1.95.3",
+    "@solana/spl-token": "^0.4.8"
   },
   "engines": {
     "node": ">=18"
