@@ -16,7 +16,7 @@
 //   TELEGRAM_BOT_TOKEN   + TELEGRAM_CHAT_ID   to announce buy+burns (optional)
 //   NOTIFY_CHAT_ID       your private chat — gets the deposit address on start
 //   DCA_DAYS=7           spread the balance over this many days (rolling)
-//   DCA_BUYS_PER_DAY=4   buys per day (4 => every 6h)
+//   DCA_INTERVAL_HOURS=2 buy+burn this often (2 => every 2 hours)
 //   DCA_RESERVE_SOL=0.02 keep this much for fees/rent (never spent)
 //   DCA_MIN_BUY_SOL=0.005 skip a tick if the per-buy would be below this
 //   DCA_SLIPPAGE=15      % · DCA_PRIORITY_SOL=0.00005 priority fee
@@ -50,13 +50,13 @@ const TG = (process.env.TELEGRAM_BOT_TOKEN || "").trim();
 const CHAT = (process.env.TELEGRAM_CHAT_ID || "").trim();
 const NOTIFY = (process.env.NOTIFY_CHAT_ID || "").trim();
 const DAYS = Math.max(1, parseInt(process.env.DCA_DAYS || "7", 10));
-const PER_DAY = Math.max(1, parseInt(process.env.DCA_BUYS_PER_DAY || "4", 10));
+const INTERVAL_HOURS = Math.max(0.25, parseFloat(process.env.DCA_INTERVAL_HOURS || "2")); // buy+burn every N hours
 const RESERVE = Math.max(0.005, parseFloat(process.env.DCA_RESERVE_SOL || "0.02"));
 const MIN_BUY = Math.max(0.001, parseFloat(process.env.DCA_MIN_BUY_SOL || "0.005"));
 const SLIPPAGE = parseFloat(process.env.DCA_SLIPPAGE || "15");
 const PRIORITY = parseFloat(process.env.DCA_PRIORITY_SOL || "0.00005");
-const INTERVAL_MS = Math.round((24 * 60 * 60 * 1000) / PER_DAY);
-const TICKS_TOTAL = DAYS * PER_DAY;
+const INTERVAL_MS = Math.round(INTERVAL_HOURS * 60 * 60 * 1000);
+const TICKS_TOTAL = Math.max(1, Math.round((DAYS * 24) / INTERVAL_HOURS)); // ticks in the rolling window
 const STATE = path.join(__dirname, ".dcastate.json");
 
 if (!MINT || !RPC) { console.error("Set TOKEN_MINT and RPC_URL"); process.exit(1); }
@@ -79,7 +79,7 @@ async function tg(chatId, text) {
 }
 const fmt = (n, d = 3) => Number(n || 0).toLocaleString("en-US", { maximumFractionDigits: d });
 
-async function loadState() { try { return JSON.parse(await fs.readFile(STATE, "utf8")); } catch { return { remaining: TICKS_TOTAL, totalSpent: 0, totalBurned: 0 }; } }
+async function loadState() { try { return JSON.parse(await fs.readFile(STATE, "utf8")); } catch { return { remaining: TICKS_TOTAL, totalSpent: 0, totalBurned: 0, funded: false }; } }
 async function saveState(s) { try { await fs.writeFile(STATE, JSON.stringify(s)); } catch {} }
 
 // Buy via PumpPortal's free local-trade API (returns a tx we sign ourselves).
@@ -122,7 +122,16 @@ async function tick() {
     if (st.remaining <= 0) st.remaining = TICKS_TOTAL; // start a fresh rolling window
     const lamports = await conn.getBalance(OWNER, "confirmed");
     const spendable = lamports / 1e9 - RESERVE;
-    if (spendable < MIN_BUY) { log(`idle — balance ${fmt(lamports / 1e9)} SOL, nothing to DCA`); running = false; return; }
+    if (spendable < MIN_BUY) {
+      log(`idle — balance ${fmt(lamports / 1e9)} SOL, nothing to DCA`);
+      if (st.funded) { // was funded, now empty -> alert once (both group + owner)
+        st.funded = false; await saveState(st);
+        const m = `⛽ <b>DCA fuel low.</b> The buy-&amp;-burn wallet is out of SOL 🔥\nSend SOL to keep the burns going:\n<code>${OWNER.toBase58()}</code>`;
+        await tg(CHAT, m); await tg(NOTIFY, m);
+      }
+      running = false; return;
+    }
+    if (!st.funded) st.funded = true; // refunded
     const perBuy = Math.max(MIN_BUY, +(spendable / st.remaining).toFixed(4));
     const amount = Math.min(perBuy, +(spendable).toFixed(4));
     log(`DCA tick: buying ${fmt(amount)} SOL of ${MINT} (spendable ${fmt(spendable)}, ${st.remaining} ticks left)`);
@@ -144,7 +153,7 @@ async function tick() {
 }
 
 (async () => {
-  log(`CATBOY DCA burn bot — wallet ${OWNER.toBase58()} · ${DAYS}d / ${PER_DAY}/day (every ${Math.round(INTERVAL_MS / 3600000 * 10) / 10}h) · reserve ${RESERVE} SOL`);
+  log(`CATBOY DCA burn bot — wallet ${OWNER.toBase58()} · buy+burn every ${INTERVAL_HOURS}h over ~${DAYS}d window · reserve ${RESERVE} SOL`);
   await tg(NOTIFY,
     `🔥 <b>CATBOY DCA burn bot online.</b>\nSend SOL to this wallet to auto buy-&amp;-burn $CATBOY (stretched over ~${DAYS} days):\n<code>${OWNER.toBase58()}</code>\nReserve kept for fees: ${RESERVE} SOL.`);
   tick(); // run one on boot (skips if empty)
