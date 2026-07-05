@@ -100,19 +100,25 @@ async function solPrice() {
 async function tgSendTo(chatId, text) {
   if (!chatId) return;
   try {
-    await fetch(`${API}/sendMessage`, {
+    const r = await fetch(`${API}/sendMessage`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true }),
     });
+    const j = await r.json().catch(() => ({}));
+    if (!j.ok) log("tgSend FAIL:", j.error_code, "·", j.description); // surface why Telegram rejected (perms / bad HTML / chat id)
+    return j;
   } catch (e) { log("tgSend error", e.message); }
 }
 const tgSendMessage = (text) => tgSendTo(CFG.chatId, text);
 async function tgReplyTo(chatId, msgId, text) {
   try {
-    await fetch(`${API}/sendMessage`, {
+    const r = await fetch(`${API}/sendMessage`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ chat_id: chatId, text, reply_to_message_id: msgId, parse_mode: "HTML", disable_web_page_preview: true, allow_sending_without_reply: true }),
     });
+    const j = await r.json().catch(() => ({}));
+    if (!j.ok) log("tgReply FAIL:", j.error_code, "·", j.description);
+    return j;
   } catch (e) { log("tgReply error", e.message); }
 }
 
