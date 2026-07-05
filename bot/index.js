@@ -256,9 +256,14 @@ async function handleCommand(m) {
   if (cmd === "/supply" || cmd === "/burn" || cmd === "/burns") {
     if (!cmdOk("supply")) return;
     if (!CFG.mint) return tgSendTo(m.chat.id, "Not live yet.");
-    const s = await solRpc("getTokenSupply", [CFG.mint]);
-    const ui = s && s.value ? Number(s.value.uiAmount) : NaN;
-    if (!isFinite(ui)) return tgSendTo(m.chat.id, "Supply unavailable right now — try again shortly.");
+    // Reuse the supply the burn poller already tracks (proven working); only hit
+    // the RPC if we don't have it yet.
+    let ui = (typeof _lastSupply === "number" && isFinite(_lastSupply)) ? _lastSupply : NaN;
+    if (!isFinite(ui)) {
+      const s = await solRpc("getTokenSupply", [CFG.mint]);
+      ui = s && s.value ? Number(s.value.uiAmount ?? s.value.uiAmountString) : NaN;
+    }
+    if (!isFinite(ui)) return tgSendTo(m.chat.id, "Supply loading — give it a few seconds and try again.");
     const burned = Math.max(0, CFG.totalSupply - ui);
     const pct = CFG.totalSupply ? (burned / CFG.totalSupply) * 100 : 0;
     return tgSendTo(m.chat.id,
