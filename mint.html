@@ -309,6 +309,20 @@
         }
         status.textContent = "Paid ✓ — minting your Catboy…";
         const d = await mintReq(sel.id, txSig, buyer);
+        // reveal the actual NFT you got in the big frame
+        try {
+          const img = $("revealImg"); if (img && d.image) img.src = d.image;
+          const badge = $("revealBadge"); if (badge) { badge.textContent = d.tier; badge.className = "nft-badge b-" + d.tier; badge.hidden = false; }
+          $("revealName").textContent = d.name;
+          $("revealTraits").textContent = "Minted to your wallet 🐾";
+          $("revealFrame").classList.remove("legendary", "epic"); $("revealBurst").hidden = true;
+          if (d.tier === "Legendary" || d.tier === "Epic") {
+            const burst = $("revealBurst"); burst.textContent = d.tier.toUpperCase() + "!"; burst.style.color = TIER_COL[d.tier]; burst.hidden = false;
+            $("revealFrame").classList.add(d.tier.toLowerCase());
+            confetti(d.tier === "Legendary" ? ["#ffd84d", "#fff2b0", "#ffb020", "#14f195"] : ["#ff3df0", "#d24dff", "#19e0ff", "#fff"]);
+            fanfare(d.tier);
+          }
+        } catch (_) {}
         status.style.color = "var(--cyan)"; status.textContent = "Minted " + d.name + " · " + d.tier + "! 🐾 Check your wallet.";
         try { const pulls = JSON.parse(localStorage.getItem("catboy_pulls") || "[]"); pulls.unshift({ name: d.name, tier: d.tier, img: d.image }); localStorage.setItem("catboy_pulls", JSON.stringify(pulls.slice(0, 60))); renderPulls(pulls); } catch {}
         paidMintSig = null;
