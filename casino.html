@@ -339,7 +339,10 @@
 
     // ---- LIVE slot-mint: every spin mints a real random Catboy (always a win,
     //      priced like the Alley pack). Not gambling — you always receive an NFT.
-    const MINT_LIVE = !!(window.CATBOY_MINT && window.CATBOY_MINT.enabled);
+    // Casino real-mint temporarily OFF — a payment on a "casino" page re-trips
+    // Phantom/Blowfish's transaction warning. Flip back to the enabled check
+    // once the domain reputation clears. Mint stays live on mint.html.
+    const MINT_LIVE = false;
     const SPIN_PRICE = 0.05; // = Alley pack
     const TIER_SYM = { Legendary: "cat", Epic: "gold", Rare: "seven", Common: "sol" };
     function getWallet() { return (window.solana && window.solana.isPhantom) ? window.solana : (window.solflare || window.backpack || (window.xnft && window.xnft.solana) || null); }
