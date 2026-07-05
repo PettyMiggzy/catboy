@@ -248,7 +248,7 @@ async function handleCommand(m) {
   if (cmd === "/start" || cmd === "/help") {
     return tgSendTo(m.chat.id,
       `🐾 <b>${CFG.ticker} bot</b>\n\n<b>Commands</b>\n` +
-      `/price — price &amp; market cap\n/nft — NFT mint stats\n/supply — supply &amp; burns\n` +
+      `/price — price &amp; market cap\n/nft — NFT mint stats\n/burn — total burned\n` +
       `/ca — contract address\n/buy — buy link\n/chart — live chart` +
       (isAdmin(m) ? `\n\n<b>Owner</b>\n/setmint &lt;CA&gt; · /status · /emojiid` : ``));
   }
@@ -279,24 +279,29 @@ async function handleCommand(m) {
       return tgSendTo(m.chat.id, `🎴 <b>Catboy NFT Mint</b>\n${rows || "(loading)"}\n\nPacks from 1 SOL → <a href="${CFG.site}/mint.html">Mint</a> · <a href="${CFG.site}/market.html">Gallery</a>`);
     } catch { return tgSendTo(m.chat.id, `🎴 Mint a Catboy → <a href="${CFG.site}/mint.html">${CFG.site}/mint.html</a>`); }
   }
-  if (cmd === "/supply" || cmd === "/burn" || cmd === "/burns") {
-    if (!cmdOk("supply")) return;
+  if (cmd === "/burn" || cmd === "/burns") {
+    // No rate-limit gate here — a burn lookup is a cheap cached read, and gating it
+    // made rapid retries return silently (the reason /burn looked "dead").
     if (!CFG.mint) return tgSendTo(m.chat.id, "Not live yet.");
-    // Reuse the supply the burn poller already tracks (proven working); only hit
-    // the RPC if we don't have it yet.
-    let ui = (typeof _lastSupply === "number" && isFinite(_lastSupply)) ? _lastSupply : NaN;
-    if (!isFinite(ui)) {
-      const s = await solRpc("getTokenSupply", [CFG.mint]);
-      ui = s && s.value ? Number(s.value.uiAmount ?? s.value.uiAmountString) : NaN;
+    try {
+      // Reuse the supply the burn poller already tracks; only hit the RPC if we don't have it yet.
+      let ui = (typeof _lastSupply === "number" && isFinite(_lastSupply)) ? _lastSupply : NaN;
+      if (!isFinite(ui)) {
+        const s = await solRpc("getTokenSupply", [CFG.mint]);
+        ui = s && s.value ? Number(s.value.uiAmount ?? s.value.uiAmountString) : NaN;
+      }
+      if (!isFinite(ui)) return tgSendTo(m.chat.id, "Supply loading — give it a few seconds and try again.");
+      const burned = Math.max(0, CFG.totalSupply - ui);
+      const pct = CFG.totalSupply ? (burned / CFG.totalSupply) * 100 : 0;
+      return tgSendTo(m.chat.id,
+        `🔥 <b>$${CFG.ticker} Burns</b>\n` +
+        `Circulating: <b>${fmt(ui, 0)}</b>\n` +
+        `Total burned: <b>${fmt(burned, 0)}</b> (${pct >= 0.01 ? pct.toFixed(2) : "<0.01"}%)\n` +
+        `Burn alerts: ${CFG.announceBurns ? "on 🔥" : "off"}`);
+    } catch (e) {
+      log("burn cmd error", e.message);
+      return tgSendTo(m.chat.id, "🔥 Couldn't fetch burn stats right now — try again in a moment.");
     }
-    if (!isFinite(ui)) return tgSendTo(m.chat.id, "Supply loading — give it a few seconds and try again.");
-    const burned = Math.max(0, CFG.totalSupply - ui);
-    const pct = CFG.totalSupply ? (burned / CFG.totalSupply) * 100 : 0;
-    return tgSendTo(m.chat.id,
-      `🔥 <b>$${CFG.ticker} Burns</b>\n` +
-      `Circulating: <b>${fmt(ui, 0)}</b>\n` +
-      `Total burned: <b>${fmt(burned, 0)}</b> (${pct >= 0.01 ? pct.toFixed(2) : "<0.01"}%)\n` +
-      `Burn alerts: ${CFG.announceBurns ? "on 🔥" : "off"}`);
   }
 
   if (!isAdmin(m)) return; // only the owner can run the rest
