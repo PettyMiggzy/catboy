@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>CATBOY Casino — Nine Lives Slots &amp; Games on Solana</title>
-  <meta name="description" content="The Catboy Casino: spin the Nine Lives Slots to win Catboy NFTs, flip coins, and scratch cards. Free demo — play all you want, no wallet or money needed until launch." />
+  <meta name="description" content="The Catboy Casino is coming soon — a free preview of the Nine Lives Slots, coin flips, and scratch cards. No real prizes yet. Mint a real Catboy NFT on the NFT page." />
   <meta property="og:title" content="CATBOY Casino — Nine Lives Slots" />
   <meta property="og:description" content="Spin to win Catboy NFTs. Higher the tier, harder the win. Buy credits and pull the lever." />
   <meta property="og:image" content="assets/nft/collection/001.jpg" />
@@ -56,7 +56,7 @@
   <!-- CREDITS BAR -->
   <section class="section" style="padding-top:0.5rem;">
     <div class="cas-credits">
-      <span class="demo-pill">FREE DEMO</span>
+      <span class="demo-pill">COMING SOON · FREE PREVIEW</span>
       <div class="cas-bal"><span>Credits</span><b id="credits">0</b></div>
       <div class="cas-bal"><span>Per spin</span><b>1 · FREE</b></div>
       <button class="btn btn-primary btn-sm" id="buyBtn" type="button">Get Free Credits</button>
@@ -134,7 +134,7 @@
           <div class="sc-cells" id="scCells"></div>
           <canvas class="sc-foil" id="scFoil"></canvas>
         </div>
-        <p class="muted-note" style="text-align:center;">Match all three to win. Scratch the foil with your finger or mouse — most cards lose, but a rare <b>Gold Cat</b> or <b>Catboy</b> pays a real NFT.</p>
+        <p class="muted-note" style="text-align:center;">Match all three to win. Scratch the foil with your finger or mouse. <b>Free preview — casino coming soon, no real prizes yet.</b></p>
         <div class="slot-result" id="scResult">Buy a card and start scratching</div>
         <div class="slot-controls">
           <button class="btn btn-ghost btn-sm" id="scRevealBtn" type="button">Reveal All</button>
@@ -148,7 +148,7 @@
       <div class="section-head" style="margin-top:0;">
         <span class="eyebrow">Deflationary</span>
         <h2>The <span class="grad">Burn Lottery</span></h2>
-        <p class="section-intro">Enter a round with $CATBOY. Winner takes the pot — every losing entry is <b class="flame">burned forever</b>, shrinking supply with each game.</p>
+        <p class="section-intro"><b>Coming soon.</b> Enter a round with $CATBOY, winner takes the pot, every losing entry <b class="flame">burned forever</b>. Preview only for now — no real entries yet.</p>
       </div>
       <div class="burn-stats">
         <div class="burn-stat"><div class="num">TBA</div><div class="lbl">Total $CATBOY Burned</div></div>
@@ -196,7 +196,7 @@
 
   <footer class="footer">
     <div class="footer-brand"><img src="assets/catboy.png" alt="Catboy" class="footer-logo" /><span>CATBOY</span></div>
-    <p class="footer-disclaimer">The Catboy Casino is a community game for entertainment. Play responsibly; never risk more than you can afford to lose. Outcomes are random, credits currently run in demo mode, and real prizes go live with the token. Not financial advice — check your local laws.</p>
+    <p class="footer-disclaimer">The Catboy Casino is <b>coming soon</b> — this is a free preview for fun only. No real credits, prizes, or NFTs are awarded here. To mint a real Catboy NFT now, use the <a href="mint.html">NFT mint</a>. Not financial advice.</p>
     <p class="footer-copy">© <span id="year"></span> CATBOY · The Legend Evolves on Solana</p>
     <p class="footer-credit">A <a href="https://t.me/kingpetty317" target="_blank" rel="noopener">King Petty</a> Build</p>
   </footer>
@@ -328,7 +328,7 @@
       const n = pool.length ? pool[(Math.random() * pool.length) | 0] : { name: "Catboy", tier, file: "001.jpg" };
       $("winImg").src = P + n.file; $("winName").textContent = n.name;
       const b = $("winBadge"); b.textContent = tier; b.className = "nft-badge b-" + tier;
-      $("winNote").textContent = "You won a " + tier + " Catboy NFT! This is a free-demo win — real NFTs are airdropped to winners once the token launches.";
+      $("winNote").textContent = "Nice pull! 🐾 The Catboy Casino is COMING SOON — this is just a free preview, no real NFT is awarded. To mint a real Catboy now, head to the NFT mint.";
       $("winModal").hidden = false;
       recordNftWin();
       // record for the city jackpot ticker
