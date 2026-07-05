@@ -6,7 +6,9 @@ window.CATBOY_MINT = {
   enabled: true,             // LIVE — /api/mint configured + collection on mainnet
   rpc: "/api/solrpc",        // same-origin RPC proxy (already live)
   total: 100,                // collection size (display)
-  collectionMint: "33kxQv4Jo7u9edC4RipZckwkpRRdxg863b6cw2UGfh6S", // Core collection — holder verify + perks
+  collectionMint: "33kxQv4Jo7u9edC4RipZckwkpRRdxg863b6cw2UGfh6S", // Nine Lives Core collection — holder verify + perks
+  genesisMint:    "HuLA9RRuG6s994eAiiY4cFhrhghCkCQWcNdm3e3wVD3x", // Genesis Core collection (elite perks)
+  prideMint:      "4N1d9umoscMYiwiqxXnkTbJD9pXLMZiPCw4H7fAUK93x", // Pride Core collection (elite perks)
 
   // Tiered foil packs — pay more, better odds of a rare pull. Every pack mints a
   // random Catboy straight to your wallet. MUST match server PACKS in api/mint.js.
