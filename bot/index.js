@@ -34,6 +34,7 @@ const CFG = {
   mint: process.env.TOKEN_MINT || "",
   minBuySol: parseFloat(process.env.MIN_BUY_SOL || "0.05"),
   emoji: process.env.BUY_EMOJI || "❤️",
+  customEmojiId: (process.env.CUSTOM_EMOJI_ID || "").trim(), // Telegram premium custom emoji id (optional; /emojiid to fetch)
   media: process.env.BUY_MEDIA || path.join(__dirname, "media", "buy.mp4"), // local path or http(s) URL (mp4 or gif)
   ticker: process.env.TOKEN_TICKER || "CATBOY",
   ws: process.env.PUMPPORTAL_WS || "wss://pumpportal.fun/api/data",
@@ -56,9 +57,9 @@ const CFG = {
   llmKey: (process.env.LLM_API_KEY || "").trim(),
   llmBase: process.env.LLM_BASE_URL || "https://api.groq.com/openai/v1/chat/completions", // OpenAI-compatible
   llmModel: process.env.LLM_MODEL || "llama-3.3-70b-versatile",
-  replyChance: Math.min(1, Math.max(0, parseFloat(process.env.REPLY_CHANCE || "0.04"))), // odds of chiming in on a RANDOM post
-  nameReplyChance: Math.min(1, Math.max(0, parseFloat(process.env.NAME_REPLY_CHANCE || "0.22"))), // odds of replying when someone just says "catboy" (not a direct @/reply)
-  llmMaxPerMin: parseInt(process.env.LLM_MAX_PER_MIN || "4", 10), // spam/cost guard
+  replyChance: Math.min(1, Math.max(0, parseFloat(process.env.REPLY_CHANCE || "0.10"))), // odds of chiming in on a RANDOM post
+  nameReplyChance: Math.min(1, Math.max(0, parseFloat(process.env.NAME_REPLY_CHANCE || "0.45"))), // odds of replying when someone just says "catboy" (not a direct @/reply)
+  llmMaxPerMin: parseInt(process.env.LLM_MAX_PER_MIN || "8", 10), // spam/cost guard
   // Daily NFT promo — one auto-post a day to the group (restart-safe via a state file).
   dailyAd: (process.env.DAILY_NFT_AD ?? "1") !== "0",
   adIntervalMs: Math.max(3600000, parseInt(process.env.AD_INTERVAL_MS || String(24 * 60 * 60 * 1000), 10)),
@@ -205,21 +206,69 @@ function isAdmin(m) {
   if (!ids.length) return false;
   return ids.includes(String(m.chat && m.chat.id)) || ids.includes(String(m.from && m.from.id));
 }
+const _cmdCd = new Map();
+function cmdOk(key, ms = 4000) { const now = Date.now(), last = _cmdCd.get(key) || 0; if (now - last < ms) return false; _cmdCd.set(key, now); return true; }
+const COLL_NAME = { nine: "Nine Lives", genesis: "Genesis", pride: "Pride" };
+
 async function handleCommand(m) {
   const text = (m.text || "").trim();
   if (!text.startsWith("/")) return;
   const parts = text.split(/\s+/);
   const cmd = parts[0].toLowerCase().replace(/@.*$/, ""); // strip @botname
   const arg = (parts[1] || "").trim();
-  if (cmd === "/start" || cmd === "/help" || cmd === "/id") {
+
+  // ---- public commands (anyone in the group) ----
+  if (cmd === "/start" || cmd === "/help") {
     return tgSendTo(m.chat.id,
-      `🐾 <b>${CFG.ticker} bot</b>\nYour chat id: <code>${m.chat.id}</code>` +
-      `\n\nOwner commands (from your NOTIFY chat):\n` +
-      `<code>/setmint &lt;CA&gt;</code> — lock onto the token at launch\n` +
-      `<code>/status</code> — show current state`);
+      `🐾 <b>${CFG.ticker} bot</b>\n\n<b>Commands</b>\n` +
+      `/price — price &amp; market cap\n/nft — NFT mint stats\n/supply — supply &amp; burns\n` +
+      `/ca — contract address\n/buy — buy link\n/chart — live chart` +
+      (isAdmin(m) ? `\n\n<b>Owner</b>\n/setmint &lt;CA&gt; · /status · /emojiid` : ``));
   }
+  if (cmd === "/id") return tgSendTo(m.chat.id, `Your chat id: <code>${m.chat.id}</code>`);
+  if (cmd === "/ca" || cmd === "/contract" || cmd === "/address") {
+    if (!CFG.mint) return tgSendTo(m.chat.id, "CA isn't set yet.");
+    return tgSendTo(m.chat.id, `<b>$${CFG.ticker} contract</b>\n<code>${CFG.mint}</code>`);
+  }
+  if (cmd === "/buy") {
+    if (!CFG.mint) return tgSendTo(m.chat.id, "Not live yet.");
+    return tgSendTo(m.chat.id, `🟢 <b>Buy $${CFG.ticker}</b>\n<a href="https://pump.fun/coin/${CFG.mint}">Pump.fun</a> · <a href="${chartUrl()}">Chart</a>\n<code>${CFG.mint}</code>`);
+  }
+  if (cmd === "/chart") return tgSendTo(m.chat.id, `📈 <a href="${chartUrl()}">$${CFG.ticker} live chart</a>`);
+  if (cmd === "/website" || cmd === "/site" || cmd === "/links") return tgSendTo(m.chat.id, `🌐 <a href="${CFG.site}">${CFG.site.replace(/^https?:\/\//, "")}</a>`);
+  if (cmd === "/price" || cmd === "/mc" || cmd === "/marketcap" || cmd === "/stats") {
+    if (!cmdOk("mkt")) return;
+    if (!dex || !dex.priceUsd) return tgSendTo(m.chat.id, "📊 Price is still loading — try again in a few seconds.");
+    return tgSendTo(m.chat.id,
+      `📊 <b>$${CFG.ticker}</b>\nPrice: <b>$${fmt(dex.priceUsd, 6)}</b>\nMarket Cap: <b>${usd0(dex.marketCap)}</b>\n` +
+      `24h Volume: <b>${usd0(dex.vol24)}</b>\nLiquidity: <b>${usd0(dex.liqUsd)}</b>\n` +
+      `<a href="${chartUrl()}">📈 Chart</a> · <a href="https://pump.fun/coin/${CFG.mint}">Buy</a>`);
+  }
+  if (cmd === "/nft" || cmd === "/nfts" || cmd === "/mintstats") {
+    if (!cmdOk("nft")) return;
+    try {
+      const j = await (await fetch(CFG.site + "/api/mint")).json();
+      const rows = (j.collections || []).map((c) => `${COLL_NAME[c.collection] || c.collection}: <b>${c.minted}/${c.total}</b> minted`).join("\n");
+      return tgSendTo(m.chat.id, `🎴 <b>Catboy NFT Mint</b>\n${rows || "(loading)"}\n\nPacks from 1 SOL → <a href="${CFG.site}/mint.html">Mint</a> · <a href="${CFG.site}/market.html">Gallery</a>`);
+    } catch { return tgSendTo(m.chat.id, `🎴 Mint a Catboy → <a href="${CFG.site}/mint.html">${CFG.site}/mint.html</a>`); }
+  }
+  if (cmd === "/supply" || cmd === "/burn" || cmd === "/burns") {
+    if (!cmdOk("supply")) return;
+    if (!CFG.mint) return tgSendTo(m.chat.id, "Not live yet.");
+    const s = await solRpc("getTokenSupply", [CFG.mint]);
+    const ui = s && s.value ? Number(s.value.uiAmount) : NaN;
+    if (!isFinite(ui)) return tgSendTo(m.chat.id, "Supply unavailable right now — try again shortly.");
+    return tgSendTo(m.chat.id, `🔥 <b>$${CFG.ticker} Supply</b>\nCirculating: <b>${fmt(ui, 0)}</b>\nBurn alerts: ${CFG.announceBurns ? "on 🔥" : "off"}`);
+  }
+
   if (!isAdmin(m)) return; // only the owner can run the rest
-  if (cmd === "/setmint" || cmd === "/mint" || cmd === "/launch") {
+  if (cmd === "/emojiid") {
+    const ent = [...(m.entities || []), ...((m.reply_to_message && m.reply_to_message.entities) || [])];
+    const ids = [...new Set(ent.filter((e) => e.type === "custom_emoji").map((e) => e.custom_emoji_id))];
+    if (!ids.length) return tgSendTo(m.chat.id, "Send <code>/emojiid</code> immediately followed by your custom emoji (or reply to a message that has it), and I'll return its id.");
+    return tgSendTo(m.chat.id, "Custom emoji id(s):\n" + ids.map((i) => `<code>${i}</code>`).join("\n") + "\n\nAdd <code>CUSTOM_EMOJI_ID=&lt;id&gt;</code> to the bot .env and restart.");
+  }
+  if (cmd === "/setmint" || cmd === "/launch") {
     if (!MINT_RE.test(arg)) return tgSendTo(m.chat.id, "⚠️ Usage: <code>/setmint &lt;contract address&gt;</code>");
     const ok = await armToken(arg, "manual");
     return tgSendTo(m.chat.id, ok ? `✅ Locked on <code>${arg}</code> — buy alerts are live.` : `Already tracking <code>${CFG.mint}</code>.`);
@@ -250,13 +299,17 @@ async function pollUpdates() {
 }
 
 let _cachedFileId = null; // reuse the uploaded GIF so we only upload once
-async function tgSendBuy(caption) {
+// caption is HTML unless captionEntities is provided (then it's plain text + entities,
+// used for premium custom emoji — parse_mode and entities are mutually exclusive).
+async function tgSendBuy(caption, captionEntities) {
+  const useEnt = Array.isArray(captionEntities) && captionEntities.length;
   try {
     const isUrl = /^https?:\/\//i.test(CFG.media);
     if (isUrl || _cachedFileId) {
+      const body = { chat_id: CFG.chatId, animation: _cachedFileId || CFG.media, caption };
+      if (useEnt) body.caption_entities = captionEntities; else body.parse_mode = "HTML";
       const r = await fetch(`${API}/sendAnimation`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: CFG.chatId, animation: _cachedFileId || CFG.media, caption, parse_mode: "HTML" }),
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
       });
       const j = await r.json();
       if (j.ok && j.result?.animation?.file_id) _cachedFileId = j.result.animation.file_id;
@@ -270,7 +323,7 @@ async function tgSendBuy(caption) {
     const fd = new FormData();
     fd.set("chat_id", CFG.chatId);
     fd.set("caption", caption);
-    fd.set("parse_mode", "HTML");
+    if (useEnt) fd.set("caption_entities", JSON.stringify(captionEntities)); else fd.set("parse_mode", "HTML");
     fd.set("animation", new Blob([buf], { type }), "buy." + ext);
     const r = await fetch(`${API}/sendAnimation`, { method: "POST", body: fd });
     const j = await r.json();
@@ -278,7 +331,7 @@ async function tgSendBuy(caption) {
     if (!j.ok) throw new Error(j.description || "sendAnimation failed");
   } catch (e) {
     log("tgSendBuy error", e.message, "— falling back to text");
-    await tgSendMessage(caption);
+    await tgSendMessage(caption); // HTML text fallback (entities dropped, still readable)
   }
 }
 
@@ -324,12 +377,49 @@ async function maybePostAd() {
 // ---- formatting ---------------------------------------------------------
 const short = (a) => (a ? a.slice(0, 4) + "…" + a.slice(-4) : "");
 const fmt = (n, d = 2) => Number(n || 0).toLocaleString("en-US", { maximumFractionDigits: d });
-function emojiBar(sol) {
-  const n = Math.max(3, Math.min(CFG.emojiMax, Math.round(sol / CFG.emojiStepSol)));
-  return CFG.emoji.repeat(n);
-}
+function emojiCount(sol) { return Math.max(3, Math.min(CFG.emojiMax, Math.round(sol / CFG.emojiStepSol))); }
+function emojiBar(sol) { return CFG.emoji.repeat(emojiCount(sol)); }
 const usd0 = (n) => "$" + fmt(n, 0);
 function chartUrl() { return dex.pairUrl || `https://dexscreener.com/solana/${CFG.mint}`; }
+
+// ---- Telegram message entities (needed for premium custom emoji in the bar) --
+// Build plain text + an entities[] array from tagged segments. Offsets are in
+// UTF-16 code units (what Telegram expects). Used only when CUSTOM_EMOJI_ID is set.
+function u16len(s) { let n = 0; for (const ch of s) n += (ch.codePointAt(0) > 0xffff ? 2 : 1); return n; }
+function renderEntities(segs) {
+  let text = "", ents = [], off = 0;
+  for (const x of segs) {
+    const len = u16len(x.s);
+    if (x.b) ents.push({ type: "bold", offset: off, length: len });
+    if (x.u) ents.push({ type: "text_link", offset: off, length: len, url: x.u });
+    if (x.e) ents.push({ type: "custom_emoji", offset: off, length: len, custom_emoji_id: x.e });
+    text += x.s; off += len;
+  }
+  return { text, entities: ents };
+}
+function buildBuyEntities(d) {
+  const segs = [], nl = () => segs.push({ s: "\n" });
+  segs.push({ s: `${CFG.ticker} Buy! `, b: true });
+  if (d.isNew) segs.push({ s: "🆕" });
+  nl();
+  const nEmoji = Math.min(d.n, 45); // Telegram caps ~100 entities/msg — keep the bar safe
+  for (let i = 0; i < nEmoji; i++) segs.push({ s: CFG.emoji, e: CFG.customEmojiId });
+  nl(); nl();
+  segs.push({ s: "💵 " }); segs.push({ s: `${fmt(d.sol, 3)} SOL`, b: true });
+  if (d.usd) segs.push({ s: ` ($${fmt(d.usd)})` });
+  if (d.tokens) { nl(); segs.push({ s: "🪙 Got " }); segs.push({ s: `${fmt(d.tokens, 0)} ${CFG.ticker}`, b: true }); }
+  if (d.mcUsd) { nl(); segs.push({ s: "📊 Market Cap: " }); segs.push({ s: `$${fmt(d.mcUsd)}`, b: true }); }
+  else if (d.mcSol) { nl(); segs.push({ s: "📊 Market Cap: " }); segs.push({ s: `${fmt(d.mcSol, 1)} SOL`, b: true }); }
+  if (d.buyer) { nl(); segs.push({ s: "👤 " }); segs.push({ s: short(d.buyer), u: `https://solscan.io/account/${d.buyer}` }); if (d.isNew) segs.push({ s: " · new holder" }); }
+  nl();
+  const links = [];
+  if (d.sig) links.push({ s: "TX", u: `https://solscan.io/tx/${d.sig}` });
+  if (CFG.mint) links.push({ s: "Pump.fun", u: `https://pump.fun/coin/${CFG.mint}` });
+  if (CFG.mint) links.push({ s: "Chart", u: chartUrl() });
+  links.push({ s: "Website", u: CFG.site });
+  links.forEach((l, i) => { if (i) segs.push({ s: " · " }); segs.push(l); });
+  return renderEntities(segs);
+}
 
 // ---- DexScreener (real price/mcap + chart-live / graduation / milestones) --
 // PumpPortal is the live per-trade feed (bonding curve AND post-graduation).
@@ -435,6 +525,14 @@ async function onBuy(t) {
   const usd = px ? sol * px : (dex.priceUsd && tokens ? dex.priceUsd * tokens : 0);
   const mcUsd = dex.marketCap || (px && mcSol ? mcSol * px : 0);
   const isNew = (t.newTokenBalance != null && tokens && Math.abs(Number(t.newTokenBalance) - tokens) < 1);
+
+  // Premium custom-emoji path: build plain text + entities (parse_mode can't mix).
+  if (CFG.customEmojiId) {
+    const { text, entities } = buildBuyEntities({ n: emojiCount(sol), isNew, sol, usd, tokens, mcUsd, mcSol, buyer, sig });
+    await tgSendBuy(text, entities);
+    log(`BUY ${fmt(sol, 3)} SOL${usd ? " ($" + fmt(usd) + ")" : ""} by ${short(buyer)} (custom emoji)`);
+    return;
+  }
 
   const lines = [];
   lines.push(`<b>${CFG.ticker} Buy!</b> ${isNew ? "🆕" : ""}`);
