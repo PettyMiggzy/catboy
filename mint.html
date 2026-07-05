@@ -113,7 +113,7 @@
     }
     $("packGrid").innerHTML = PACKS.map((p) => `
       <button class="pack-card${sel && p.id === sel.id ? " sel" : ""}" data-id="${p.id}" type="button">
-        <div class="pack-emoji">${p.emoji}</div>
+        <div class="pack-emoji"><img src="assets/nft/packs/${p.id}.png" alt="${p.name}" loading="lazy" style="width:88px;height:88px;object-fit:contain;filter:drop-shadow(0 6px 16px rgba(0,0,0,.55))"></div>
         <div class="pack-name">${p.name}</div>
         <div class="pack-price">${p.priceSol} SOL ${C.enabled ? "" : '<span class="pack-free">free demo</span>'}</div>
         <p class="pack-blurb">${p.blurb}</p>
