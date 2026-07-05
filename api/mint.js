@@ -43,11 +43,15 @@ const MINT_SECRET = (process.env.NFT_MINT_SECRET || "").trim();
 const MAX_TX_AGE_S = 20 * 60;
 const PRICE_TOLERANCE = 0.97; // accept >=97% of quoted price (absorbs SOL drift)
 
-// Pack odds live server-side so the client can't tamper with them.
+// Price + odds live server-side so the client can't tamper with them.
+// Single flat-price random mint: odds are proportional to supply, so every one
+// of the 100 Catboys is equally likely (a true random pull).
 const PACKS = {
-  alley:     { name: "Alley Cat Pack",   priceSol: 0.05, odds: { Common: 80, Rare: 16, Epic: 3.5, Legendary: 0.5 } },
-  ninelives: { name: "Nine Lives Pack",  priceSol: 0.2,  odds: { Common: 50, Rare: 35, Epic: 12,  Legendary: 3 } },
-  alpha:     { name: "Alpha Whale Pack", priceSol: 0.6,  odds: { Common: 18, Rare: 42, Epic: 32,  Legendary: 8 } },
+  random: { name: "Random Catboy", priceSol: 1, odds: { Common: 60, Rare: 25, Epic: 12, Legendary: 3 } },
+  // legacy pack ids kept as aliases so old links / the casino don't 400
+  alley:     { name: "Random Catboy", priceSol: 1, odds: { Common: 60, Rare: 25, Epic: 12, Legendary: 3 } },
+  ninelives: { name: "Random Catboy", priceSol: 1, odds: { Common: 60, Rare: 25, Epic: 12, Legendary: 3 } },
+  alpha:     { name: "Random Catboy", priceSol: 1, odds: { Common: 60, Rare: 25, Epic: 12, Legendary: 3 } },
 };
 
 const B58 = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;

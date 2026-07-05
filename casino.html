@@ -343,7 +343,7 @@
     // Phantom/Blowfish's transaction warning. Flip back to the enabled check
     // once the domain reputation clears. Mint stays live on mint.html.
     const MINT_LIVE = false;
-    const SPIN_PRICE = 0.05; // = Alley pack
+    const SPIN_PRICE = 1; // = Random Catboy mint
     const TIER_SYM = { Legendary: "cat", Epic: "gold", Rare: "seven", Common: "sol" };
     function getWallet() { return (window.solana && window.solana.isPhantom) ? window.solana : (window.solflare || window.backpack || (window.xnft && window.xnft.solana) || null); }
     async function waitConfirmed(conn, sig, timeoutMs = 90000) {
@@ -393,7 +393,7 @@
         }
         recordSpin();
         // spin the reels while the mint resolves
-        const mintP = mintReq("alley", sig, String(from));
+        const mintP = mintReq("random", sig, String(from));
         await Promise.all([reelSpin(reels[0], "cat", 900), reelSpin(reels[1], "cat", 1250), reelSpin(reels[2], "gold", 1600)]);
         const d = await mintP;
         const sym = TIER_SYM[d.tier] || "sol";
