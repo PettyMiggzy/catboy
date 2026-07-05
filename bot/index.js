@@ -517,6 +517,7 @@ async function onNewToken(t) {
 // ---- PumpPortal WebSocket (auto-reconnect) ------------------------------
 const seen = new Set(); // signature dedupe
 let ws, backoff = 1000;
+let _wsMsgCount = 0, _wsTradeCount = 0; // PumpPortal WS feed health counters
 
 function connect() {
   log("connecting to PumpPortal…");
