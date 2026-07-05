@@ -28,6 +28,23 @@
     .reveal-frame.flashfx::after { content:''; position:absolute; inset:0; z-index:7; pointer-events:none;
       background: radial-gradient(circle, #fff 0%, rgba(255,255,255,0.5) 40%, transparent 72%); animation: flashfx 0.3s ease-out; }
     @keyframes flashfx { 0%{opacity:0} 35%{opacity:0.95} 100%{opacity:0} }
+    /* desktop 2-column: mint left, perks right */
+    .mint-layout { display: grid; grid-template-columns: 1fr; gap: 1.6rem; max-width: var(--max); margin: 0 auto; padding: 0 clamp(1rem,4vw,2.5rem); }
+    .mint-main { min-width: 0; }
+    @media (min-width: 980px) {
+      .mint-layout { grid-template-columns: minmax(0,1fr) 330px; align-items: start; }
+      .perks-aside { position: sticky; top: 84px; }
+    }
+    .perks-card { background: linear-gradient(160deg, rgba(155,77,255,0.10), rgba(53,224,255,0.05)); border: 1px solid var(--border); border-radius: 16px; padding: 1.35rem 1.25rem; }
+    .perks-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.85rem; }
+    .perks-list li { display: flex; gap: 0.7rem; align-items: flex-start; }
+    .perks-list li > span { font-size: 1.35rem; line-height: 1; }
+    .perks-list li b { color: #fff; font-size: 0.95rem; }
+    .perks-list li p { margin: 0.12rem 0 0; color: var(--muted); font-size: 0.8rem; line-height: 1.35; }
+    .perks-rarity { margin-top: 1.15rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+    .perks-rarity > b { display: block; margin-bottom: 0.55rem; font-size: 0.85rem; color: #fff; }
+    .rarity-row { display: flex; justify-content: space-between; padding: 0.18rem 0; font-size: 0.86rem; }
+    .rarity-row b { color: #fff; }
   </style>
 </head>
 <body>
@@ -65,35 +82,57 @@
     </div>
   </section>
 
-  <!-- PACK SELECTOR -->
+  <!-- MINT LAYOUT: packs + reveal (left) · perks/why-buy (right on desktop) -->
   <section class="section" style="padding-top:1rem;">
-    <div class="pack-grid" id="packGrid"></div>
-  </section>
-
-  <!-- OPEN STAGE -->
-  <section class="section" style="padding-top:0;">
-    <div class="open-stage">
-      <div class="reveal-frame" id="revealFrame">
-        <img src="assets/nft/collection/003.jpg" alt="Catboy NFT" class="reveal-img" id="revealImg" />
-        <div class="pack-open" id="packOpen" hidden><img class="pack-foil" id="packFoil" src="assets/nft/packs/pack-standard.jpg" alt="Catboy pack" /></div>
-        <span class="win-burst reveal-burst" id="revealBurst" hidden>LEGENDARY</span>
-      </div>
-      <div class="open-meta">
-        <span class="nft-badge" id="revealBadge" hidden></span>
-        <h3 id="revealName">Rip a pack to reveal your cat</h3>
-        <p class="muted-note" id="revealTraits" style="margin:.2rem 0 0;"></p>
-      </div>
-      <div class="open-controls">
-        <div class="open-price">
-          <span id="openPackName">Nine Lives Pack</span>
-          <b id="openPackPrice">FREE DEMO</b>
+    <div class="mint-layout">
+      <div class="mint-main">
+        <div class="pack-grid" id="packGrid"></div>
+        <div class="open-stage">
+          <div class="reveal-frame" id="revealFrame">
+            <img src="assets/nft/collection/003.jpg" alt="Catboy NFT" class="reveal-img" id="revealImg" />
+            <div class="pack-open" id="packOpen" hidden><img class="pack-foil" id="packFoil" src="assets/nft/packs/pack-standard.jpg" alt="Catboy pack" /></div>
+            <span class="win-burst reveal-burst" id="revealBurst" hidden>LEGENDARY</span>
+          </div>
+          <div class="open-meta">
+            <span class="nft-badge" id="revealBadge" hidden></span>
+            <h3 id="revealName">Rip a pack to reveal your cat</h3>
+            <p class="muted-note" id="revealTraits" style="margin:.2rem 0 0;"></p>
+          </div>
+          <div class="open-controls">
+            <div class="open-price">
+              <span id="openPackName">Nine Lives Pack</span>
+              <b id="openPackPrice">FREE DEMO</b>
+            </div>
+            <button class="btn btn-primary slot-spin" id="openBtn" type="button" style="width:100%;">Open Pack · FREE</button>
+            <p class="pity" id="pityLabel"></p>
+          </div>
+          <p class="form-status" id="mintStatus" role="status" aria-live="polite"></p>
+          <div class="pulls" id="pulls" aria-label="Your recent pulls"></div>
+          <p class="muted-note" id="mintFootnote" style="text-align:center;">Demo pulls are for fun and preview real rarity odds. At launch, packs mint on Solana for the prices shown — you sign every mint yourself, non-custodial. Not financial advice.</p>
         </div>
-        <button class="btn btn-primary slot-spin" id="openBtn" type="button" style="width:100%;">Open Pack · FREE</button>
-        <p class="pity" id="pityLabel"></p>
       </div>
-      <p class="form-status" id="mintStatus" role="status" aria-live="polite"></p>
-      <div class="pulls" id="pulls" aria-label="Your recent pulls"></div>
-      <p class="muted-note" id="mintFootnote" style="text-align:center;">Demo pulls are for fun and preview real rarity odds. At launch, packs mint on Solana for the prices shown — you sign every mint yourself, non-custodial. Not financial advice.</p>
+
+      <aside class="perks-aside">
+        <div class="perks-card">
+          <span class="eyebrow">Why mint a Catboy?</span>
+          <h3 style="margin:.25rem 0 .9rem;">Every cat = real utility</h3>
+          <ul class="perks-list">
+            <li><span>🎰</span><div><b>Casino edge</b><p>Holders unlock bigger wagers + perks in the Catboy Casino.</p></div></li>
+            <li><span>🥊</span><div><b>Fighter skin</b><p>Run your Catboy as a playable skin in the Arcade fighter.</p></div></li>
+            <li><span>🏙️</span><div><b>City billboard</b><p>Your cat featured on the Catboy City jackpot ticker.</p></div></li>
+            <li><span>🎴</span><div><b>Cat's Den club</b><p>Holder-only channels, roles &amp; allowlist access.</p></div></li>
+            <li><span>🎁</span><div><b>Airdrop priority</b><p>First in line for token + NFT airdrops as the ecosystem grows.</p></div></li>
+          </ul>
+          <div class="perks-rarity">
+            <b>Only 100 exist — every one a 1-of-1</b>
+            <div class="rarity-row"><span style="color:#ffd84d">◆ Legendary</span><b>3</b></div>
+            <div class="rarity-row"><span style="color:#ff3df0">◆ Epic</span><b>12</b></div>
+            <div class="rarity-row"><span style="color:#19e0ff">◆ Rare</span><b>25</b></div>
+            <div class="rarity-row"><span style="color:#b9b2cf">◆ Common</span><b>60</b></div>
+          </div>
+          <p class="muted-note" style="margin-top:.9rem;font-size:.76rem;">Pay more, better odds. 5% resale royalty supports the project — trade on Magic Eden / Tensor.</p>
+        </div>
+      </aside>
     </div>
   </section>
 
