@@ -107,7 +107,12 @@
         lamports: Math.round(CFG.feeSol * 1e9),
       }));
       tx.feePayer = new web3.PublicKey(from);
-      tx.recentBlockhash = (await conn.getLatestBlockhash()).blockhash;
+      tx.recentBlockhash = (await conn.getLatestBlockhash("finalized")).blockhash;
+      // Pre-flight sim (Phantom docs): abort cleanly if the tx would fail on-chain
+      // rather than letting Phantom show its "malicious" block on an underfunded tx.
+      let simErr = null;
+      try { const sim = await conn.simulateTransaction(tx); simErr = sim && sim.value && sim.value.err; } catch (_) {}
+      if (simErr) throw new Error("Not enough SOL — you need " + CFG.feeSol + " SOL + fees. Top up and retry.");
       const res = await p.signAndSendTransaction(tx);
       const signature = res && res.signature ? res.signature : res;
       // Poll the signature status ourselves instead of conn.confirmTransaction —

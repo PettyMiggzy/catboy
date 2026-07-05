@@ -412,7 +412,12 @@
           const conn = new web3.Connection(location.origin + (C.rpc || "/api/solrpc"), "confirmed");
           const tx = new web3.Transaction().add(web3.SystemProgram.transfer({ fromPubkey: new web3.PublicKey(from), toPubkey: new web3.PublicKey(String(cfg.payTo).trim()), lamports: Math.round(sel.priceSol * 1e9) }));
           tx.feePayer = new web3.PublicKey(from);
-          tx.recentBlockhash = (await conn.getLatestBlockhash()).blockhash;
+          tx.recentBlockhash = (await conn.getLatestBlockhash("finalized")).blockhash;
+          // Pre-flight sim (Phantom's docs): only hand Phantom a tx that will succeed.
+          // A failing tx (e.g. underfunded wallet) is what triggers its "malicious" block.
+          let simErr = null;
+          try { const sim = await conn.simulateTransaction(tx); simErr = sim && sim.value && sim.value.err; } catch (_) { /* sim infra issue — let Phantom guard */ }
+          if (simErr) throw new Error("Not enough SOL — you need " + sel.priceSol + " SOL + a little for fees. Top up and try again.");
           const res = await p.signAndSendTransaction(tx);
           txSig = res && res.signature ? res.signature : res;
           await waitConfirmed(conn, txSig);

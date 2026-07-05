@@ -97,26 +97,34 @@ async function pumpBuy(solAmount) {
   const tx = VersionedTransaction.deserialize(new Uint8Array(await r.arrayBuffer()));
   tx.sign([kp]);
   const sig = await conn.sendRawTransaction(tx.serialize(), { skipPreflight: false, maxRetries: 3 });
-  await conn.confirmTransaction(sig, "confirmed");
+  const conf = await conn.confirmTransaction(sig, "confirmed");
+  if (conf && conf.value && conf.value.err) throw new Error("buy failed on-chain " + JSON.stringify(conf.value.err) + " sig=" + sig);
+  log(`buy tx ${sig}`);
   return sig;
 }
 
-async function tokenBalanceRaw() {
-  try { const ata = await getAssociatedTokenAddress(new PublicKey(MINT), OWNER); const acct = await getAccount(conn, ata); return acct.amount; }
-  catch { return 0n; }
+// Reliable balance read via getParsedTokenAccountsByOwner, with retry (a freshly
+// bought token's account isn't queryable instantly — the old getAccount returned 0).
+async function readHolding(retries) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const res = await conn.getParsedTokenAccountsByOwner(OWNER, { mint: new PublicKey(MINT) });
+      for (const v of res.value) { const ta = v.account.data.parsed.info.tokenAmount; const raw = BigInt(ta.amount); if (raw > 0n) return { raw, dec: ta.decimals, ata: v.pubkey }; }
+    } catch (e) { if (i === retries - 1) log("balance read err", e.message); }
+    if (i < retries - 1) await new Promise((r) => setTimeout(r, 1800));
+  }
+  return { raw: 0n, dec: 6, ata: null };
 }
-async function burnAll() {
-  const ata = await getAssociatedTokenAddress(new PublicKey(MINT), OWNER);
-  const amt = await tokenBalanceRaw();
-  if (amt <= 0n) return { burned: 0n, dec: 6 };
-  const mintInfo = await getMint(conn, new PublicKey(MINT));
-  const ix = createBurnCheckedInstruction(ata, new PublicKey(MINT), OWNER, amt, mintInfo.decimals);
+async function burnHolding(retries) {
+  const { raw, dec, ata } = await readHolding(retries);
+  if (raw <= 0n || !ata) return { burned: 0n, dec };
+  const ix = createBurnCheckedInstruction(ata, new PublicKey(MINT), OWNER, raw, dec);
   const tx = new Transaction().add(ix);
   tx.feePayer = OWNER; tx.recentBlockhash = (await conn.getLatestBlockhash()).blockhash;
   tx.sign(kp);
   const sig = await conn.sendRawTransaction(tx.serialize(), { maxRetries: 3 });
   await conn.confirmTransaction(sig, "confirmed");
-  return { burned: amt, dec: mintInfo.decimals, sig };
+  return { burned: raw, dec, sig };
 }
 
 const CHECK_MS = Math.max(60000, Math.round(parseFloat(process.env.DCA_CHECK_MIN || "3") * 60000)); // how often we poll (fast, so buys start right after funding)
@@ -124,9 +132,8 @@ const CHECK_MS = Math.max(60000, Math.round(parseFloat(process.env.DCA_CHECK_MIN
 // Burn ANY $CATBOY sitting in the wallet — catches tokens people send in directly,
 // not just the DCA buys. Called every check.
 async function burnAnyTokens(st, label) {
-  const bal = await tokenBalanceRaw();
-  if (bal <= 0n) return 0;
-  const { burned, dec, sig } = await burnAll();
+  const { burned, dec, sig } = await burnHolding(1);
+  if (burned <= 0n) return 0;
   const ui = Number(burned) / 10 ** dec;
   st.totalBurned += ui; await saveState(st);
   log(`${label}: burned ${fmt(ui, 0)} CATBOY (${sig})`);
@@ -162,11 +169,11 @@ async function check() {
     const amount = Math.min(perBuy, +(spendable).toFixed(4));
     log(`DCA buy ${fmt(amount)} SOL (spendable ${fmt(spendable)}, ${st.remaining} ticks left)`);
     const buySig = await pumpBuy(amount);
-    await new Promise((r) => setTimeout(r, 3000)); // let the ATA settle
-    const { burned, dec, sig: burnSig } = await burnAll();
+    const { burned, dec, sig: burnSig } = await burnHolding(6); // retries until the bought tokens are queryable
     const burnedUi = Number(burned) / 10 ** dec;
-    st.remaining -= 1; st.totalSpent = +(st.totalSpent + amount).toFixed(4); st.totalBurned += burnedUi; st.lastBuyAt = Date.now();
-    await saveState(st);
+    st.remaining -= 1; st.totalSpent = +(st.totalSpent + amount).toFixed(4); st.lastBuyAt = Date.now();
+    if (burnedUi <= 0) { await saveState(st); log(`WARN: buy ${buySig} yielded 0 tokens (slippage/pool?) — nothing to burn`); running = false; return; }
+    st.totalBurned += burnedUi; await saveState(st);
     log(`bought+burned: ${fmt(burnedUi, 0)} CATBOY for ${fmt(amount)} SOL`);
     await tg(CHAT,
       `🔥 <b>DCA Buy &amp; Burn</b>\n` +
