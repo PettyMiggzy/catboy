@@ -121,6 +121,22 @@ let botId = 0, botUsername = "";
 async function getMe() {
   try { const j = await (await fetch(`${API}/getMe`)).json(); if (j.ok) { botId = j.result.id; botUsername = (j.result.username || "").toLowerCase(); log("bot identity:", "@" + botUsername); } } catch {}
 }
+// Auto-register the slash-command menu so /burn etc. show in the "/" autocomplete.
+async function registerCommands() {
+  const commands = [
+    { command: "price", description: "Price & market cap" },
+    { command: "burn", description: "Total $CATBOY burned" },
+    { command: "nft", description: "NFT mint stats" },
+    { command: "ca", description: "Contract address" },
+    { command: "buy", description: "Buy $CATBOY" },
+    { command: "chart", description: "Live chart" },
+    { command: "help", description: "Show all commands" },
+  ];
+  try {
+    const r = await fetch(`${API}/setMyCommands`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ commands }) });
+    const j = await r.json(); log("commands registered:", j.ok ? "ok" : (j.description || "failed"));
+  } catch (e) { log("setMyCommands error", e.message); }
+}
 
 // ---- AI chat personality (optional; OpenAI-compatible, e.g. Groq) --------
 const PERSONA =
@@ -783,6 +799,7 @@ if (CFG.mint) {
     `At launch, DM me <code>/setmint &lt;CA&gt;</code> and I'll lock on + announce to the group. (I'll also DM you any $${CFG.ticker} launches I spot.)`);
 }
 getMe();      // learn our @username for mention detection
+registerCommands(); // populate the / command menu (incl. /burn)
 connect();
 pollUpdates(); // listen for /setmint, owner commands, and AI chat
 if (CFG.announceBurns) setInterval(() => { checkBurns().catch((e) => log("burn error", e.message)); }, CFG.burnPollMs);
