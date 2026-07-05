@@ -57,22 +57,34 @@
 
   <section class="section" style="padding-top:1rem;">
     <div class="mkt-colltabs mkt-colltabs-3">
-      <button class="mkt-colltab active" data-c="nine" type="button">Nine Lives · 100</button>
-      <button class="mkt-colltab" data-c="genesis" type="button">✦ Genesis · 100</button>
-      <button class="mkt-colltab mkt-pride" data-c="pride" type="button">🏳️‍🌈 Pride · 10<span class="tab-new">NEW</span></button>
+      <button class="mkt-colltab active" data-c="nine" type="button">Nine Lives · 100 <span class="tab-new" style="background:#14f195;color:#04120a;">LIVE</span></button>
+      <button class="mkt-colltab" data-c="genesis" type="button">✦ Genesis · 100 <span class="tab-new" style="background:#3a2f55;">SOON</span></button>
+      <button class="mkt-colltab mkt-pride" data-c="pride" type="button">🏳️‍🌈 Pride · 10 <span class="tab-new" style="background:#3a2f55;">SOON</span></button>
     </div>
     <div class="mkt-filters" id="mktFilters">
       <span id="tierChips" class="tierchips"></span>
       <select id="mktSort" class="mkt-sort">
-        <option value="id">Sort: Number</option>
         <option value="rarity">Sort: Rarity</option>
-        <option value="priceup">Price: Low → High</option>
-        <option value="pricedown">Price: High → Low</option>
+        <option value="id">Sort: Number</option>
       </select>
     </div>
     <div class="mkt-traits-bar" id="traitBar"></div>
     <div class="mkt-grid" id="mktGrid"></div>
     <p class="muted-note" id="mktNote" style="text-align:center;margin-top:1.5rem;"></p>
+  </section>
+
+  <!-- SELL / TRADE -->
+  <section class="section" style="padding-top:0;">
+    <div style="max-width:820px;margin:0 auto;text-align:center;background:linear-gradient(160deg,rgba(155,77,255,.12),rgba(53,224,255,.06));border:1px solid var(--border);border-radius:18px;padding:1.8rem 1.4rem;">
+      <span class="eyebrow">Own a Catboy?</span>
+      <h2 style="margin:.3rem 0 .5rem;">Sell &amp; Trade on <span class="grad">Magic Eden</span> / <span class="grad">Tensor</span></h2>
+      <p class="muted-note" style="max-width:600px;margin:0 auto 1.1rem;">Your Catboy is a standard Solana NFT. List it, set your price, and trade it on the big marketplaces — where all the buyers are. Every resale pays <b>5% creator royalty</b> back to the project. (Your collection appears there once minting picks up.)</p>
+      <div class="hero-actions" style="justify-content:center;flex-wrap:wrap;">
+        <a href="https://magiceden.io/marketplace/33kxQv4Jo7u9edC4RipZckwkpRRdxg863b6cw2UGfh6S" target="_blank" rel="noopener" class="btn btn-primary">List on Magic Eden &rsaquo;</a>
+        <a href="https://www.tensor.trade/trade/33kxQv4Jo7u9edC4RipZckwkpRRdxg863b6cw2UGfh6S" target="_blank" rel="noopener" class="btn btn-ghost">Trade on Tensor &rsaquo;</a>
+      </div>
+      <p class="muted-note" style="margin-top:1rem;font-size:.78rem;">Collection: <code style="user-select:all;">33kxQv4Jo7u9edC4RipZckwkpRRdxg863b6cw2UGfh6S</code></p>
+    </div>
   </section>
 
   <!-- modal -->
@@ -104,7 +116,7 @@
     (function () {
       const grid = document.getElementById("mktGrid");
       const RANK = { Legendary: 0, Epic: 1, Rare: 2, Common: 3 };
-      let items = [], filter = "all", sort = "id";
+      let items = [], filter = "all", sort = "rarity";
 
       let TF = {};   // trait-value frequencies for rarity %
       function buildFreq() {
@@ -136,12 +148,12 @@
       }
 
       const COLLS = {
-        nine:    { file: "assets/nft/collection/manifest.json", path: "assets/nft/collection/", note: "100-piece collection completes at mint",
-                   eyebrow: "Marketplace", title: "The <span class='grad'>Nine Lives</span> Collection", intro: "100 high-quality anime Catboy PFPs — each with its own traits and rarity. Browse the drop and mint at launch." },
-        genesis: { file: "assets/nft/genesis/manifest.json",    path: "assets/nft/genesis/",    note: "Genesis — special launch edition · 3 Legendary (animated) / 12 Epic / 25 Rare / 60 Common",
-                   eyebrow: "✦ Special Launch Edition", title: "Catboy <span class='grad'>Genesis</span>", intro: "The special launch edition — 100 original high-quality Catboy pieces with real trait rarity. 3 Legendary (animated 3D), 12 Epic, 25 Rare, 60 Common. Part of the Winslow Ecosystem." },
-        pride:   { file: "assets/nft/pride/manifest.json",      path: "assets/nft/pride/",      note: "Pride Edition 2026 · 10 limited pieces · Love is Love 🏳️‍🌈",
-                   eyebrow: "🏳️‍🌈 Pride Edition 2026", title: "Catboy <span class='grad'>Pride</span>", intro: "A limited Pride Edition — 10 original rainbow Catboys. Love is love. 🏳️‍🌈" },
+        nine:    { file: "assets/nft/collection/manifest.json", path: "assets/nft/collection/", live: true, note: "The live collection · mint a random for 1 SOL · 3 Legendary / 12 Epic / 25 Rare / 60 Common",
+                   eyebrow: "● LIVE · Mintable", title: "The <span class='grad'>Nine Lives</span> Collection", intro: "This is the collection you mint from. Browse all 100 with full traits and rarity — then mint a <b>random</b> Catboy for 1 SOL and it lands straight in your wallet." },
+        genesis: { file: "assets/nft/genesis/manifest.json",    path: "assets/nft/genesis/",    live: false, note: "Genesis · gallery preview (not yet mintable) · 3 Legendary (animated) / 12 Epic / 25 Rare / 60 Common",
+                   eyebrow: "✦ Special Edition · Preview", title: "Catboy <span class='grad'>Genesis</span>", intro: "Gallery preview — a special launch edition of 100 pieces (3 animated 3D Legendaries). <b>View-only for now</b> — not yet mintable." },
+        pride:   { file: "assets/nft/pride/manifest.json",      path: "assets/nft/pride/",      live: false, note: "Pride Edition 2026 · gallery preview (not yet mintable) · 10 limited pieces 🏳️‍🌈",
+                   eyebrow: "🏳️‍🌈 Pride Edition · Preview", title: "Catboy <span class='grad'>Pride</span>", intro: "Gallery preview — 10 limited rainbow Catboys. Love is love. 🏳️‍🌈 <b>View-only for now</b> — not yet mintable." },
       };
       let PATH = COLLS.nine.path, NOTE = COLLS.nine.note;
       // animated Legendaries (Genesis only): NFT id -> clip under PATH
@@ -175,11 +187,11 @@
 
       function stats() {
         const n = items.length;
-        const floor = Math.min(...items.map((i) => i.price));
         const topTier = items.some((i) => i.tier === "Legend") ? "Legend" : "Legendary";
-        const rare = items.filter((i) => i.tier === topTier).length;
+        const leg = items.filter((i) => i.tier === topTier).length;
+        const epic = items.filter((i) => i.tier === "Epic").length;
         document.getElementById("mktStats").innerHTML =
-          stat(n, "Items") + stat(floor + " SOL", "Floor") + stat(rare, topTier + "s") + stat("Solana", "Chain");
+          stat(n, "Items") + stat(leg, topTier + "s") + stat(epic, "Epics") + stat("Solana", "Chain");
       }
       function stat(v, l) { return `<div class="mkt-stat"><b>${v}</b><span>${l}</span></div>`; }
 
