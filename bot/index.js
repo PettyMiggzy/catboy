@@ -566,21 +566,30 @@ function parseTrade(tx) {
     const meta = tx.meta; if (!meta || meta.err) return null;
     const msg = tx.transaction.message;
     const keys = (msg.accountKeys || []).map((k) => (typeof k === "string" ? k : k.pubkey));
-    const trader = keys[0]; // fee payer = the trader on pump.fun / most swaps
-    if (!trader) return null;
     const pre = meta.preTokenBalances || [], post = meta.postTokenBalances || [];
-    const bal = (arr) => { const b = arr.find((x) => x.mint === CFG.mint && x.owner === trader); return b ? Number(b.uiTokenAmount.uiAmount || 0) : 0; };
-    const preTok = bal(pre), postTok = bal(post), delta = postTok - preTok;
-    if (Math.abs(delta) < 1) return null;                 // not a trade for our token by the signer
-    const solDelta = (Number(meta.preBalances[0]) - Number(meta.postBalances[0])) / 1e9; // + = spent
-    if (delta > 0) return { type: "buy", trader, tokens: delta, sol: Math.max(0, solDelta), newBal: postTok };
-    return { type: "sell", trader, tokens: -delta, sol: -solDelta, newBal: postTok };
+    // Net token change PER OWNER for our mint (works no matter who signs/pays fees —
+    // buys via aggregators/trading bots have a relayer signer but the BUYER's wallet
+    // still gains the tokens). Find the biggest gainer = buyer; biggest loser = seller.
+    const delta = {};
+    for (const p of pre) if (p.mint === CFG.mint) delta[p.owner] = (delta[p.owner] || 0) - Number(p.uiTokenAmount.uiAmount || 0);
+    for (const p of post) if (p.mint === CFG.mint) delta[p.owner] = (delta[p.owner] || 0) + Number(p.uiTokenAmount.uiAmount || 0);
+    let buyer = null, gain = 0, seller = null, loss = 0;
+    for (const o in delta) { if (delta[o] > gain) { gain = delta[o]; buyer = o; } if (delta[o] < loss) { loss = delta[o]; seller = o; } }
+    // SOL amount = the biggest lamport outflow (the payer). Confirms a real buy (SOL moved).
+    let solOut = 0;
+    for (let k = 0; k < keys.length; k++) { const d = (Number(meta.preBalances[k]) - Number(meta.postBalances[k])) / 1e9; if (d > solOut) solOut = d; }
+    if (buyer && gain >= 1 && solOut > 0.0001) {
+      const pb = post.find((x) => x.mint === CFG.mint && x.owner === buyer);
+      return { type: "buy", trader: buyer, tokens: gain, sol: solOut, newBal: pb ? Number(pb.uiTokenAmount.uiAmount || 0) : gain };
+    }
+    if (seller && loss <= -1) return { type: "sell", trader: seller, tokens: -loss, sol: 0 };
+    return null;
   } catch { return null; }
 }
 async function pollChainTrades() {
   if (!CFG.mint || !CFG.useChain) return;
   try {
-    const sigs = await solRpc("getSignaturesForAddress", [CFG.mint, { limit: 30 }]);
+    const sigs = await solRpc("getSignaturesForAddress", [CFG.mint, { limit: 80 }]);
     if (!Array.isArray(sigs) || !sigs.length) return;
     // newest-first → collect the run of unseen sigs, then process oldest→newest
     const fresh = [];
