@@ -13,6 +13,27 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
+  <style>
+    /* pack-opening reveal */
+    #revealFrame { position: relative; overflow: hidden; }
+    .pack-open { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 6; }
+    .pack-card { width: 58%; max-width: 210px; aspect-ratio: 3/4; border-radius: 16px;
+      background: linear-gradient(160deg, #2a1d4a 0%, #1a1030 55%, #0e0820 100%);
+      border: 2px solid rgba(232,196,90,0.85); box-shadow: 0 18px 55px rgba(0,0,0,0.6), inset 0 0 40px rgba(155,77,255,0.35);
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.3rem; transform-origin: center; }
+    .pack-card img { width: 46%; border-radius: 50%; box-shadow: 0 0 18px rgba(155,77,255,0.7); }
+    .pack-lbl { font-family: Orbitron, sans-serif; font-weight: 900; letter-spacing: 2px; color: #d9d4e8; font-size: 0.85rem; }
+    .pack-q { font-size: 2.6rem; color: var(--cyan); text-shadow: 0 0 16px var(--cyan); line-height: 1; }
+    @keyframes packshake { 0%,100%{transform:rotate(0) translateX(0)} 25%{transform:rotate(-5deg) translateX(-6px)} 50%{transform:rotate(5deg) translateX(6px)} 75%{transform:rotate(-3deg) translateX(-3px)} }
+    .pack-shake .pack-card { animation: packshake 0.16s ease-in-out infinite; }
+    @keyframes packburst { 0%{transform:scale(1); opacity:1} 100%{transform:scale(1.7); opacity:0; filter:brightness(2.2)} }
+    .pack-burst .pack-card { animation: packburst 0.3s ease-out forwards; }
+    @keyframes cardpop { 0%{transform:scale(.18) rotateY(90deg); opacity:0} 55%{transform:scale(1.1) rotateY(0); opacity:1} 100%{transform:scale(1) rotateY(0)} }
+    .reveal-img.card-pop { animation: cardpop 0.55s cubic-bezier(.2,1.2,.35,1) both; }
+    .reveal-frame.flashfx::after { content:''; position:absolute; inset:0; z-index:7; pointer-events:none;
+      background: radial-gradient(circle, #fff 0%, rgba(255,255,255,0.5) 40%, transparent 72%); animation: flashfx 0.3s ease-out; }
+    @keyframes flashfx { 0%{opacity:0} 35%{opacity:0.95} 100%{opacity:0} }
+  </style>
 </head>
 <body>
   <div class="bg-grid" aria-hidden="true"></div>
@@ -59,6 +80,7 @@
     <div class="open-stage">
       <div class="reveal-frame" id="revealFrame">
         <img src="assets/nft/collection/003.jpg" alt="Catboy NFT" class="reveal-img" id="revealImg" />
+        <div class="pack-open" id="packOpen" hidden><div class="pack-card"><img src="assets/catboy.png" alt="" /><span class="pack-lbl">CATBOY</span><b class="pack-q">?</b></div></div>
         <span class="win-burst reveal-burst" id="revealBurst" hidden>LEGENDARY</span>
       </div>
       <div class="open-meta">
@@ -282,6 +304,31 @@
       }
       throw new Error(lastErr);
     }
+    // Pack-opening reveal: a sealed CATBOY pack shakes, bursts, and your minted
+    // NFT card pops out (with tier glow + confetti on Epic/Legendary).
+    async function playPackOpen(d) {
+      const frame = $("revealFrame"), img = $("revealImg"), pack = $("packOpen");
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      frame.classList.remove("legendary", "epic", "flashfx"); $("revealBurst").hidden = true;
+      img.classList.remove("card-pop"); img.style.visibility = "hidden";
+      $("revealName").textContent = "Opening…"; $("revealTraits").textContent = ""; $("revealBadge").hidden = true;
+      pack.hidden = false; pack.classList.remove("pack-burst"); pack.classList.add("pack-shake");
+      await wait(950);
+      pack.classList.remove("pack-shake"); pack.classList.add("pack-burst"); frame.classList.add("flashfx");
+      await wait(300);
+      pack.hidden = true; frame.classList.remove("flashfx");
+      img.src = d.image; img.style.visibility = "visible"; void img.offsetWidth; img.classList.add("card-pop");
+      const badge = $("revealBadge"); badge.textContent = d.tier; badge.className = "nft-badge b-" + d.tier; badge.hidden = false;
+      $("revealName").textContent = d.name; $("revealTraits").textContent = "Minted to your wallet 🐾";
+      if (d.tier === "Legendary" || d.tier === "Epic") {
+        const burst = $("revealBurst"); burst.textContent = d.tier.toUpperCase() + "!"; burst.style.color = TIER_COL[d.tier]; burst.hidden = false;
+        frame.classList.add(d.tier.toLowerCase());
+        confetti(d.tier === "Legendary" ? ["#ffd84d", "#fff2b0", "#ffb020", "#14f195"] : ["#ff3df0", "#d24dff", "#19e0ff", "#fff"]);
+        fanfare(d.tier);
+        if (navigator.vibrate) navigator.vibrate(d.tier === "Legendary" ? [40, 40, 80] : [40]);
+      }
+      await wait(200);
+    }
     let paidMintSig = null; // reuse a successful payment so a retry never re-charges
     async function doRealMint() {
       if (!sel) return;
@@ -307,22 +354,9 @@
           await waitConfirmed(conn, txSig);
           paidMintSig = txSig;
         }
-        status.textContent = "Paid ✓ — minting your Catboy…";
+        status.textContent = "Paid ✓ — ripping your pack…";
         const d = await mintReq(sel.id, txSig, buyer);
-        // reveal the actual NFT you got in the big frame
-        try {
-          const img = $("revealImg"); if (img && d.image) img.src = d.image;
-          const badge = $("revealBadge"); if (badge) { badge.textContent = d.tier; badge.className = "nft-badge b-" + d.tier; badge.hidden = false; }
-          $("revealName").textContent = d.name;
-          $("revealTraits").textContent = "Minted to your wallet 🐾";
-          $("revealFrame").classList.remove("legendary", "epic"); $("revealBurst").hidden = true;
-          if (d.tier === "Legendary" || d.tier === "Epic") {
-            const burst = $("revealBurst"); burst.textContent = d.tier.toUpperCase() + "!"; burst.style.color = TIER_COL[d.tier]; burst.hidden = false;
-            $("revealFrame").classList.add(d.tier.toLowerCase());
-            confetti(d.tier === "Legendary" ? ["#ffd84d", "#fff2b0", "#ffb020", "#14f195"] : ["#ff3df0", "#d24dff", "#19e0ff", "#fff"]);
-            fanfare(d.tier);
-          }
-        } catch (_) {}
+        await playPackOpen(d).catch(() => {});
         status.style.color = "var(--cyan)"; status.textContent = "Minted " + d.name + " · " + d.tier + "! 🐾 Check your wallet.";
         try { const pulls = JSON.parse(localStorage.getItem("catboy_pulls") || "[]"); pulls.unshift({ name: d.name, tier: d.tier, file: String(d.image || "").split("/").pop(), img: d.image }); localStorage.setItem("catboy_pulls", JSON.stringify(pulls.slice(0, 60))); renderPulls(pulls); } catch {}
         paidMintSig = null;
