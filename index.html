@@ -82,7 +82,7 @@
   <section id="top" class="hero">
     <div class="hero-inner">
       <div class="hero-copy">
-        <span class="badge"><span class="dot"></span> Now on Solana · Coming Soon</span>
+        <span class="badge"><span class="dot"></span> Now LIVE on Solana · <a href="#buy" style="color:inherit;text-decoration:underline;">Buy $CATBOY</a></span>
         <h1 class="hero-title">
           The Legend<br /><span class="grad">Crosses Over.</span>
         </h1>
@@ -368,30 +368,35 @@
   <!-- HOW TO BUY -->
   <section id="buy" class="section">
     <div class="section-head">
-      <span class="eyebrow">How to Buy</span>
-      <h2>Join the <span class="grad">Movement</span></h2>
+      <span class="eyebrow"><span class="dot"></span> Live on Solana</span>
+      <h2>Buy <span class="grad">$CATBOY</span></h2>
+      <p class="section-intro">The legend is live on pump.fun. Copy the contract, check the live chart, and ape in. Always verify the CA here — never trust one posted by anyone else.</p>
     </div>
-    <div class="steps">
-      <div class="step">
-        <span class="step-num">1</span>
-        <h3>Get a Solana Wallet</h3>
-        <p>Download Phantom or Solflare and fund it with SOL from your favorite exchange.</p>
-      </div>
-      <div class="step">
-        <span class="step-num">2</span>
-        <h3>Follow Our Channels</h3>
-        <p>The token isn't live yet. Follow X & Telegram to catch the official launch and contract.</p>
-      </div>
-      <div class="step">
-        <span class="step-num">3</span>
-        <h3>Swap for $CATBOY</h3>
-        <p>At launch, swap SOL for $CATBOY on a Solana DEX using the verified contract address.</p>
-      </div>
-      <div class="step">
-        <span class="step-num">4</span>
-        <h3>Hold the Legend</h3>
-        <p>No shortcuts. No hype chasing. Conviction over everything — built to last.</p>
-      </div>
+
+    <!-- contract address -->
+    <div class="ca-bar">
+      <span class="ca-label">Contract</span>
+      <code class="ca-value" data-ca>3UCdpV5mTb4TmJSCyPkaAsuUFvaF4ofc2uXCEj3Jpump</code>
+      <button class="btn btn-ghost btn-sm ca-copy" type="button">Copy</button>
+    </div>
+
+    <!-- live stats from DexScreener -->
+    <div class="tk-stats">
+      <div class="tk-stat"><span>Price</span><b id="tkPrice">—</b></div>
+      <div class="tk-stat"><span>Market Cap</span><b id="tkMcap">—</b></div>
+      <div class="tk-stat"><span>24h Vol</span><b id="tkVol">—</b></div>
+      <div class="tk-stat"><span>Liquidity</span><b id="tkLiq">—</b></div>
+      <div class="tk-stat"><span>24h</span><b id="tkChange">—</b></div>
+    </div>
+
+    <div class="hero-actions" style="justify-content:center;margin:1.3rem 0 0;">
+      <a href="https://pump.fun/coin/3UCdpV5mTb4TmJSCyPkaAsuUFvaF4ofc2uXCEj3Jpump" target="_blank" rel="noopener" class="btn btn-primary">🟢 Buy on Pump.fun</a>
+      <a id="tkChartLink" href="https://dexscreener.com/solana/3UCdpV5mTb4TmJSCyPkaAsuUFvaF4ofc2uXCEj3Jpump" target="_blank" rel="noopener" class="btn btn-ghost">📊 Full Chart</a>
+    </div>
+
+    <!-- embedded DexScreener chart -->
+    <div class="tk-chart-wrap">
+      <iframe id="tkChart" title="$CATBOY live chart · DexScreener" loading="lazy" allow="clipboard-write"></iframe>
     </div>
   </section>
 
@@ -430,11 +435,11 @@
       </details>
       <details class="faq-item">
         <summary>Has the token launched yet?</summary>
-        <p>Follow our X and Telegram so you're first to know every drop, the official contract address, and what's next.</p>
+        <p>Yes — $CATBOY is <b>live on Solana</b> via pump.fun. The official contract is <code data-ca style="user-select:all;">3UCdpV5mTb4TmJSCyPkaAsuUFvaF4ofc2uXCEj3Jpump</code> — see the live chart in the <a href="#buy">Buy section</a>.</p>
       </details>
       <details class="faq-item">
         <summary>How do I avoid scams?</summary>
-        <p>There is no contract address until we officially announce it. Only trust links from our verified channels. Never trust a CA posted by anyone else — always verify here first.</p>
+        <p>The <b>only</b> official contract is <code data-ca style="user-select:all;">3UCdpV5mTb4TmJSCyPkaAsuUFvaF4ofc2uXCEj3Jpump</code>. Only trust links from our verified channels, and always verify the CA here first — never trust one posted by anyone else.</p>
       </details>
       <details class="faq-item">
         <summary>What are the Catboy NFTs?</summary>
@@ -483,5 +488,7 @@
   </div>
 
   <script src="script.js?v=realvid"></script>
+  <script src="assets/token-config.js"></script>
+  <script src="assets/token-live.js"></script>
 </body>
 </html>

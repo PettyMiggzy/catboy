@@ -1506,3 +1506,16 @@ body.splash-open { overflow: hidden; }
   .pk-strip { grid-auto-flow: column; grid-template-columns: none; grid-auto-columns: minmax(150px, 46%); overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 0.6rem; -webkit-overflow-scrolling: touch; }
   .pk-card { scroll-snap-align: center; }
 }
+
+/* ---- live $CATBOY panel (CA + DexScreener stats + chart) ---- */
+.ca-bar { display: flex; align-items: center; gap: 0.7rem; justify-content: center; flex-wrap: wrap; max-width: 780px; margin: 0 auto 1.3rem; padding: 0.7rem 1rem; border: 1px solid var(--border); border-radius: 14px; background: var(--card, rgba(255,255,255,0.03)); }
+.ca-label { color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.07em; font-weight: 700; }
+.ca-value { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.82rem; color: #fff; word-break: break-all; user-select: all; }
+.btn-sm { padding: 0.35rem 0.85rem; font-size: 0.8rem; }
+.tk-stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.8rem; max-width: 840px; margin: 0 auto; }
+.tk-stat { text-align: center; padding: 0.9rem 0.5rem; border: 1px solid var(--border); border-radius: 12px; background: var(--card, rgba(255,255,255,0.03)); }
+.tk-stat span { display: block; color: var(--muted); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.3rem; }
+.tk-stat b { font-family: "Orbitron", sans-serif; font-size: 1.0rem; color: #fff; }
+.tk-chart-wrap { max-width: 920px; margin: 1.5rem auto 0; border: 1px solid var(--border); border-radius: 16px; overflow: hidden; background: #0a0618; }
+.tk-chart-wrap iframe { width: 100%; height: 540px; border: 0; display: block; }
+@media (max-width: 720px) { .tk-stats { grid-template-columns: repeat(2, 1fr); } .tk-stat b { font-size: 0.92rem; } .tk-chart-wrap iframe { height: 430px; } }
