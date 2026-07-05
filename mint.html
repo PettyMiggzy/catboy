@@ -244,7 +244,7 @@
     function renderPulls(arr) {
       if (!arr.length) { $("pulls").innerHTML = ""; return; }
       $("pulls").innerHTML = '<span class="pulls-lbl">Your pulls</span>' + arr.map((p) =>
-        `<img src="${P + p.file}" class="pull-thumb b-${p.tier}" title="${p.name} · ${p.tier}" alt="${p.name}">`).join("");
+        `<img src="${p.file ? P + p.file : (p.img || "")}" class="pull-thumb b-${p.tier}" title="${p.name} · ${p.tier}" alt="${p.name}">`).join("");
     }
     try { renderPulls(JSON.parse(localStorage.getItem("catboy_pulls") || "[]")); } catch {}
     updatePity(getPity());
@@ -324,7 +324,7 @@
           }
         } catch (_) {}
         status.style.color = "var(--cyan)"; status.textContent = "Minted " + d.name + " · " + d.tier + "! 🐾 Check your wallet.";
-        try { const pulls = JSON.parse(localStorage.getItem("catboy_pulls") || "[]"); pulls.unshift({ name: d.name, tier: d.tier, img: d.image }); localStorage.setItem("catboy_pulls", JSON.stringify(pulls.slice(0, 60))); renderPulls(pulls); } catch {}
+        try { const pulls = JSON.parse(localStorage.getItem("catboy_pulls") || "[]"); pulls.unshift({ name: d.name, tier: d.tier, file: String(d.image || "").split("/").pop(), img: d.image }); localStorage.setItem("catboy_pulls", JSON.stringify(pulls.slice(0, 60))); renderPulls(pulls); } catch {}
         paidMintSig = null;
       } catch (e) {
         const msg = (e && e.message) || String(e);
