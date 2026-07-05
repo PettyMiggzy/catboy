@@ -56,8 +56,13 @@ const CFG = {
   llmKey: (process.env.LLM_API_KEY || "").trim(),
   llmBase: process.env.LLM_BASE_URL || "https://api.groq.com/openai/v1/chat/completions", // OpenAI-compatible
   llmModel: process.env.LLM_MODEL || "llama-3.3-70b-versatile",
-  replyChance: Math.min(1, Math.max(0, parseFloat(process.env.REPLY_CHANCE || "0.06"))), // odds of chiming in on a random post
-  llmMaxPerMin: parseInt(process.env.LLM_MAX_PER_MIN || "6", 10), // spam/cost guard
+  replyChance: Math.min(1, Math.max(0, parseFloat(process.env.REPLY_CHANCE || "0.04"))), // odds of chiming in on a RANDOM post
+  nameReplyChance: Math.min(1, Math.max(0, parseFloat(process.env.NAME_REPLY_CHANCE || "0.22"))), // odds of replying when someone just says "catboy" (not a direct @/reply)
+  llmMaxPerMin: parseInt(process.env.LLM_MAX_PER_MIN || "4", 10), // spam/cost guard
+  // Daily NFT promo — one auto-post a day to the group (restart-safe via a state file).
+  dailyAd: (process.env.DAILY_NFT_AD ?? "1") !== "0",
+  adIntervalMs: Math.max(3600000, parseInt(process.env.AD_INTERVAL_MS || String(24 * 60 * 60 * 1000), 10)),
+  adFirstDelayMs: Math.max(60000, parseInt(process.env.AD_FIRST_DELAY_MS || String(30 * 60 * 1000), 10)),
   // Burn detection: poll supply, announce when it drops.
   rpcUrl: process.env.RPC_URL || "https://api.mainnet-beta.solana.com",
   burnPollMs: Math.max(30000, parseInt(process.env.BURN_POLL_MS || "60000", 10)),
@@ -126,11 +131,13 @@ function llmRateOk() {
   if (_replyTimes.length >= CFG.llmMaxPerMin) return false;
   _replyTimes.push(now); return true;
 }
-function addressedToBot(m) {
+// Directly addressed = a reply to the bot, or an @mention. These ALWAYS get an
+// answer. A bare "catboy" name-drop does NOT (it's every other message in a
+// $CATBOY group) — it just raises the odds of chiming in.
+function directlyAddressed(m) {
   if (m.reply_to_message && m.reply_to_message.from && m.reply_to_message.from.id === botId) return true;
   const t = (m.text || "").toLowerCase();
   if (botUsername && t.includes("@" + botUsername)) return true;
-  if (/\bcatboy\b/i.test(m.text || "")) return true; // name-drop
   return false;
 }
 async function llmReply(userText, name) {
@@ -154,8 +161,11 @@ async function handleChat(m) {
   if (m.from && m.from.is_bot) return;
   const inGroup = m.chat && (m.chat.type === "group" || m.chat.type === "supergroup");
   if (inGroup && CFG.chatId && String(m.chat.id) !== String(CFG.chatId)) return; // only our group
-  const addressed = addressedToBot(m);
-  if (!addressed && Math.random() >= CFG.replyChance) return; // sometimes chime in
+  // reply odds: direct @/reply = always; "catboy" name-drop = sometimes; else = rarely
+  const direct = directlyAddressed(m);
+  const named = /\bcatboy\b/i.test(m.text || "");
+  const chance = direct ? 1 : named ? CFG.nameReplyChance : CFG.replyChance;
+  if (Math.random() >= chance) return;
   if (!llmRateOk()) return;
   try { fetch(`${API}/sendChatAction`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: m.chat.id, action: "typing" }) }); } catch {}
   const who = (m.from && (m.from.first_name || m.from.username)) || "anon";
@@ -270,6 +280,45 @@ async function tgSendBuy(caption) {
     log("tgSendBuy error", e.message, "— falling back to text");
     await tgSendMessage(caption);
   }
+}
+
+// ---- daily NFT promo (one auto-post per day) ----------------------------
+async function tgSendPhoto(chatId, photoUrl, caption) {
+  try {
+    const r = await fetch(`${API}/sendPhoto`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, photo: photoUrl, caption, parse_mode: "HTML" }),
+    });
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.description || "sendPhoto failed");
+  } catch (e) { log("sendPhoto error", e.message, "— text fallback"); await tgSendMessage(caption); }
+}
+const AD_STATE = path.join(__dirname, ".adstate.json");
+let _adLast = 0;
+async function initAd() {
+  if (!CFG.dailyAd) return;
+  try { const s = JSON.parse(await fs.readFile(AD_STATE, "utf8")); if (s && s.lastAdAt) { _adLast = s.lastAdAt; return; } } catch {}
+  // first run: schedule the first ad adFirstDelayMs from now (not on every restart)
+  _adLast = Date.now() - CFG.adIntervalMs + CFG.adFirstDelayMs;
+  try { await fs.writeFile(AD_STATE, JSON.stringify({ lastAdAt: _adLast })); } catch {}
+}
+async function postNftAd() {
+  const s = CFG.site;
+  const img = `${s}/assets/nft/packs/pack-standard.jpg`;
+  const cap =
+    `🐾 <b>Own a Catboy NFT</b>\n\n` +
+    `Rip a pack, get a random Catboy minted <b>straight to your wallet</b> — Nine Lives, Genesis & Pride collections live now. Packs from <b>1 SOL</b>.\n\n` +
+    `Holders unlock perks across the Catboy world (casino edge, bigger fighter payouts & more).\n\n` +
+    `🎁 <a href="${s}/mint.html">Mint yours →</a>  ·  <a href="${s}/market.html">Gallery</a>`;
+  await tgSendPhoto(CFG.chatId, img, cap);
+  log("posted daily NFT ad");
+}
+async function maybePostAd() {
+  if (!CFG.dailyAd || !CFG.chatId) return;
+  if (Date.now() - _adLast < CFG.adIntervalMs) return;
+  _adLast = Date.now();
+  try { await fs.writeFile(AD_STATE, JSON.stringify({ lastAdAt: _adLast })); } catch {}
+  await postNftAd().catch((e) => log("ad post error", e.message));
 }
 
 // ---- formatting ---------------------------------------------------------
@@ -612,4 +661,12 @@ getMe();      // learn our @username for mention detection
 connect();
 pollUpdates(); // listen for /setmint, owner commands, and AI chat
 if (CFG.announceBurns) setInterval(() => { checkBurns().catch((e) => log("burn error", e.message)); }, CFG.burnPollMs);
-if (CFG.llmKey) log(`AI chat ON (${CFG.llmModel}) — replies to @mentions/replies, ${Math.round(CFG.replyChance * 100)}% on random posts`);
+if (CFG.llmKey) log(`AI chat ON (${CFG.llmModel}) — always replies to @mentions/replies, ${Math.round(CFG.nameReplyChance * 100)}% on "catboy" name-drops, ${Math.round(CFG.replyChance * 100)}% on random posts`);
+// daily NFT promo — one post per day (restart-safe)
+if (CFG.dailyAd) {
+  initAd().then(() => {
+    log(`daily NFT ad ON — next in ~${Math.max(0, Math.round((CFG.adIntervalMs - (Date.now() - _adLast)) / 60000))} min`);
+    maybePostAd().catch(() => {});
+    setInterval(() => maybePostAd().catch((e) => log("ad error", e.message)), 15 * 60 * 1000);
+  });
+}
