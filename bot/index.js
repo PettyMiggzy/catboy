@@ -77,6 +77,9 @@ const CFG = {
 
 const API = `https://api.telegram.org/bot${CFG.token}`;
 const log = (...a) => console.log(new Date().toISOString(), ...a);
+// Never let a stray async error kill the bot (would drop commands mid-restart).
+process.on("unhandledRejection", (e) => log("unhandledRejection:", (e && e.message) || e));
+process.on("uncaughtException", (e) => log("uncaughtException:", (e && e.message) || e));
 
 if (!CFG.token || !CFG.chatId) { console.error("Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID"); process.exit(1); }
 if (!CFG.mint) log("WARNING: TOKEN_MINT not set yet — set it at launch and restart. Waiting anyway.");
@@ -217,6 +220,7 @@ async function handleCommand(m) {
   const parts = text.split(/\s+/);
   const cmd = parts[0].toLowerCase().replace(/@.*$/, ""); // strip @botname
   const arg = (parts[1] || "").trim();
+  log("cmd:", cmd, "·", m.chat.type, m.chat.id); // visibility: did the command arrive?
 
   // ---- public commands (anyone in the group) ----
   if (cmd === "/start" || cmd === "/help") {
@@ -705,6 +709,7 @@ function connect() {
   });
 
   ws.on("message", async (data) => {
+   try {
     _wsMsgCount++;
     let msg;
     try { msg = JSON.parse(data.toString()); } catch { return; }
@@ -726,6 +731,7 @@ function connect() {
       if (t.signature) { seen.add(t.signature); if (seen.size > 5000) seen.clear(); }
       onBuy(t).catch((e) => log("onBuy error", e.message));
     }
+   } catch (e) { log("ws handler error", e.message); } // one bad frame can never crash the bot
   });
 
   ws.on("close", () => { log("socket closed — reconnecting in", backoff, "ms"); scheduleReconnect(); });
