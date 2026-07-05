@@ -79,7 +79,7 @@ async function tg(chatId, text) {
 }
 const fmt = (n, d = 3) => Number(n || 0).toLocaleString("en-US", { maximumFractionDigits: d });
 
-async function loadState() { try { return JSON.parse(await fs.readFile(STATE, "utf8")); } catch { return { remaining: TICKS_TOTAL, totalSpent: 0, totalBurned: 0, funded: false }; } }
+async function loadState() { try { return JSON.parse(await fs.readFile(STATE, "utf8")); } catch { return { remaining: TICKS_TOTAL, totalSpent: 0, totalBurned: 0, funded: false, lastBuyAt: 0 }; } }
 async function saveState(s) { try { await fs.writeFile(STATE, JSON.stringify(s)); } catch {} }
 
 // Buy via PumpPortal's free local-trade API (returns a tx we sign ourselves).
@@ -114,48 +114,69 @@ async function burnAll() {
   return { burned: amt, dec: mintInfo.decimals, sig };
 }
 
+const CHECK_MS = Math.max(60000, Math.round(parseFloat(process.env.DCA_CHECK_MIN || "3") * 60000)); // how often we poll (fast, so buys start right after funding)
+
+// Burn ANY $CATBOY sitting in the wallet — catches tokens people send in directly,
+// not just the DCA buys. Called every check.
+async function burnAnyTokens(st, label) {
+  const bal = await tokenBalanceRaw();
+  if (bal <= 0n) return 0;
+  const { burned, dec, sig } = await burnAll();
+  const ui = Number(burned) / 10 ** dec;
+  st.totalBurned += ui; await saveState(st);
+  log(`${label}: burned ${fmt(ui, 0)} CATBOY (${sig})`);
+  return ui;
+}
+
 let running = false;
-async function tick() {
+async function check() {
   if (running) return; running = true;
   try {
     const st = await loadState();
-    if (st.remaining <= 0) st.remaining = TICKS_TOTAL; // start a fresh rolling window
+
+    // 1) auto-burn anything sent directly to the wallet (donated CATBOY)
+    const donated = await burnAnyTokens(st, "direct-send").catch((e) => { log("burn-send error", e.message); return 0; });
+    if (donated > 0) {
+      await tg(CHAT, `🔥 <b>${fmt(donated, 0)} $CATBOY sent in &amp; BURNED forever.</b>\nTotal burned: <b>${fmt(st.totalBurned, 0)}</b> 🐾\n<i>Send $CATBOY to the burn wallet to torch it too.</i>`);
+    }
+
+    // 2) DCA buy+burn on the pacing interval
+    if (st.lastBuyAt && Date.now() - st.lastBuyAt < INTERVAL_MS) { running = false; return; } // not time yet
+    if (st.remaining <= 0) st.remaining = TICKS_TOTAL;
     const lamports = await conn.getBalance(OWNER, "confirmed");
     const spendable = lamports / 1e9 - RESERVE;
     if (spendable < MIN_BUY) {
-      log(`idle — balance ${fmt(lamports / 1e9)} SOL, nothing to DCA`);
-      if (st.funded) { // was funded, now empty -> alert once (both group + owner)
-        st.funded = false; await saveState(st);
+      if (st.funded) { st.funded = false; await saveState(st);
         const m = `⛽ <b>DCA fuel low.</b> The buy-&amp;-burn wallet is out of SOL 🔥\nSend SOL to keep the burns going:\n<code>${OWNER.toBase58()}</code>`;
         await tg(CHAT, m); await tg(NOTIFY, m);
       }
       running = false; return;
     }
-    if (!st.funded) st.funded = true; // refunded
+    if (!st.funded) st.funded = true;
     const perBuy = Math.max(MIN_BUY, +(spendable / st.remaining).toFixed(4));
     const amount = Math.min(perBuy, +(spendable).toFixed(4));
-    log(`DCA tick: buying ${fmt(amount)} SOL of ${MINT} (spendable ${fmt(spendable)}, ${st.remaining} ticks left)`);
+    log(`DCA buy ${fmt(amount)} SOL (spendable ${fmt(spendable)}, ${st.remaining} ticks left)`);
     const buySig = await pumpBuy(amount);
-    await new Promise((r) => setTimeout(r, 2500)); // let the ATA settle
+    await new Promise((r) => setTimeout(r, 3000)); // let the ATA settle
     const { burned, dec, sig: burnSig } = await burnAll();
     const burnedUi = Number(burned) / 10 ** dec;
-    st.remaining -= 1; st.totalSpent = +(st.totalSpent + amount).toFixed(4); st.totalBurned += burnedUi;
+    st.remaining -= 1; st.totalSpent = +(st.totalSpent + amount).toFixed(4); st.totalBurned += burnedUi; st.lastBuyAt = Date.now();
     await saveState(st);
     log(`bought+burned: ${fmt(burnedUi, 0)} CATBOY for ${fmt(amount)} SOL`);
     await tg(CHAT,
       `🔥 <b>DCA Buy &amp; Burn</b>\n` +
       `Bought <b>${fmt(burnedUi, 0)} $CATBOY</b> for <b>${fmt(amount)} SOL</b> — and burned every one. 🔥\n` +
-      `Total burned via DCA: <b>${fmt(st.totalBurned, 0)}</b>\n` +
+      `Total burned: <b>${fmt(st.totalBurned, 0)}</b>\n` +
       `<a href="https://solscan.io/tx/${burnSig || buySig}">tx</a> · deflationary cattitude 🐾`);
   } catch (e) {
-    log("tick error", e.message);
+    log("check error", e.message);
   } finally { running = false; }
 }
 
 (async () => {
-  log(`CATBOY DCA burn bot — wallet ${OWNER.toBase58()} · buy+burn every ${INTERVAL_HOURS}h over ~${DAYS}d window · reserve ${RESERVE} SOL`);
+  log(`CATBOY DCA burn bot — wallet ${OWNER.toBase58()} · buy+burn every ${INTERVAL_HOURS}h over ~${DAYS}d · checks every ${CHECK_MS / 60000}min · reserve ${RESERVE} SOL`);
   await tg(NOTIFY,
-    `🔥 <b>CATBOY DCA burn bot online.</b>\nSend SOL to this wallet to auto buy-&amp;-burn $CATBOY (stretched over ~${DAYS} days):\n<code>${OWNER.toBase58()}</code>\nReserve kept for fees: ${RESERVE} SOL.`);
-  tick(); // run one on boot (skips if empty)
-  setInterval(tick, INTERVAL_MS);
+    `🔥 <b>CATBOY DCA burn bot online.</b>\nSend <b>SOL</b> here to auto buy-&amp;-burn $CATBOY, or send <b>$CATBOY</b> to burn it directly:\n<code>${OWNER.toBase58()}</code>\nBuy+burn every ${INTERVAL_HOURS}h · reserve ${RESERVE} SOL kept for fees.`);
+  check(); // run one now
+  setInterval(check, CHECK_MS);
 })();
