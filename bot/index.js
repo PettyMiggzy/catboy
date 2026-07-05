@@ -62,6 +62,10 @@ const CFG = {
   rpcUrl: process.env.RPC_URL || "https://api.mainnet-beta.solana.com",
   burnPollMs: Math.max(30000, parseInt(process.env.BURN_POLL_MS || "60000", 10)),
   announceBurns: (process.env.ANNOUNCE_BURNS ?? "1") !== "0",
+  // On-chain buy detection via YOUR RPC — reliable primary source (PumpPortal's
+  // free WS drops trades). Polls the mint's recent signatures and parses buys.
+  useChain: (process.env.USE_CHAIN_TRADES ?? "1") !== "0",
+  chainPollMs: Math.max(3000, parseInt(process.env.CHAIN_POLL_MS || "5000", 10)),
 };
 
 const API = `https://api.telegram.org/bot${CFG.token}`;
@@ -366,9 +370,13 @@ async function refreshDex() {
   return dex;
 }
 
+const postedBuys = new Set(); // shared dedupe across WS + on-chain paths (by signature)
 async function onBuy(t) {
+  const sig0 = t.signature || "";
+  if (sig0 && postedBuys.has(sig0)) return;           // already alerted (other source)
+  if (sig0) { postedBuys.add(sig0); if (postedBuys.size > 8000) postedBuys.clear(); }
   const sol = Number(t.solAmount ?? t.sol_amount ?? 0);
-  if (!sol || sol < CFG.minBuySol) return;
+  if (!sol || sol < CFG.minBuySol) { log(`skip small buy: ${fmt(sol, 3)} SOL (< ${CFG.minBuySol})`); return; }
   const tokens = Number(t.tokenAmount ?? t.token_amount ?? 0);
   const mcSol = Number(t.marketCapSol ?? t.market_cap_sol ?? 0);
   const buyer = t.traderPublicKey || t.trader || t.owner || "";
@@ -399,6 +407,55 @@ async function onBuy(t) {
   log(`BUY ${fmt(sol, 3)} SOL${usd ? " ($" + fmt(usd) + ")" : ""} by ${short(buyer)}`);
 }
 
+// ---- on-chain trade detection (via YOUR RPC) ----------------------------
+// PumpPortal's free WS silently drops trades, so we read buys straight off the
+// chain: poll the mint's recent signatures, fetch each new tx, and detect a buy
+// as "the fee-payer's balance of this token went UP". Works on the bonding curve
+// AND post-graduation (Raydium/PumpSwap) — anywhere the token trades.
+const seenChainSig = new Set();
+let _chainPrimed = false;
+function parseTrade(tx) {
+  try {
+    const meta = tx.meta; if (!meta || meta.err) return null;
+    const msg = tx.transaction.message;
+    const keys = (msg.accountKeys || []).map((k) => (typeof k === "string" ? k : k.pubkey));
+    const trader = keys[0]; // fee payer = the trader on pump.fun / most swaps
+    if (!trader) return null;
+    const pre = meta.preTokenBalances || [], post = meta.postTokenBalances || [];
+    const bal = (arr) => { const b = arr.find((x) => x.mint === CFG.mint && x.owner === trader); return b ? Number(b.uiTokenAmount.uiAmount || 0) : 0; };
+    const preTok = bal(pre), postTok = bal(post), delta = postTok - preTok;
+    if (Math.abs(delta) < 1) return null;                 // not a trade for our token by the signer
+    const solDelta = (Number(meta.preBalances[0]) - Number(meta.postBalances[0])) / 1e9; // + = spent
+    if (delta > 0) return { type: "buy", trader, tokens: delta, sol: Math.max(0, solDelta), newBal: postTok };
+    return { type: "sell", trader, tokens: -delta, sol: -solDelta, newBal: postTok };
+  } catch { return null; }
+}
+async function pollChainTrades() {
+  if (!CFG.mint || !CFG.useChain) return;
+  try {
+    const sigs = await solRpc("getSignaturesForAddress", [CFG.mint, { limit: 30 }]);
+    if (!Array.isArray(sigs) || !sigs.length) return;
+    // newest-first → collect the run of unseen sigs, then process oldest→newest
+    const fresh = [];
+    for (const s of sigs) { if (seenChainSig.has(s.signature)) break; fresh.push(s); }
+    for (const s of sigs) { seenChainSig.add(s.signature); }
+    if (seenChainSig.size > 12000) seenChainSig.clear();
+    if (!_chainPrimed) { _chainPrimed = true; log(`chain trades: primed on ${fresh.length} recent sigs (watching for new buys)`); return; }
+    fresh.reverse();
+    for (const s of fresh) {
+      if (s.err) continue;
+      const tx = await solRpc("getTransaction", [s.signature, { maxSupportedTransactionVersion: 0, encoding: "jsonParsed", commitment: "confirmed" }]);
+      const tr = parseTrade(tx);
+      if (!tr) continue;
+      log(`chain ${tr.type}: ${fmt(tr.sol, 3)} SOL ${short(tr.trader)}`);
+      if (tr.type === "buy") {
+        await onBuy({ solAmount: tr.sol, tokenAmount: tr.tokens, traderPublicKey: tr.trader,
+          signature: s.signature, newTokenBalance: tr.newBal }).catch((e) => log("onBuy error", e.message));
+      }
+    }
+  } catch (e) { log("chain poll error", e.message); }
+}
+
 // ---- launch auto-detect -------------------------------------------------
 // When we don't yet have a mint but know the creator wallet (or ticker), watch
 // pump.fun's new-token firehose and grab the mint the instant it's created.
@@ -413,6 +470,7 @@ async function armToken(mint, source) {
   if (!mint || mint === CFG.mint) return false;
   CFG.mint = mint;
   resetDexState(); seen.clear();
+  seenChainSig.clear(); _chainPrimed = false; postedBuys.clear(); // re-prime on-chain poller for the new token
   log(`🚀 armed on ${mint} (${source})`);
   try {
     if (ws && ws.readyState === 1) {
@@ -478,9 +536,10 @@ function connect() {
   });
 
   ws.on("message", async (data) => {
+    _wsMsgCount++;
     let msg;
     try { msg = JSON.parse(data.toString()); } catch { return; }
-    if (msg.message || msg.errors) return; // subscription ack / errors
+    if (msg.message || msg.errors) { log("ws ack:", JSON.stringify(msg).slice(0, 160)); return; } // subscription ack / errors
     const events = Array.isArray(msg) ? msg : [msg];
     for (const t of events) {
       if (!t) continue;
@@ -490,7 +549,9 @@ function connect() {
         continue;
       }
       if (t.mint !== CFG.mint) continue;
+      _wsTradeCount++;
       const type = (t.txType || t.type || "").toLowerCase();
+      log("trade:", type, fmt(Number(t.solAmount ?? t.sol_amount ?? 0), 3), "SOL", short(t.traderPublicKey || t.trader || t.owner || "")); // debug: feed visibility
       if (type !== "buy") continue;
       if (t.signature && seen.has(t.signature)) continue;
       if (t.signature) { seen.add(t.signature); if (seen.size > 5000) seen.clear(); }
@@ -524,6 +585,13 @@ process.on("SIGHUP", async () => {
 // ---- DexScreener poll loop ----------------------------------------------
 if (CFG.mint) refreshDex().catch((e) => log("dex refresh error", e.message));
 setInterval(() => { if (CFG.mint) refreshDex().catch((e) => log("dex refresh error", e.message)); }, CFG.dexPollMs);
+
+// on-chain buy detection (primary source — reliable via your RPC)
+if (CFG.useChain) {
+  log(`on-chain trade polling ${CFG.mint ? "ON" : "waiting for mint"} every ${CFG.chainPollMs}ms via ${CFG.rpcUrl.replace(/\/v2\/.*/, "/v2/***").replace(/\?.*/, "")}`);
+  if (CFG.mint) pollChainTrades().catch(() => {});
+  setInterval(() => { if (CFG.mint) pollChainTrades().catch((e) => log("chain poll error", e.message)); }, CFG.chainPollMs);
+}
 
 const watchNote = CFG.mint ? `mint=${CFG.mint}`
   : watchingNewTokens() ? `auto-detecting launch (creator=${CFG.creator || "-"}, symbol=${CFG.matchSymbol || "-"})`
