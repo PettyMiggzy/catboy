@@ -3,7 +3,7 @@
    verifies payment on-chain and enforces the pack odds. The mint wallet, price
    and odds are authoritative on the SERVER (api/mint.js); fields here are UI. */
 window.CATBOY_MINT = {
-  enabled: false,            // flip to true once /api/mint is configured + tested
+  enabled: true,             // LIVE — /api/mint configured + collection on mainnet
   rpc: "/api/solrpc",        // same-origin RPC proxy (already live)
   total: 100,                // collection size (display)
 
