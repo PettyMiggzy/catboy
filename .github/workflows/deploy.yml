@@ -1,0 +1,35 @@
+name: Deploy to droplet
+
+# Auto-deploy: every push to main SSHes into the droplet, pulls the latest
+# code, and reloads all pm2 processes (bots). Also runnable on demand from the
+# Actions tab ("Run workflow") — works from the GitHub mobile site too.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency:
+  group: droplet-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH deploy (pull + reload bots)
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.DROPLET_HOST }}
+          username: ${{ secrets.DROPLET_USER }}
+          key: ${{ secrets.DROPLET_SSH_KEY }}
+          port: ${{ secrets.DROPLET_PORT || 22 }}
+          script_stop: true
+          script: |
+            set -e
+            cd ~/catboy
+            git fetch origin main
+            git reset --hard origin/main
+            # reload keeps processes up with zero downtime; falls back to start
+            pm2 reload all || pm2 restart all
+            pm2 save
+            echo "deployed $(git rev-parse --short HEAD)"
