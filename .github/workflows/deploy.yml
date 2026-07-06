@@ -3,9 +3,11 @@ name: Deploy to droplet
 # Auto-deploy: every push to main SSHes into the droplet, pulls the latest
 # code, and reloads all pm2 processes (bots). Also runnable on demand from the
 # Actions tab ("Run workflow") — works from the GitHub mobile site too.
+# Manual-only for now: the droplet has password SSH disabled (key-only), so
+# auto-deploy needs an SSH deploy key in DROPLET_SSH_KEY before re-enabling the
+# push trigger. Until then, deploy from the droplet console with:
+#   cd ~/catboy && git pull origin main && pm2 reload all
 on:
-  push:
-    branches: [main]
   workflow_dispatch: {}
 
 concurrency:
@@ -34,7 +36,6 @@ jobs:
           password: ${{ secrets.DROPLET_SSH_PASSWORD || secrets.DROPLET_PASSWORD || secrets.ROOT_PASSWORD || secrets.SSH_PASSWORD || secrets.PASSWORD || secrets.ROOT }}
           key: ${{ secrets.DROPLET_SSH_KEY }}
           port: ${{ secrets.DROPLET_PORT || 22 }}
-          script_stop: true
           script: |
             set -e
             cd ~/catboy
