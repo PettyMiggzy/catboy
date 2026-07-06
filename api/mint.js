@@ -146,12 +146,18 @@ export default async function handler(req, res) {
       const byColl = await s`SELECT collection, COUNT(*)::int AS total, COUNT(*) FILTER (WHERE minted)::int AS minted FROM nft_inventory GROUP BY collection`;
       const minted = (await s`SELECT COUNT(*)::int AS n FROM nft_inventory WHERE minted`)[0].n;
       const total = (await s`SELECT COUNT(*)::int AS n FROM nft_inventory`)[0].n;
+      // Which specific pieces are sold, as manifest display numbers (strip the
+      // per-collection id offset), so the marketplace can stamp them SOLD.
+      const OFFSET = { nine: 0, genesis: 1000, pride: 2000 };
+      const mintedRows = await s`SELECT collection, id FROM nft_inventory WHERE minted`;
+      const mintedIds = { nine: [], genesis: [], pride: [] };
+      for (const r of mintedRows) { const off = OFFSET[r.collection] || 0; (mintedIds[r.collection] || (mintedIds[r.collection] = [])).push(r.id - off); }
       // Only advertise packs whose collection is deployed on-chain AND stocked.
       const stocked = new Set(byColl.filter((c) => c.total > c.minted).map((c) => c.collection));
       const packs = Object.entries(PACKS)
         .filter(([, p]) => COLL[p.coll] && stocked.has(p.coll))
         .map(([id, p]) => ({ id, name: p.name, priceSol: p.priceSol, odds: p.odds, coll: p.coll }));
-      return res.status(200).json({ payTo: MINT_WALLET, packs, minted, total, tiers, collections: byColl });
+      return res.status(200).json({ payTo: MINT_WALLET, packs, minted, total, tiers, collections: byColl, mintedIds });
     }
     if (req.method !== "POST") { res.setHeader("Allow", "GET, POST"); return res.status(405).json({ error: "method_not_allowed" }); }
     if (!CONN || !RPC || !MINT_WALLET || !MINT_SECRET) return res.status(500).json({ error: "mint_not_configured" });
