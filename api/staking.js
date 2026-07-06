@@ -19,6 +19,7 @@ import crypto from "crypto";
 const CONN = (process.env.DATABASE_URL || process.env.POSTGRES_URL || "").trim();
 const RPC = (process.env.SOLANA_RPC || "").trim();
 const MINT = (process.env.TOKEN_MINT || "3UCdpV5mTb4TmJSCyPkaAsuUFvaF4ofc2uXCEj3Jpump").trim();
+const POOL_WALLET = (process.env.STAKE_POOL_WALLET || "BhXrZtDMbntmisGqQf15QRAmNadRALyx52sqaSxQup7b").trim();
 const SECRET = (process.env.STAKE_SECRET || "").trim();
 const CLAIM_DAYS = Math.max(1, parseInt(process.env.CLAIM_INTERVAL_DAYS || "30", 10));
 const DEFAULT_COLLECTIONS = ["33kxQv4Jo7u9edC4RipZckwkpRRdxg863b6cw2UGfh6S", "HuLA9RRuG6s994eAiiY4cFhrhghCkCQWcNdm3e3wVD3x", "4N1d9umoscMYiwiqxXnkTbJD9pXLMZiPCw4H7fAUK93x"];
@@ -90,7 +91,10 @@ export default async function handler(req, res) {
     if (req.method === "GET") {
       const wallet = String((req.query || {}).wallet || "").trim();
       const totalShares = Number(p.total_shares);
-      const base = { pool: { deposited: Number(p.deposited), totalShares }, napShares: NAP, claimDays: CLAIM_DAYS };
+      // show the LIVE pool wallet $CATBOY balance (what stakers watch grow)
+      let live = null;
+      try { const rr = await rpc("getTokenAccountsByOwner", [POOL_WALLET, { mint: MINT }, { encoding: "jsonParsed" }]); live = 0; for (const v of (rr.value || [])) live += Number(v.account?.data?.parsed?.info?.tokenAmount?.uiAmount || 0); } catch {}
+      const base = { pool: { deposited: (live != null ? live : Number(p.deposited)), totalShares }, napShares: NAP, claimDays: CLAIM_DAYS };
       if (!wallet) return res.status(200).json(base);
       const owned = await ownedCatboys(s, wallet);
       const stakedRows = await s`SELECT asset FROM staked_assets WHERE wallet=${wallet}`;
