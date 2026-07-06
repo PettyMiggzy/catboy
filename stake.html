@@ -5,32 +5,59 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Nap to Earn — CATBOY Staking</title>
   <meta name="description" content="Stake your Catboy NFT and earn $CATBOY. Non-custodial — your cat naps in your wallet and earns from 10% of all NFT sales." />
+  <meta property="og:title" content="CATBOY NFT Staking — Nap to Earn" />
+  <meta property="og:image" content="assets/stake-hero-poster.jpg" />
   <link rel="icon" type="image/png" href="assets/solana.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
   <style>
-    .stk-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.9rem;max-width:820px;margin:0 auto 1.5rem;}
-    .stk-stat{background:rgba(255,255,255,.03);border:1px solid rgba(120,225,255,.2);border-radius:14px;padding:1rem;text-align:center;}
-    .stk-stat b{display:block;font-size:1.5rem;color:#3fe0ff;font-family:'Orbitron',sans-serif;}
-    .stk-stat span{font-size:.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;}
-    .stk-tiers{display:flex;gap:.5rem;flex-wrap:wrap;justify-content:center;margin:0 auto 1.5rem;max-width:700px;}
-    .stk-tier{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:.45rem .8rem;font-weight:700;font-size:.85rem;}
-    .stk-tier b{color:#3fe0ff;}
-    .stk-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:1rem;}
-    .stk-card{background:rgba(255,255,255,.03);border:2px solid rgba(255,255,255,.1);border-radius:14px;overflow:hidden;cursor:pointer;transition:border-color .15s,transform .15s;}
-    .stk-card.sel{border-color:#3fe0ff;transform:translateY(-3px);}
-    .stk-card img{width:100%;aspect-ratio:1;object-fit:cover;background:#111;}
-    .stk-card .cb{padding:.5rem .6rem;}
-    .stk-card .cb b{font-size:.82rem;display:block;}
-    .stk-card .cb span{font-size:.72rem;color:#3fe0ff;}
-    .stk-panel{max-width:960px;margin:0 auto;}
-    .stk-claim{background:linear-gradient(160deg,rgba(20,241,149,.1),rgba(120,225,255,.05));border:1px solid rgba(20,241,149,.3);border-radius:16px;padding:1.3rem;text-align:center;margin:1.2rem 0;}
-    .stk-claim b.amt{font-size:2rem;color:#14f195;font-family:'Orbitron',sans-serif;display:block;}
-    .perk-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:.8rem;max-width:960px;margin:1rem auto;}
-    .perk{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:.9rem 1rem;}
-    .perk b{color:#fff;}.perk p{margin:.2rem 0 0;color:var(--muted);font-size:.82rem;}
+    :root{ --au:#f7c43c; --au2:#ffe08a; --au-d:#9a6410; --ink:#0a0a12; }
+    .stk-wrap{max-width:1200px;margin:0 auto;padding:0 clamp(1rem,4vw,2rem);}
+    .goldtxt{background:linear-gradient(180deg,var(--au2) 0%,var(--au) 45%,var(--au-d) 100%);-webkit-background-clip:text;background-clip:text;color:transparent;font-family:'Orbitron',sans-serif;}
+    /* ---- animated banner ---- */
+    .stk-banner{position:relative;border-radius:22px;overflow:hidden;margin:1.2rem auto 2rem;min-height:420px;display:flex;align-items:center;
+      border:1px solid rgba(247,196,60,.35);box-shadow:0 0 60px rgba(247,196,60,.12),inset 0 0 80px rgba(0,0,0,.5);background:#05050a;}
+    .stk-banner video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:75% center;z-index:0;}
+    .stk-banner::after{content:"";position:absolute;inset:0;z-index:1;background:linear-gradient(90deg,rgba(5,5,10,.97) 0%,rgba(5,5,10,.85) 42%,rgba(5,5,10,.15) 70%,transparent 100%);}
+    .stk-banner .bn{position:relative;z-index:2;padding:2.2rem clamp(1.4rem,4vw,3rem);max-width:640px;}
+    .bn .eyebrow2{color:var(--au);font-weight:800;letter-spacing:.14em;font-size:.85rem;text-transform:uppercase;display:flex;align-items:center;gap:.5rem;}
+    .bn h1{font-family:'Orbitron',sans-serif;font-weight:900;font-size:clamp(2.6rem,7vw,4.6rem);line-height:.95;margin:.4rem 0 .2rem;letter-spacing:-.01em;}
+    .bn h1 .nft{color:#fff;text-shadow:0 0 24px rgba(120,200,255,.4);}
+    .bn h1 .stk{filter:drop-shadow(0 0 22px rgba(247,196,60,.45));}
+    .bn .tag{font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:.18em;color:#e9e9f0;font-size:clamp(.9rem,2.4vw,1.15rem);margin:.2rem 0 1.3rem;}
+    .bn .tag b{color:var(--au);}
+    .btn-au{display:inline-block;background:linear-gradient(180deg,var(--au2),var(--au));color:#1a1204;font-weight:800;font-family:'Rajdhani',sans-serif;font-size:1.1rem;
+      border:none;border-radius:12px;padding:.85rem 2rem;cursor:pointer;box-shadow:0 8px 26px rgba(247,196,60,.35);transition:transform .15s,box-shadow .15s;letter-spacing:.03em;}
+    .btn-au:hover{transform:translateY(-2px);box-shadow:0 12px 34px rgba(247,196,60,.5);}
+    .btn-au:disabled{opacity:.5;cursor:not-allowed;transform:none;}
+    /* ---- stat cards ---- */
+    .stk-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:1rem;margin:0 0 2rem;}
+    .stk-stat{background:linear-gradient(160deg,rgba(247,196,60,.09),rgba(255,255,255,.02));border:1px solid rgba(247,196,60,.28);border-radius:16px;padding:1.15rem 1rem;text-align:center;box-shadow:inset 0 0 30px rgba(247,196,60,.05);}
+    .stk-stat b{display:block;font-size:1.7rem;line-height:1.1;}
+    .stk-stat span{font-size:.74rem;color:#9a9ab0;text-transform:uppercase;letter-spacing:.08em;margin-top:.25rem;display:block;}
+    /* ---- sections ---- */
+    .stk-h2{font-family:'Orbitron',sans-serif;font-weight:800;font-size:1.5rem;margin:2.2rem 0 1rem;}
+    .stk-tiers{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.8rem;margin-bottom:1rem;}
+    .stk-tier{background:rgba(255,255,255,.03);border:1px solid rgba(247,196,60,.22);border-radius:12px;padding:.7rem 1rem;display:flex;justify-content:space-between;align-items:center;font-weight:700;}
+    .stk-tier b{font-family:'Orbitron',sans-serif;font-size:1.15rem;}
+    .stk-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:1rem;}
+    .stk-card{background:rgba(255,255,255,.03);border:2px solid rgba(255,255,255,.1);border-radius:16px;overflow:hidden;cursor:pointer;transition:border-color .15s,transform .15s,box-shadow .15s;}
+    .stk-card:hover{transform:translateY(-3px);}
+    .stk-card.sel{border-color:var(--au);box-shadow:0 0 24px rgba(247,196,60,.35);}
+    .stk-card img{width:100%;aspect-ratio:1;object-fit:cover;background:#111;display:block;}
+    .stk-card .cb{padding:.55rem .7rem;}
+    .stk-card .cb b{font-size:.85rem;display:block;color:#fff;}
+    .stk-card .cb span{font-size:.72rem;color:var(--au);font-weight:700;}
+    .stk-claim{background:linear-gradient(160deg,rgba(20,241,149,.1),rgba(247,196,60,.06));border:1px solid rgba(20,241,149,.35);border-radius:18px;padding:1.6rem;text-align:center;margin:1.4rem 0;box-shadow:0 0 40px rgba(20,241,149,.08);}
+    .stk-claim .lbl{color:#9a9ab0;text-transform:uppercase;letter-spacing:.08em;font-size:.8rem;}
+    .stk-claim .amt{font-family:'Orbitron',sans-serif;font-size:2.6rem;color:#14f195;display:block;margin:.2rem 0;text-shadow:0 0 30px rgba(20,241,149,.4);}
+    .perk-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:.9rem;margin:1rem 0 2rem;}
+    .perk{background:linear-gradient(160deg,rgba(247,196,60,.06),rgba(255,255,255,.02));border:1px solid rgba(247,196,60,.18);border-radius:14px;padding:1rem 1.1rem;}
+    .perk b{color:#fff;font-size:1rem;}.perk p{margin:.25rem 0 0;color:#b6b6c6;font-size:.84rem;line-height:1.4;}
+    .stk-status{text-align:center;margin:.8rem 0;color:#9a9ab0;min-height:1.2em;}
+    @media(max-width:640px){ .stk-banner{min-height:340px;} .stk-banner::after{background:linear-gradient(180deg,rgba(5,5,10,.6),rgba(5,5,10,.92));} .bn{max-width:100%;text-align:center;} .bn .eyebrow2{justify-content:center;} }
   </style>
 </head>
 <body>
@@ -47,50 +74,54 @@
     <a href="mint.html" class="btn btn-primary nav-cta">🐾 Mint</a>
   </header>
 
-  <section class="page-hero" style="padding-bottom:.5rem;">
-    <div class="page-hero-inner">
-      <span class="eyebrow" style="display:block;margin-top:1rem;">😴 Nap to Earn</span>
-      <h1>Catboy <span class="grad">Staking</span></h1>
-      <p>Your Catboy <b>naps in your wallet</b> (never leaves it) and earns <b>$CATBOY</b> from <b>10% of every NFT sale</b>. Higher tier = bigger nap. Auto-compounds; claim monthly.</p>
-    </div>
-  </section>
+  <div class="stk-wrap">
+    <!-- ANIMATED BANNER -->
+    <section class="stk-banner">
+      <video src="assets/stake-hero.mp4" poster="assets/stake-hero-poster.jpg" autoplay muted loop playsinline></video>
+      <div class="bn">
+        <div class="eyebrow2">😴 Nap to Earn · $CATBOY</div>
+        <h1><span class="nft">NFT</span> <span class="stk goldtxt">STAKING</span></h1>
+        <div class="tag">STAKE <b>·</b> EARN <b>·</b> DOMINATE</div>
+        <button class="btn-au" id="connect" type="button">Connect Wallet</button>
+        <p class="stk-status" id="status" style="text-align:left;"></p>
+      </div>
+    </section>
 
-  <section class="section" style="padding-top:.5rem;">
+    <!-- LIVE STATS -->
     <div class="stk-stats">
-      <div class="stk-stat"><b id="sPool">—</b><span>Pool $CATBOY</span></div>
-      <div class="stk-stat"><b id="sApy">Live</b><span>Est. APY</span></div>
-      <div class="stk-stat"><b id="sStaked">—</b><span>NFTs Staked</span></div>
-      <div class="stk-stat"><b id="sYours">—</b><span>Your Shares</span></div>
+      <div class="stk-stat"><b class="goldtxt" id="sPool">—</b><span>Pool $CATBOY</span></div>
+      <div class="stk-stat"><b class="goldtxt" id="sApy">LIVE</b><span>Est. APY</span></div>
+      <div class="stk-stat"><b class="goldtxt" id="sStaked">—</b><span>Total Staked</span></div>
+      <div class="stk-stat"><b class="goldtxt" id="sYours">—</b><span>Your Shares</span></div>
     </div>
+
+    <!-- CLAIM -->
+    <div id="claimBox" class="stk-claim" hidden>
+      <span class="lbl">Your accrued rewards</span>
+      <b class="amt" id="accrued">0</b>
+      <span class="lbl" id="claimMeta"></span><br/>
+      <button class="btn-au" id="claim" type="button" style="margin-top:.8rem;">Claim $CATBOY</button>
+    </div>
+
+    <!-- YOUR CATS -->
+    <div id="stakedWrap" hidden>
+      <h2 class="stk-h2">😴 Napping <span style="color:#9a9ab0;font-size:1rem;" id="stakedCount"></span></h2>
+      <div class="stk-grid" id="stakedGrid"></div>
+      <button class="btn-au" id="unstakeBtn" type="button" style="margin:1rem 0;" hidden>Wake selected (unstake)</button>
+    </div>
+    <div id="stakeWrap" hidden>
+      <h2 class="stk-h2">🐾 Available to nap <span style="color:#9a9ab0;font-size:1rem;" id="availCount"></span></h2>
+      <div class="stk-grid" id="availGrid"></div>
+      <button class="btn-au" id="stakeBtn" type="button" style="margin:1rem 0;" hidden>Nap selected (stake)</button>
+    </div>
+
+    <!-- TIERS -->
+    <h2 class="stk-h2">Nap Shares by Tier</h2>
     <div class="stk-tiers" id="tiers"></div>
+    <p style="color:#9a9ab0;font-size:.9rem;">Your reward = your shares ÷ total staked shares × the pool. Higher tier naps earn more. Auto-compounds; claim once a month.</p>
 
-    <div class="stk-panel">
-      <div style="text-align:center;margin-bottom:1.2rem;">
-        <button class="btn btn-primary" id="connect" type="button">Connect Wallet</button>
-        <p class="form-status" id="status" role="status" aria-live="polite" style="margin-top:.6rem;"></p>
-      </div>
-
-      <div id="claimBox" class="stk-claim" hidden>
-        <span style="color:var(--muted);">Your accrued rewards</span>
-        <b class="amt" id="accrued">0</b>
-        <span id="claimMeta" style="color:var(--muted);font-size:.85rem;"></span><br/>
-        <button class="btn btn-primary" id="claim" type="button" style="margin-top:.7rem;">Claim $CATBOY</button>
-      </div>
-
-      <div id="stakedWrap" hidden>
-        <h3>😴 Napping <span id="stakedCount" style="color:var(--muted);font-size:.9rem;"></span></h3>
-        <div class="stk-grid" id="stakedGrid"></div>
-        <button class="btn btn-ghost" id="unstakeBtn" type="button" style="margin:.8rem 0;" hidden>Wake selected (unstake)</button>
-      </div>
-
-      <div id="stakeWrap" hidden>
-        <h3 style="margin-top:1.5rem;">🐾 Available to nap <span id="availCount" style="color:var(--muted);font-size:.9rem;"></span></h3>
-        <div class="stk-grid" id="availGrid"></div>
-        <button class="btn btn-primary" id="stakeBtn" type="button" style="margin:.8rem 0;" hidden>Nap selected (stake)</button>
-      </div>
-    </div>
-
-    <div class="section-head" style="margin-top:2.5rem;"><span class="eyebrow">Why hold a Catboy</span><h2>Holder <span class="grad">Perks</span></h2></div>
+    <!-- PERKS -->
+    <h2 class="stk-h2">Holder Perks</h2>
     <div class="perk-grid">
       <div class="perk"><b>💸 Staking rewards</b><p>Earn $CATBOY from 10% of all NFT sales. Higher tier earns more.</p></div>
       <div class="perk"><b>🐋 Whale group</b><p>An NFT gets you into the gated whale room.</p></div>
@@ -101,7 +132,7 @@
       <div class="perk"><b>🗳️ Governance</b><p>Vote on treasury spend, features, and drops.</p></div>
       <div class="perk"><b>🎁 Airdrops + whitelist</b><p>Priority on future drops and new collections.</p></div>
     </div>
-  </section>
+  </div>
 
   <footer class="footer">
     <div class="footer-brand"><img src="assets/catboy.png" alt="Catboy" class="footer-logo" /><span>CATBOY</span></div>
@@ -116,7 +147,7 @@
     const $ = (id) => document.getElementById(id);
     $("year").textContent = new Date().getFullYear();
     const fmt = (n) => Number(n || 0).toLocaleString("en-US", { maximumFractionDigits: 0 });
-    const st = (m, err) => { const s = $("status"); s.textContent = m; s.style.color = err ? "var(--magenta)" : "var(--muted)"; };
+    const st = (m, err) => { const s = $("status"); s.textContent = m; s.style.color = err ? "#ff5a6a" : "#c9c9d6"; };
     const getProvider = () => (window.solana && window.solana.isPhantom) ? window.solana : (window.solflare || window.backpack || (window.phantom && window.phantom.solana) || null);
     let WALLET = null, DATA = null, selAvail = new Set(), selStaked = new Set();
 
@@ -125,28 +156,24 @@
         const r = await fetch("/api/staking" + (WALLET ? "?wallet=" + WALLET : ""));
         DATA = await r.json();
         $("sPool").textContent = fmt(DATA.pool?.deposited || 0);
-        $("sStaked").textContent = fmt((DATA.staked?.length || 0) + (DATA.pool?.totalShares ? "" : ""));
         $("sStaked").textContent = fmt(DATA.pool?.totalShares || 0) + " sh";
-        if (DATA.napShares) $("tiers").innerHTML = Object.entries(DATA.napShares).filter(([k]) => ["Common","Rare","Epic","Legendary","Pride"].includes(k)).map(([k, v]) => `<span class="stk-tier">${k} <b>${v}×</b></span>`).join("");
+        if (DATA.napShares) $("tiers").innerHTML = Object.entries(DATA.napShares).filter(([k]) => ["Common","Rare","Epic","Legendary","Pride"].includes(k)).map(([k, v]) => `<div class="stk-tier"><span>${k}</span><b class="goldtxt">${v}×</b></div>`).join("");
         if (WALLET) renderWallet();
       } catch (e) { st("Couldn't load staking data.", true); }
     }
     function renderWallet() {
       $("sYours").textContent = fmt(DATA.yourShares || 0);
-      // claim box
       $("claimBox").hidden = false;
       $("accrued").textContent = fmt(DATA.accrued || 0);
       const meta = $("claimMeta");
       if (DATA.canClaim) { meta.textContent = "Ready to claim ✓"; $("claim").disabled = !(DATA.accrued > 0); }
       else { meta.textContent = "Next claim: " + (DATA.nextClaimAt ? new Date(DATA.nextClaimAt).toLocaleDateString() : "—"); $("claim").disabled = true; }
-      // staked grid
       const staked = DATA.staked || [];
       $("stakedWrap").hidden = false; $("stakedCount").textContent = "(" + staked.length + ")";
-      $("stakedGrid").innerHTML = staked.length ? staked.map(c => card(c, selStaked)).join("") : `<p class="muted-note">No cats napping yet.</p>`;
-      // available grid
+      $("stakedGrid").innerHTML = staked.length ? staked.map(c => card(c, selStaked)).join("") : `<p style="color:#9a9ab0;">No cats napping yet.</p>`;
       const avail = DATA.stakeable || [];
       $("stakeWrap").hidden = false; $("availCount").textContent = "(" + avail.length + ")";
-      $("availGrid").innerHTML = avail.length ? avail.map(c => card(c, selAvail)).join("") : `<p class="muted-note">No un-staked Catboys in this wallet.</p>`;
+      $("availGrid").innerHTML = avail.length ? avail.map(c => card(c, selAvail)).join("") : `<p style="color:#9a9ab0;">No un-staked Catboys in this wallet.</p>`;
       wire();
     }
     function card(c, sel) {
@@ -177,7 +204,7 @@
         const d = await r.json();
         if (!d.ok) { st("Failed: " + (d.error || "unknown"), true); return; }
         if (action === "claim") st("Claimed " + fmt(d.amount) + " $CATBOY — payout on the way. 🐾");
-        else st((action === "stake" ? "Napping " : "Woke ") + (assets.length) + " cat(s). 😴");
+        else st((action === "stake" ? "Napping " : "Woke ") + assets.length + " cat(s). 😴");
         selAvail.clear(); selStaked.clear(); $("stakeBtn").hidden = $("unstakeBtn").hidden = true;
         await loadStats();
       } catch (e) { st("Failed: " + ((e && e.message) || e), true); }
