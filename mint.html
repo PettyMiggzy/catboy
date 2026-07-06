@@ -412,7 +412,10 @@
           const conn = new web3.Connection(location.origin + (C.rpc || "/api/solrpc"), "confirmed");
           const tx = new web3.Transaction().add(web3.SystemProgram.transfer({ fromPubkey: new web3.PublicKey(from), toPubkey: new web3.PublicKey(String(cfg.payTo).trim()), lamports: Math.round(sel.priceSol * 1e9) }));
           tx.feePayer = new web3.PublicKey(from);
-          tx.recentBlockhash = (await conn.getLatestBlockhash("finalized")).blockhash;
+          // Default commitment (matches our "confirmed" connection) per Phantom support:
+          // a fresh blockhash lets Phantom simulate against current state confidently.
+          // A stale "finalized" hash is what made Phantom unsure → "malicious" warning.
+          tx.recentBlockhash = (await conn.getLatestBlockhash()).blockhash;
           // Pre-flight sim (Phantom's docs): only hand Phantom a tx that will succeed.
           // A failing tx (e.g. underfunded wallet) is what triggers its "malicious" block.
           let simErr = null;

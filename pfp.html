@@ -107,7 +107,10 @@
         lamports: Math.round(CFG.feeSol * 1e9),
       }));
       tx.feePayer = new web3.PublicKey(from);
-      tx.recentBlockhash = (await conn.getLatestBlockhash("finalized")).blockhash;
+      // Default commitment (matches our "confirmed" connection) per Phantom support:
+      // a fresh blockhash lets Phantom simulate against current state confidently
+      // instead of flagging a stale "finalized" hash it can't predict → warning.
+      tx.recentBlockhash = (await conn.getLatestBlockhash()).blockhash;
       // Pre-flight sim (Phantom docs): abort cleanly if the tx would fail on-chain
       // rather than letting Phantom show its "malicious" block on an underfunded tx.
       let simErr = null;
