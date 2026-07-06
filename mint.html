@@ -410,8 +410,16 @@
           status.style.color = "var(--muted)"; status.textContent = "Approve the " + sel.priceSol + " SOL for " + sel.name + "…";
           const web3 = await import("https://esm.sh/@solana/web3.js@1.95.3");
           const conn = new web3.Connection(location.origin + (C.rpc || "/api/solrpc"), "confirmed");
-          const tx = new web3.Transaction().add(web3.SystemProgram.transfer({ fromPubkey: new web3.PublicKey(from), toPubkey: new web3.PublicKey(String(cfg.payTo).trim()), lamports: Math.round(sel.priceSol * 1e9) }));
-          tx.feePayer = new web3.PublicKey(from);
+          // Phantom support (Joey) confirmed the "malicious/blocked" warning fires when
+          // the wallet can't cover the amount (Phantom can't simulate a succeeding tx).
+          // Guard BEFORE building/signing so underfunded users get a friendly message
+          // and never reach a failing signature Phantom would flag.
+          const wallet = new web3.PublicKey(from); // connected wallet: same for fromPubkey + feePayer
+          const need = Math.round(sel.priceSol * 1e9) + 6000000; // price + ~0.006 SOL fee/priority
+          let bal = null; try { bal = await conn.getBalance(wallet); } catch (_) {}
+          if (bal != null && bal < need) throw new Error("Not enough SOL — you have " + (bal / 1e9).toFixed(3) + ", need about " + (need / 1e9).toFixed(3) + " (" + sel.priceSol + " + fees). Top up and try again.");
+          const tx = new web3.Transaction().add(web3.SystemProgram.transfer({ fromPubkey: wallet, toPubkey: new web3.PublicKey(String(cfg.payTo).trim()), lamports: Math.round(sel.priceSol * 1e9) }));
+          tx.feePayer = wallet;
           // Default commitment (matches our "confirmed" connection) per Phantom support:
           // a fresh blockhash lets Phantom simulate against current state confidently.
           // A stale "finalized" hash is what made Phantom unsure → "malicious" warning.

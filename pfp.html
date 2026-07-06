@@ -100,13 +100,21 @@
       const from = (r && r.publicKey) ? r.publicKey : p.publicKey;
       const web3 = await import("https://esm.sh/@solana/web3.js@1.95.3");
       const conn = new web3.Connection(location.origin + ((window.CATBOY_MINT && window.CATBOY_MINT.rpc) || "/api/solrpc"), "confirmed");
+      // Phantom support (Joey) confirmed the "malicious/blocked" warning fires when the
+      // wallet can't cover the amount (Phantom can't simulate a succeeding tx). Guard
+      // BEFORE building/signing so underfunded users get a friendly message and never
+      // reach a failing signature Phantom would flag.
+      const wallet = new web3.PublicKey(from); // connected wallet: same for fromPubkey + feePayer
+      const need = Math.round(CFG.feeSol * 1e9) + 6000000; // fee + ~0.006 SOL for network fee/priority
+      let bal = null; try { bal = await conn.getBalance(wallet); } catch (_) {}
+      if (bal != null && bal < need) throw new Error("Not enough SOL — you have " + (bal / 1e9).toFixed(3) + ", need about " + (need / 1e9).toFixed(3) + " (" + CFG.feeSol + " + fees). Top up and retry.");
       const tx = new web3.Transaction();
       tx.add(web3.SystemProgram.transfer({
-        fromPubkey: new web3.PublicKey(from),
+        fromPubkey: wallet,
         toPubkey: new web3.PublicKey(CFG.payTo),
         lamports: Math.round(CFG.feeSol * 1e9),
       }));
-      tx.feePayer = new web3.PublicKey(from);
+      tx.feePayer = wallet;
       // Default commitment (matches our "confirmed" connection) per Phantom support:
       // a fresh blockhash lets Phantom simulate against current state confidently
       // instead of flagging a stale "finalized" hash it can't predict → warning.
