@@ -10,6 +10,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import WebSocket from "ws";
+import { whaleCommand, startWhaleEnforcement } from "./whale.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -137,6 +138,7 @@ async function registerCommands() {
     { command: "ca", description: "Contract address" },
     { command: "buy", description: "Buy $CATBOY" },
     { command: "chart", description: "Live chart" },
+    { command: "whale", description: "Verify wallet for the whale group 🐋" },
     { command: "help", description: "Show all commands" },
   ];
   try {
@@ -260,6 +262,12 @@ async function handleCommand(m) {
   const cmd = parts[0].toLowerCase().replace(/@.*$/, ""); // strip @botname
   const arg = (parts[1] || "").trim();
   log("cmd:", cmd, "·", m.chat.type, m.chat.id); // visibility: did the command arrive?
+
+  // ---- whale-group gate (its own module) ----
+  if (["/whale", "/verify", "/setwhale", "/whalenft", "/whalestatus"].includes(cmd)) {
+    await whaleCommand(cmd, arg, m, { API, tgSendTo, isAdmin, log, botUsername }).catch((e) => log("whale cmd error", e.message));
+    return;
+  }
 
   // ---- public commands (anyone in the group) ----
   if (cmd === "/start" || cmd === "/help") {
@@ -830,6 +838,7 @@ if (CFG.mint) {
 }
 getMe();      // learn our @username for mention detection
 registerCommands(); // populate the / command menu (incl. /burn)
+startWhaleEnforcement({ API, CFG, log, tgSendTo }); // whale gate: auto-remove sellers
 connect();
 pollUpdates(); // listen for /setmint, owner commands, and AI chat
 if (CFG.announceBurns) setInterval(() => { checkBurns().catch((e) => log("burn error", e.message)); }, CFG.burnPollMs);

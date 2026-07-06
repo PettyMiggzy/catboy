@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "CATBOY pump.fun Telegram buy bot — real-time buy alerts via PumpPortal.",
+  "description": "CATBOY pump.fun Telegram buy bot \u2014 real-time buy alerts via PumpPortal.",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
@@ -12,7 +12,8 @@
   "dependencies": {
     "ws": "^8.18.0",
     "@solana/web3.js": "^1.95.3",
-    "@solana/spl-token": "^0.4.8"
+    "@solana/spl-token": "^0.4.8",
+    "@neondatabase/serverless": "^0.10.4"
   },
   "engines": {
     "node": ">=18"
