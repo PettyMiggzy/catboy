@@ -3,120 +3,195 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>CATBOY Merch — Wear the Legend</title>
-  <meta name="description" content="Official Catboy merch — tees, hoodies, caps and more. Pay with card or crypto. Dropping soon." />
+  <title>CATBOY Merch — Pay in $CATBOY</title>
+  <meta name="description" content="Official Catboy merch — tees, hoodies, mugs and more. Pay in $CATBOY. Printed on demand and shipped worldwide." />
   <meta property="og:title" content="CATBOY Merch — Wear the Legend" />
-  <meta property="og:description" content="Official Catboy gear. Pay with card or SOL." />
-  <meta property="og:image" content="assets/catboy.png" />
-  <meta name="twitter:card" content="summary_large_image" />
+  <meta property="og:description" content="Official Catboy gear. Pay in $CATBOY." />
+  <meta property="og:image" content="assets/merch/classic.png" />
   <link rel="icon" type="image/png" href="assets/solana.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
-  <noscript><style>.reveal { opacity: 1 !important; transform: none !important; filter: none !important; }</style></noscript>
+  <style>
+    .mrch-tabs{display:flex;gap:.5rem;flex-wrap:wrap;justify-content:center;margin:1rem 0 1.5rem;}
+    .mrch-tab{padding:.4rem 1rem;border-radius:999px;border:1px solid rgba(255,255,255,.15);background:transparent;color:var(--muted);cursor:pointer;font-weight:600;font-family:inherit;}
+    .mrch-tab.active{background:var(--cyan,#3fe0ff);color:#001;border-color:transparent;}
+    .mrch-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:1.2rem;}
+    .mrch-card{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.1);border-radius:16px;overflow:hidden;cursor:pointer;transition:transform .15s,border-color .15s;}
+    .mrch-card:hover{transform:translateY(-4px);border-color:var(--cyan,#3fe0ff);}
+    .mrch-card img{width:100%;aspect-ratio:1;object-fit:cover;background:#fff;}
+    .mrch-body{padding:.8rem 1rem 1rem;}
+    .mrch-name{font-weight:700;margin:0 0 .2rem;}
+    .mrch-price{color:var(--cyan,#3fe0ff);font-weight:700;}
+    .mrch-cat{font-size:.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;}
+    .mrch-modal{position:fixed;inset:0;background:rgba(0,0,0,.82);display:none;align-items:center;justify-content:center;z-index:50;padding:1rem;}
+    .mrch-modal.open{display:flex;}
+    .mrch-sheet{background:#0b0b14;border:1px solid rgba(255,255,255,.15);border-radius:18px;max-width:720px;width:100%;max-height:92vh;overflow:auto;padding:1.4rem;}
+    .mrch-sheet img.hero{width:100%;max-width:320px;border-radius:12px;background:#fff;display:block;margin:0 auto 1rem;}
+    .mrch-row{display:flex;gap:.6rem;flex-wrap:wrap;margin:.5rem 0;align-items:center;}
+    .mrch-opt{padding:.4rem .9rem;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#eee;cursor:pointer;font-weight:600;font-family:inherit;}
+    .mrch-opt.sel{background:var(--cyan,#3fe0ff);color:#001;border-color:transparent;}
+    .mrch-form{display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin:1rem 0;}
+    .mrch-form input{padding:.6rem;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:#12121c;color:#eee;width:100%;font-family:inherit;}
+    .mrch-form .full{grid-column:1/-1;}
+    .close-x{float:right;font-size:1.6rem;cursor:pointer;color:var(--muted);line-height:1;}
+  </style>
 </head>
 <body>
   <div class="bg-grid" aria-hidden="true"></div>
   <div class="bg-glow" aria-hidden="true"></div>
-  <div class="scroll-progress" id="progress" aria-hidden="true"></div>
 
-  <!-- NAV -->
   <header class="nav">
-    <a href="index.html" class="brand">
-      <img src="assets/catboy.png" alt="Catboy logo" class="brand-logo" />
-      <span class="brand-name">CATBOY</span>
-    </a>
+    <a href="index.html" class="brand"><img src="assets/catboy.png" alt="Catboy logo" class="brand-logo" /><span class="brand-name">CATBOY</span></a>
     <nav class="nav-links">
-      <a href="index.html#lore">Lore</a>
-      <a href="saga.html">Saga</a>
-      <a href="trench.html">Terminal</a>
-      <a href="nft.html">NFTs</a>
-      <a href="launch.html">Launch</a>
-      <a href="casino.html">Casino</a>
-      <a href="arcade.html">Arcade</a>
-      <a href="club.html">Club</a>
-      <a href="meme.html">Meme</a>
-      <a href="wallet.html">Wallet</a>
-      <a href="merch.html" class="active">Merch</a>
+      <a href="index.html#lore">Lore</a><a href="saga.html">Saga</a><a href="nft.html">NFTs</a>
+      <a href="casino.html">Casino</a><a href="arcade.html">Arcade</a><a href="merch.html" class="active">Merch</a>
       <a href="index.html#faq">FAQ</a>
     </nav>
     <a href="mint.html" class="btn btn-primary nav-cta">🐾 Mint</a>
   </header>
 
-  <!-- PAGE HERO -->
-  <section class="page-hero">
+  <section class="page-hero" style="padding-bottom:.5rem;">
     <div class="page-hero-inner">
       <a href="index.html" class="back-link">&lsaquo; Back to Home</a>
-      <span class="eyebrow" style="display:block;margin-top:1rem;">Official Store</span>
+      <span class="eyebrow" style="display:block;margin-top:1rem;">Printed on demand · shipped worldwide</span>
       <h1>Wear the <span class="grad">Legend</span></h1>
-      <p>Premium Catboy gear — printed on demand, shipped worldwide. Pay with card or crypto. Store dropping soon.</p>
+      <p>Rep Catboy. Every item is <b>paid in $CATBOY</b>, printed on demand, and shipped to your door. Holder discounts &amp; drops coming.</p>
     </div>
   </section>
 
-  <!-- PRODUCTS -->
-  <section class="section" style="padding-top:1.5rem;">
-    <div class="product-grid">
-      <div class="product">
-        <div class="product-img"><span class="product-badge">Coming Soon</span><img src="assets/merch/tee.png" alt="Catboy Tee" loading="lazy" /></div>
-        <div class="product-body"><h3>Catboy Genesis Tee</h3><span class="product-price">TBA</span></div>
-      </div>
-      <div class="product">
-        <div class="product-img"><span class="product-badge">Coming Soon</span><img src="assets/merch/ninelives.png" alt="Neon Hoodie" loading="lazy" /></div>
-        <div class="product-body"><h3>Neon City Hoodie</h3><span class="product-price">TBA</span></div>
-      </div>
-      <div class="product">
-        <div class="product-img"><span class="product-badge">Coming Soon</span><img src="assets/merch/tee.png" alt="Solana Cap" loading="lazy" /></div>
-        <div class="product-body"><h3>Solana Snapback</h3><span class="product-price">TBA</span></div>
-      </div>
-      <div class="product">
-        <div class="product-img"><span class="product-badge">Coming Soon</span><img src="assets/merch/ninelives.png" alt="Sticker Pack" loading="lazy" /></div>
-        <div class="product-body"><h3>Sticker Pack</h3><span class="product-price">TBA</span></div>
-      </div>
-      <div class="product">
-        <div class="product-img"><span class="product-badge">Coming Soon</span><img src="assets/merch/tee.png" alt="Mousepad" loading="lazy" /></div>
-        <div class="product-body"><h3>Cyber Mousepad</h3><span class="product-price">TBA</span></div>
-      </div>
-      <div class="product">
-        <div class="product-img"><span class="product-badge">Coming Soon</span><img src="assets/merch/ninelives.png" alt="Poster" loading="lazy" /></div>
-        <div class="product-body"><h3>Legend Poster</h3><span class="product-price">TBA</span></div>
-      </div>
-    </div>
-
-    <div class="store-cta">
-      <a href="#" class="btn btn-primary" data-merch>Visit Store</a>
-      <p class="muted-note">Store powered by print-on-demand — pay with card or SOL. No login needed.</p>
-    </div>
+  <section class="section" style="padding-top:.5rem;">
+    <div class="mrch-tabs" id="tabs"></div>
+    <div class="mrch-grid" id="grid"></div>
+    <p class="muted-note" style="text-align:center;margin-top:1.5rem;">Prices in $CATBOY. You pay in one wallet transaction; we print &amp; ship. Shipping is added at checkout. Print-on-demand sales are final.</p>
   </section>
 
-  <!-- WHY -->
-  <section class="section">
-    <div class="section-head">
-      <span class="eyebrow">The Drop</span>
-      <h2>Repping the <span class="grad">Movement</span></h2>
-      <p class="section-intro">Every piece celebrates the legend's leap from BNB to Solana. Holders get exclusive designs and discounts.</p>
-    </div>
-    <div class="util-grid">
-      <div class="util-card"><span class="util-icon"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18z"/></svg></span><h3>Worldwide Shipping</h3><p>Print-on-demand fulfillment ships to most countries — no inventory, no delays.</p></div>
-      <div class="util-card"><span class="util-icon"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span><h3>Card or Crypto</h3><p>Check out with a normal card or pay in SOL / USDC. Your choice.</p></div>
-      <div class="util-card"><span class="util-icon"><svg class="ic" viewBox="0 0 24 24"><circle cx="6" cy="10" r="1.6"/><circle cx="10" cy="6.5" r="1.6"/><circle cx="14" cy="6.5" r="1.6"/><circle cx="18" cy="10" r="1.6"/><path d="M12 11c-3 0-5 2.2-5 4.5C7 18 9 19 12 19s5-1 5-3.5C17 13.2 15 11 12 11z"/></svg></span><h3>Holder Perks</h3><p>NFT holders unlock discounts and limited holder-only merch drops.</p></div>
-    </div>
-  </section>
+  <div class="mrch-modal" id="modal"><div class="mrch-sheet" id="sheet"></div></div>
 
-  <!-- FOOTER -->
   <footer class="footer">
-    <div class="footer-brand">
-      <img src="assets/catboy.png" alt="Catboy" class="footer-logo" />
-      <span>CATBOY</span>
-    </div>
-    <p class="footer-disclaimer">
-      Catboy merch is fan-driven community gear. Designs and availability subject to change.
-      Always verify official store links through our channels.
-    </p>
+    <div class="footer-brand"><img src="assets/catboy.png" alt="Catboy" class="footer-logo" /><span>CATBOY</span></div>
     <p class="footer-copy">© <span id="year"></span> CATBOY · The Legend Evolves on Solana</p>
-    <p class="footer-credit">A <a href="https://t.me/kingpetty317" target="_blank" rel="noopener">King Petty</a> Build</p>
   </footer>
 
-  <script src="script.js"></script>
+  <script src="assets/merch-config.js"></script>
+  <script src="assets/mint-config.js"></script>
+  <script>
+  (function () {
+    const $ = (id) => document.getElementById(id);
+    $("year").textContent = new Date().getFullYear();
+    const M = window.CATBOY_MERCH || { products: [], categories: [] };
+    const fmt = (n) => Number(n || 0).toLocaleString("en-US");
+    let CFG = { ready: false, payTo: "", decimals: 6 };
+    let cat = "All";
+
+    fetch("/api/merch").then(r => r.json()).then(c => { CFG = Object.assign(CFG, c); }).catch(() => {});
+
+    function renderTabs() {
+      const cats = ["All", ...M.categories];
+      $("tabs").innerHTML = cats.map(c => `<button class="mrch-tab${c === cat ? " active" : ""}" data-cat="${c}">${c}</button>`).join("");
+    }
+    function renderGrid() {
+      const items = M.products.filter(p => cat === "All" || p.cat === cat);
+      $("grid").innerHTML = items.map(p => `
+        <div class="mrch-card" data-id="${p.id}">
+          <img src="${p.design}" alt="${p.name}" loading="lazy" />
+          <div class="mrch-body">
+            <div class="mrch-cat">${p.cat}</div>
+            <p class="mrch-name">${p.name}</p>
+            <span class="mrch-price">${fmt(p.priceCatboy)} $CATBOY</span>
+          </div>
+        </div>`).join("");
+    }
+    renderTabs(); renderGrid();
+    $("tabs").addEventListener("click", e => { const b = e.target.closest("[data-cat]"); if (!b) return; cat = b.dataset.cat; renderTabs(); renderGrid(); });
+    $("grid").addEventListener("click", e => { const c = e.target.closest("[data-id]"); if (c) openProduct(c.dataset.id); });
+
+    const getProvider = () => (window.solana && window.solana.isPhantom) ? window.solana : (window.solflare || window.backpack || (window.phantom && window.phantom.solana) || null);
+
+    function openProduct(id) {
+      const p = M.products.find(x => x.id === id); if (!p) return;
+      let opt = p.options[0], qty = 1;
+      const sheet = $("sheet");
+      const draw = () => {
+        sheet.innerHTML = `
+          <span class="close-x" id="cx">×</span>
+          <img class="hero" src="${p.design}" alt="${p.name}" />
+          <h2 style="margin:0 0 .2rem;">${p.name}</h2>
+          <p class="muted-note">${p.blurb || ""}</p>
+          <div class="mrch-price" style="font-size:1.3rem;margin:.4rem 0;">${fmt(p.priceCatboy * qty)} $CATBOY</div>
+          <div><b>Option</b><div class="mrch-row">${p.options.map(o => `<button class="mrch-opt${o === opt ? " sel" : ""}" data-opt="${o}">${o}</button>`).join("")}</div></div>
+          <div><b>Qty</b><div class="mrch-row"><button class="mrch-opt" data-q="-">−</button><span style="min-width:2ch;text-align:center;">${qty}</span><button class="mrch-opt" data-q="+">+</button></div></div>
+          <div style="margin-top:1rem;"><b>Ship to</b></div>
+          <div class="mrch-form">
+            <input class="full" id="f_name" placeholder="Full name" />
+            <input class="full" id="f_email" placeholder="Email (for tracking)" type="email" />
+            <input class="full" id="f_addr" placeholder="Address" />
+            <input id="f_city" placeholder="City" />
+            <input id="f_state" placeholder="State / Province" />
+            <input id="f_zip" placeholder="ZIP / Postal" />
+            <input id="f_country" placeholder="Country (e.g. US)" value="US" />
+          </div>
+          <button class="btn btn-primary" id="buy" style="width:100%;">Pay ${fmt(p.priceCatboy * qty)} $CATBOY &amp; Order</button>
+          <p class="form-status" id="mstatus" role="status" aria-live="polite" style="margin-top:.8rem;"></p>
+          <p class="muted-note">You pay in $CATBOY from your wallet; we print &amp; ship. Keep a little SOL for gas.</p>`;
+        sheet.querySelector("#cx").onclick = closeModal;
+        sheet.querySelectorAll("[data-opt]").forEach(b => b.onclick = () => { opt = b.dataset.opt; draw(); });
+        sheet.querySelectorAll("[data-q]").forEach(b => b.onclick = () => { qty = Math.max(1, qty + (b.dataset.q === "+" ? 1 : -1)); draw(); });
+        sheet.querySelector("#buy").onclick = () => checkout(p, opt, qty);
+      };
+      draw();
+      $("modal").classList.add("open");
+    }
+    function closeModal() { $("modal").classList.remove("open"); }
+    $("modal").addEventListener("click", e => { if (e.target === $("modal")) closeModal(); });
+
+    async function checkout(p, opt, qty) {
+      const st = (m, err) => { const s = $("mstatus"); s.textContent = m; s.style.color = err ? "var(--magenta)" : "var(--muted)"; };
+      const ship = {
+        name: $("f_name").value.trim(), email: $("f_email").value.trim(), address1: $("f_addr").value.trim(),
+        city: $("f_city").value.trim(), state: $("f_state").value.trim(), zip: $("f_zip").value.trim(), country: ($("f_country").value.trim() || "US").toUpperCase(),
+      };
+      if (!ship.name || !ship.address1 || !ship.city || !ship.zip) { st("Fill in your shipping details.", true); return; }
+      if (!CFG.ready || !CFG.payTo) { st("Store isn't live yet — the merch treasury isn't configured.", true); return; }
+      const provider = getProvider();
+      if (!provider) { st("No Solana wallet found — install Phantom.", true); return; }
+      $("buy").disabled = true;
+      try {
+        st("Approve the $CATBOY payment in your wallet…");
+        const web3 = await import("https://esm.sh/@solana/web3.js@1.95.3");
+        const spl = await import("https://esm.sh/@solana/spl-token@0.4.8");
+        const conn = new web3.Connection(location.origin + ((window.CATBOY_MINT && window.CATBOY_MINT.rpc) || "/api/solrpc"), "confirmed");
+        const r = await provider.connect();
+        const buyer = (r && r.publicKey ? r.publicKey : provider.publicKey);
+        const mint = new web3.PublicKey(M.mint);
+        const prog = spl.TOKEN_2022_PROGRAM_ID; // $CATBOY is a Token-2022 mint
+        const treasury = new web3.PublicKey(CFG.payTo);
+        const fromAta = spl.getAssociatedTokenAddressSync(mint, buyer, false, prog);
+        const toAta = spl.getAssociatedTokenAddressSync(mint, treasury, false, prog);
+        const dec = CFG.decimals || 6;
+        const amount = BigInt(Math.round(p.priceCatboy * qty)) * (10n ** BigInt(dec));
+        const tx = new web3.Transaction();
+        tx.add(spl.createAssociatedTokenAccountIdempotentInstruction(buyer, toAta, treasury, mint, prog));
+        tx.add(spl.createTransferCheckedInstruction(fromAta, mint, toAta, buyer, amount, dec, [], prog));
+        tx.feePayer = buyer;
+        tx.recentBlockhash = (await conn.getLatestBlockhash()).blockhash;
+        let simErr = null;
+        try { const sim = await conn.simulateTransaction(tx); simErr = sim && sim.value && sim.value.err; } catch (_) {}
+        if (simErr) throw new Error("Payment would fail — check you hold enough $CATBOY + a little SOL for gas.");
+        const res = await provider.signAndSendTransaction(tx);
+        const sig = res && res.signature ? res.signature : res;
+        st("Paid ✓ — placing your order…");
+        const or = await fetch("/api/merch", { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ productId: p.id, option: opt, qty, txSig: sig, buyer: buyer.toString(), ship }) });
+        const d = await or.json();
+        if (or.ok && d.ok) { st("Order placed! 🐾 Confirmation + tracking will hit your email. Order #" + (d.orderId || "—")); }
+        else st("Payment landed but the order didn't finalize (" + (d.error || "unknown") + "). Screenshot this + your tx and DM us — we'll fix it.", true);
+      } catch (e) {
+        st("Failed: " + ((e && e.message) || e), true);
+      } finally { $("buy").disabled = false; }
+    }
+  })();
+  </script>
 </body>
 </html>
