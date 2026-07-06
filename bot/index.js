@@ -68,6 +68,7 @@ const CFG = {
   rpcUrl: process.env.RPC_URL || "https://api.mainnet-beta.solana.com",
   burnPollMs: Math.max(30000, parseInt(process.env.BURN_POLL_MS || "60000", 10)),
   announceBurns: (process.env.ANNOUNCE_BURNS ?? "1") !== "0",
+  burnMedia: process.env.BURN_MEDIA || "https://www.catboyonsol.fun/assets/burn.mp4", // dragon burn video on burn announcements
   totalSupply: parseFloat(process.env.TOTAL_SUPPLY || "1000000000"), // pump.fun launches at 1B; used to compute total burned
   // On-chain buy detection via YOUR RPC — reliable primary source (PumpPortal's
   // free WS drops trades). Polls the mint's recent signatures and parses buys.
@@ -208,6 +209,22 @@ async function solRpc(method, params) {
     const j = await r.json(); return j.result;
   } catch { return null; }
 }
+// Burn announcements get the dragon video. Falls back to plain text if the
+// animation fails, so a burn is never announced silently.
+let _burnFileId = null;
+async function tgSendBurn(caption) {
+  if (!CFG.burnMedia) return tgSendMessage(caption);
+  try {
+    const r = await fetch(`${API}/sendAnimation`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: CFG.chatId, animation: _burnFileId || CFG.burnMedia, caption, parse_mode: "HTML" }),
+    });
+    const j = await r.json();
+    if (j.ok) { if (j.result?.animation?.file_id) _burnFileId = j.result.animation.file_id; return; }
+    log("tgSendBurn FAIL:", j.description || "err", "— text fallback");
+  } catch (e) { log("tgSendBurn error", e.message, "— text fallback"); }
+  return tgSendMessage(caption);
+}
 async function checkBurns() {
   if (!CFG.mint || !CFG.announceBurns) return;
   const s = await solRpc("getTokenSupply", [CFG.mint]);
@@ -218,7 +235,7 @@ async function checkBurns() {
     const burned = _lastSupply - ui;
     const pct = burned / _lastSupply * 100;
     _lastSupply = ui;
-    await tgSendMessage(`🔥🔥 <b>${fmt(burned, 0)} ${CFG.ticker} BURNED!</b> (${pct >= 0.01 ? pct.toFixed(2) : "<0.01"}% of supply)\nSupply now <b>${fmt(ui, 0)}</b>. Deflationary cattitude 🐾🔥`);
+    await tgSendBurn(`🔥🔥 <b>${fmt(burned, 0)} ${CFG.ticker} BURNED!</b> (${pct >= 0.01 ? pct.toFixed(2) : "<0.01"}% of supply)\nSupply now <b>${fmt(ui, 0)}</b>. Deflationary cattitude 🐾🔥`);
     log("burn announced:", burned);
   } else if (ui > _lastSupply) { _lastSupply = ui; } // mint/rebase — just track
 }
