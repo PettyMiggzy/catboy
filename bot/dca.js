@@ -82,6 +82,24 @@ async function tg(chatId, text) {
     if (!j.ok) log("tg send failed:", j.description || r.status, "chat=" + chatId);
   } catch (e) { log("tg error", e.message); }
 }
+// Burn announcements get the hype GIF. BURN_MEDIA can override; default is the
+// web-served animation (Vercel serves /assets). Falls back to a plain text send
+// if the animation upload fails, so a burn is never announced silently.
+const BURN_MEDIA = process.env.BURN_MEDIA || "https://www.catboyonsol.fun/assets/burn.mp4";
+let _burnFileId = null; // reuse Telegram's file_id after first upload
+async function tgBurn(chatId, caption) {
+  if (!TG || !chatId) return tg(chatId, caption);
+  try {
+    const r = await fetch(`https://api.telegram.org/bot${TG}/sendAnimation`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: chatId, animation: _burnFileId || BURN_MEDIA, caption, parse_mode: "HTML" }),
+    });
+    const j = await r.json();
+    if (j.ok) { if (j.result?.animation?.file_id) _burnFileId = j.result.animation.file_id; return; }
+    log("tgBurn failed:", j.description || r.status, "— falling back to text");
+  } catch (e) { log("tgBurn error", e.message, "— falling back to text"); }
+  return tg(chatId, caption); // never announce a burn silently
+}
 const fmt = (n, d = 3) => Number(n || 0).toLocaleString("en-US", { maximumFractionDigits: d });
 
 async function loadState() { try { return JSON.parse(await fs.readFile(STATE, "utf8")); } catch { return { remaining: TICKS_TOTAL, totalSpent: 0, totalBurned: 0, funded: false, lastBuyAt: 0 }; } }
@@ -151,7 +169,7 @@ async function check() {
     // 1) auto-burn anything sent directly to the wallet (donated CATBOY)
     const donated = await burnAnyTokens(st, "direct-send").catch((e) => { log("burn-send error", e.message); return 0; });
     if (donated > 0) {
-      await tg(CHAT, `🔥 <b>${fmt(donated, 0)} $CATBOY sent in &amp; BURNED forever.</b>\nTotal burned: <b>${fmt(st.totalBurned, 0)}</b> 🐾\n<i>Send $CATBOY to the burn wallet to torch it too.</i>`);
+      await tgBurn(CHAT, `🔥 <b>${fmt(donated, 0)} $CATBOY sent in &amp; BURNED forever.</b>\nTotal burned: <b>${fmt(st.totalBurned, 0)}</b> 🐾\n<i>Send $CATBOY to the burn wallet to torch it too.</i>`);
     }
 
     // 2) DCA buy+burn on the pacing interval
@@ -177,7 +195,7 @@ async function check() {
     if (burnedUi <= 0) { await saveState(st); log(`WARN: buy ${buySig} yielded 0 tokens (slippage/pool?) — nothing to burn`); running = false; return; }
     st.totalBurned += burnedUi; await saveState(st);
     log(`bought+burned: ${fmt(burnedUi, 0)} CATBOY for ${fmt(amount)} SOL`);
-    await tg(CHAT,
+    await tgBurn(CHAT,
       `🔥 <b>DCA Buy &amp; Burn</b>\n` +
       `Bought <b>${fmt(burnedUi, 0)} $CATBOY</b> for <b>${fmt(amount)} SOL</b> — and burned every one. 🔥\n` +
       `Total burned: <b>${fmt(st.totalBurned, 0)}</b>\n` +
