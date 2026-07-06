@@ -122,6 +122,8 @@ export default async function handler(req, res) {
     const { action, wallet, sig, ts, assets } = b;
     if (!wallet || !sig || !ts) return res.status(400).json({ ok: false, error: "missing_fields" });
     if (!SECRET) return res.status(503).json({ ok: false, error: "staking_not_configured" });
+    // reject stale signatures (replay hardening); the page signs a fresh Date.now() each action
+    if (Math.abs(Date.now() - Number(ts)) > 15 * 60000) return res.status(401).json({ ok: false, error: "signature_expired" });
     if (!verifySig(messageFor(wallet, ts), wallet, sig)) return res.status(401).json({ ok: false, error: "signature_invalid" });
 
     // settle helper: roll a staker's pending forward at current accPerShare, set new shares
