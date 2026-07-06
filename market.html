@@ -159,9 +159,12 @@
       // animated Legendaries (Genesis only): NFT id -> clip under PATH
       const ANIM = { 57: "anim/057.mp4", 90: "anim/090.mp4", 92: "anim/092.mp4" };
       const animSrc = (i) => (PATH.indexOf("genesis") > -1 && ANIM[i.id]) ? PATH + ANIM[i.id] : null;
+      // sold pieces (from /api/mint mintedIds) get a SOLD stamp so browsers see what's gone
+      let CURKEY = "nine", SOLD = {};
+      (function () { const s = document.createElement("style"); s.textContent = ".nft-card.sold .nft-thumb{filter:grayscale(.65) brightness(.5);}.nft-sold{position:absolute;top:8px;left:8px;z-index:4;background:#ff3b5c;color:#fff;font-weight:800;font-size:.68rem;letter-spacing:.08em;padding:.16rem .55rem;border-radius:6px;transform:rotate(-8deg);box-shadow:0 2px 8px rgba(0,0,0,.45);}.nft-card.sold .nft-buy{color:#ff3b5c;font-weight:700;}"; document.head.appendChild(s); })();
       const TIER_ORDER = { Legendary: 0, Legend: 0, Founder: 1, Epic: 2, Rare: 3, Common: 4 };
       function load(key) {
-        const c = COLLS[key]; PATH = c.path; NOTE = c.note; filter = "all"; traitFilter = {};
+        const c = COLLS[key]; PATH = c.path; NOTE = c.note; filter = "all"; traitFilter = {}; CURKEY = key;
         document.getElementById("mktEyebrow").textContent = c.eyebrow;
         document.getElementById("mktTitle").innerHTML = c.title;
         document.getElementById("mktIntro").innerHTML = c.intro;
@@ -197,6 +200,7 @@
         try {
           const r = await fetch("/api/mint"); if (!r.ok) return;
           const d = await r.json();
+          SOLD = d.mintedIds || {}; render(); // stamp the sold pieces
           const liveColls = new Set((d.packs || []).map((p) => p.coll));
           for (const key of ["genesis", "pride"]) {
             if (!liveColls.has(key) || !LIVE_COPY[key]) continue;
@@ -237,14 +241,15 @@
 
       function render() {
         const a = sorted();
-        grid.innerHTML = a.map((i) => `
-          <div class="nft-card t-${i.tier}" data-id="${i.id}">
-            <div class="nft-thumb">${animSrc(i) ? `<span class="nft-anim-badge">● ANIMATED</span>` : ``}<span class="nft-rank" title="Rarity rank">＃${i.rank}</span>${animSrc(i) ? `<video src="${animSrc(i)}" autoplay muted loop playsinline poster="${PATH}${i.file}"></video>` : `<img loading="lazy" src="${PATH}${i.file}" alt="${i.name}" />`}</div>
+        const soldSet = new Set(SOLD[CURKEY] || []);
+        grid.innerHTML = a.map((i) => { const sold = soldSet.has(i.id); return `
+          <div class="nft-card t-${i.tier}${sold ? " sold" : ""}" data-id="${i.id}">
+            <div class="nft-thumb">${sold ? `<span class="nft-sold">SOLD</span>` : ``}${animSrc(i) ? `<span class="nft-anim-badge">● ANIMATED</span>` : ``}<span class="nft-rank" title="Rarity rank">＃${i.rank}</span>${animSrc(i) ? `<video src="${animSrc(i)}" autoplay muted loop playsinline poster="${PATH}${i.file}"></video>` : `<img loading="lazy" src="${PATH}${i.file}" alt="${i.name}" />`}</div>
             <div class="nft-meta">
               <div class="nft-row"><span class="nft-name">${i.name}</span><span class="nft-badge b-${i.tier}">${i.tier}</span></div>
-              <div class="nft-row"><span class="nft-price" style="color:var(--muted);">Rank ＃${i.rank}</span><span class="nft-buy">View</span></div>
+              <div class="nft-row"><span class="nft-price" style="color:var(--muted);">Rank ＃${i.rank}</span><span class="nft-buy">${sold ? "Sold" : "View"}</span></div>
             </div>
-          </div>`).join("");
+          </div>`; }).join("");
         document.getElementById("mktNote").textContent = a.length + " of " + items.length + " shown · " + NOTE;
       }
 
