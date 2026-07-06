@@ -55,7 +55,10 @@ async function ensure(s) {
   await s`CREATE TABLE IF NOT EXISTS stake_claims (id SERIAL PRIMARY KEY, wallet TEXT, amount NUMERIC, status TEXT DEFAULT 'pending', sig TEXT, created_at TIMESTAMPTZ DEFAULT now())`;
 }
 async function pool(s) { return (await s`SELECT * FROM stake_pool WHERE id=1`)[0]; }
-const bi = (x) => BigInt(Math.trunc(Number(x)));
+// Parse Postgres NUMERIC (returned as a string) straight to BigInt — going via
+// Number() would silently corrupt the accRewardPerShare accumulator once it
+// exceeds 2^53, throwing off every reward calc.
+const bi = (x) => BigInt(String(x ?? 0).trim().split(".")[0] || "0");
 // pending for a staker given current accPerShare (all fixed-point over SCALE)
 function pendingOf(st, accPerShare) { return bi(st.pending) + (bi(st.shares) * bi(accPerShare)) / SCALE - bi(st.reward_debt); }
 

@@ -63,7 +63,9 @@ const POOL = kp.publicKey;
 const sql = neon(CONN_STR);
 const conn = new Connection(RPC, "confirmed");
 const MINT_PK = new PublicKey(MINT);
-const bi = (x) => BigInt(Math.trunc(Number(x)));
+// Parse NUMERIC strings straight to BigInt — Number() would lose precision on
+// the large accRewardPerShare accumulator and corrupt every reward calc.
+const bi = (x) => BigInt(String(x ?? 0).trim().split(".")[0] || "0");
 
 async function ensure() {
   await sql`CREATE TABLE IF NOT EXISTS stake_pool (id INT PRIMARY KEY DEFAULT 1, acc_per_share NUMERIC NOT NULL DEFAULT 0, total_shares BIGINT NOT NULL DEFAULT 0, undistributed NUMERIC NOT NULL DEFAULT 0, deposited NUMERIC NOT NULL DEFAULT 0)`;
@@ -179,6 +181,7 @@ async function cycle() {
     const paid = await processClaims(h.dec, h.prog);
     const h2 = await poolHolding(); // re-read after payouts
     await detectDeposits(h2.ui, paid);
+    await distribute(0n); // roll any held (undistributed) rewards in once stakers exist (e.g. the seed deposited before anyone staked)
     await sweep();
   } catch (e) { log("cycle error", e.message); }
   finally { busy = false; }
