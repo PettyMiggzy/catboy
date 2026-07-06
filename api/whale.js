@@ -25,8 +25,11 @@ const BOT = (process.env.TELEGRAM_BOT_TOKEN || "").trim();
 const WHALE_CHAT = (process.env.WHALE_CHAT_ID || "").trim();
 const SECRET = (process.env.WHALE_SECRET || "").trim();
 const MINT = (process.env.TOKEN_MINT || "").trim();
-const COLLECTIONS = [process.env.NFT_COLLECTION, process.env.NFT_COLLECTION_GENESIS, process.env.NFT_COLLECTION_PRIDE]
+// Public on-chain collection ids — default to the known Catboy collections.
+const DEFAULT_COLLECTIONS = ["33kxQv4Jo7u9edC4RipZckwkpRRdxg863b6cw2UGfh6S", "HuLA9RRuG6s994eAiiY4cFhrhghCkCQWcNdm3e3wVD3x", "4N1d9umoscMYiwiqxXnkTbJD9pXLMZiPCw4H7fAUK93x"];
+const _envColls = [process.env.NFT_COLLECTION, process.env.NFT_COLLECTION_GENESIS, process.env.NFT_COLLECTION_PRIDE]
   .map((x) => (x || "").trim()).filter(Boolean);
+const COLLECTIONS = _envColls.length ? _envColls : DEFAULT_COLLECTIONS;
 const LINK_TTL = 30 * 60 * 1000;       // verify link valid 30 min
 const DEFAULT_MIN = 10_000_000;        // 10M $CATBOY default (changeable from the bot)
 

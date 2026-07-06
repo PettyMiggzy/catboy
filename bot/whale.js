@@ -17,8 +17,11 @@ const SECRET = (process.env.WHALE_SECRET || "").trim();
 const SITE = (process.env.WHALE_SITE || "https://www.catboyonsol.fun").replace(/\/$/, "");
 const RECHECK_MS = Math.max(5, parseInt(process.env.WHALE_RECHECK_MIN || "30", 10)) * 60000;
 const MINT = (process.env.TOKEN_MINT || "").trim();
-const COLLECTIONS = [process.env.NFT_COLLECTION, process.env.NFT_COLLECTION_GENESIS, process.env.NFT_COLLECTION_PRIDE]
-  .map((x) => (x || "").trim()).filter(Boolean);
+// Collection addresses are public on-chain ids (not secrets) — default to the
+// known Catboy collections so the droplet doesn't need to set them.
+const DEFAULT_COLLECTIONS = ["33kxQv4Jo7u9edC4RipZckwkpRRdxg863b6cw2UGfh6S", "HuLA9RRuG6s994eAiiY4cFhrhghCkCQWcNdm3e3wVD3x", "4N1d9umoscMYiwiqxXnkTbJD9pXLMZiPCw4H7fAUK93x"];
+const _envColls = [process.env.NFT_COLLECTION, process.env.NFT_COLLECTION_GENESIS, process.env.NFT_COLLECTION_PRIDE].map((x) => (x || "").trim()).filter(Boolean);
+const COLLECTIONS = _envColls.length ? _envColls : DEFAULT_COLLECTIONS;
 const DEFAULT_MIN = 10_000_000;
 
 const sql = () => (CONN ? neon(CONN) : null);
