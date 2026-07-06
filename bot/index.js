@@ -212,18 +212,18 @@ async function solRpc(method, params) {
 // Burn announcements get the dragon video. Falls back to plain text if the
 // animation fails, so a burn is never announced silently.
 let _burnFileId = null;
-async function tgSendBurn(caption) {
-  if (!CFG.burnMedia) return tgSendMessage(caption);
+async function tgSendBurn(caption, chatId = CFG.chatId) {
+  if (!CFG.burnMedia || !chatId) return tgSendTo(chatId, caption);
   try {
     const r = await fetch(`${API}/sendAnimation`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: CFG.chatId, animation: _burnFileId || CFG.burnMedia, caption, parse_mode: "HTML" }),
+      body: JSON.stringify({ chat_id: chatId, animation: _burnFileId || CFG.burnMedia, caption, parse_mode: "HTML" }),
     });
     const j = await r.json();
     if (j.ok) { if (j.result?.animation?.file_id) _burnFileId = j.result.animation.file_id; return; }
     log("tgSendBurn FAIL:", j.description || "err", "— text fallback");
   } catch (e) { log("tgSendBurn error", e.message, "— text fallback"); }
-  return tgSendMessage(caption);
+  return tgSendTo(chatId, caption);
 }
 async function checkBurns() {
   if (!CFG.mint || !CFG.announceBurns) return;
@@ -310,11 +310,13 @@ async function handleCommand(m) {
       if (!isFinite(ui)) return tgSendTo(m.chat.id, "Supply loading — give it a few seconds and try again.");
       const burned = Math.max(0, CFG.totalSupply - ui);
       const pct = CFG.totalSupply ? (burned / CFG.totalSupply) * 100 : 0;
-      return tgSendTo(m.chat.id,
+      // Send with the dragon video (same path as burn announcements) so /burn
+      // both shows stats AND proves the animation works.
+      return tgSendBurn(
         `🔥 <b>$${CFG.ticker} Burns</b>\n` +
         `Circulating: <b>${fmt(ui, 0)}</b>\n` +
         `Total burned: <b>${fmt(burned, 0)}</b> (${pct >= 0.01 ? pct.toFixed(2) : "<0.01"}%)\n` +
-        `Burn alerts: ${CFG.announceBurns ? "on 🔥" : "off"}`);
+        `Burn alerts: ${CFG.announceBurns ? "on 🔥" : "off"}`, m.chat.id);
     } catch (e) {
       log("burn cmd error", e.message);
       return tgSendTo(m.chat.id, "🔥 Couldn't fetch burn stats right now — try again in a moment.");
