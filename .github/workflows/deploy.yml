@@ -16,14 +16,22 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      - name: Check secrets are present (no values printed)
+        env:
+          H: ${{ secrets.DROPLET_HOST }}
+          U: ${{ secrets.DROPLET_USER }}
+          P: ${{ secrets.DROPLET_SSH_PASSWORD || secrets.DROPLET_PASSWORD || secrets.ROOT_PASSWORD || secrets.SSH_PASSWORD || secrets.PASSWORD || secrets.ROOT }}
+        run: |
+          echo "host set:     $([ -n "$H" ] && echo yes || echo NO)"
+          echo "user set:     $([ -n "$U" ] && echo "yes ($U)" || echo NO)"
+          echo "password len: ${#P}  (0 = no matching password secret found)"
       - name: SSH deploy (pull + reload bots)
         uses: appleboy/ssh-action@v1.2.2
         with:
           host: ${{ secrets.DROPLET_HOST }}
-          username: ${{ secrets.DROPLET_USER }}
-          # Password auth (mobile-friendly: no SSH key to generate on the box).
-          # If DROPLET_SSH_KEY is set instead, the action uses that and ignores password.
-          password: ${{ secrets.DROPLET_SSH_PASSWORD }}
+          username: ${{ secrets.DROPLET_USER || 'root' }}
+          # Accept whatever the password secret was named (mobile setup guesswork).
+          password: ${{ secrets.DROPLET_SSH_PASSWORD || secrets.DROPLET_PASSWORD || secrets.ROOT_PASSWORD || secrets.SSH_PASSWORD || secrets.PASSWORD || secrets.ROOT }}
           key: ${{ secrets.DROPLET_SSH_KEY }}
           port: ${{ secrets.DROPLET_PORT || 22 }}
           script_stop: true
