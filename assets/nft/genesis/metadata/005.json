@@ -1,51 +1,51 @@
 {
- "name": "Genesis Catboy #005",
- "symbol": "CATBOYGEN",
- "description": "Catboy Genesis \u2014 the special launch edition. 100 original high-quality Catboy pieces on Solana. Genesis holders unlock top-tier utility: casino edge, Catboy City ownership, fighter skins, and treasury perks.",
- "image": "https://www.catboyonsol.fun/assets/nft/genesis/005.jpg",
- "external_url": "https://www.catboyonsol.fun/market.html",
- "attributes": [
-  {
-   "trait_type": "Theme",
-   "value": "Neon Alley"
-  },
-  {
-   "trait_type": "Outfit",
-   "value": "Hacker Hoodie"
-  },
-  {
-   "trait_type": "Aura",
-   "value": "None"
-  },
-  {
-   "trait_type": "Eyes",
-   "value": "Blue"
-  },
-  {
-   "trait_type": "Chain",
-   "value": "Solana"
-  },
-  {
-   "trait_type": "Utility",
-   "value": "Alley"
-  },
-  {
-   "trait_type": "Rarity",
-   "value": "Common"
-  },
-  {
-   "display_type": "number",
-   "trait_type": "Rarity Rank",
-   "value": 94
-  }
- ],
- "properties": {
-  "files": [
-   {
-    "uri": "https://www.catboyonsol.fun/assets/nft/genesis/005.jpg",
-    "type": "image/jpeg"
-   }
+  "name": "Genesis Catboy #005",
+  "symbol": "CATBOYGEN",
+  "description": "Catboy Genesis — the special launch edition. 100 original high-quality Catboy pieces on Solana. Genesis holders unlock top-tier utility: casino edge, Catboy City ownership, fighter skins, and treasury perks.\n\n🎁 Holder Perks: Stake to earn $CATBOY (10% of every NFT sale), whale-group access, casino edge, arcade fighter skin, merch discounts, free AI PFP, governance votes, and airdrop + whitelist priority. See catboyonsol.fun/stake.html",
+  "image": "https://www.catboyonsol.fun/assets/nft/genesis/005.jpg",
+  "external_url": "https://www.catboyonsol.fun/market.html",
+  "attributes": [
+    {
+      "trait_type": "Theme",
+      "value": "Neon Alley"
+    },
+    {
+      "trait_type": "Outfit",
+      "value": "Hacker Hoodie"
+    },
+    {
+      "trait_type": "Aura",
+      "value": "None"
+    },
+    {
+      "trait_type": "Eyes",
+      "value": "Blue"
+    },
+    {
+      "trait_type": "Chain",
+      "value": "Solana"
+    },
+    {
+      "trait_type": "Utility",
+      "value": "Alley"
+    },
+    {
+      "trait_type": "Rarity",
+      "value": "Common"
+    },
+    {
+      "display_type": "number",
+      "trait_type": "Rarity Rank",
+      "value": 94
+    }
   ],
-  "category": "image"
- }
+  "properties": {
+    "files": [
+      {
+        "uri": "https://www.catboyonsol.fun/assets/nft/genesis/005.jpg",
+        "type": "image/jpeg"
+      }
+    ],
+    "category": "image"
+  }
 }

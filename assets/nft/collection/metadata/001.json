@@ -1,71 +1,71 @@
 {
- "name": "Catboy #001",
- "symbol": "CATBOY",
- "description": "$CATBOY \u2014 The Nine Lives Collection. Reborn on Solana. Holders unlock real utility across the Catboy ecosystem: casino perks, Catboy City ownership, fighter skins, the Cat's Den club, and allowlist. Part of the Winslow Ecosystem.",
- "image": "https://www.catboyonsol.fun/assets/nft/collection/001.jpg",
- "external_url": "https://www.catboyonsol.fun/market.html",
- "attributes": [
-  {
-   "trait_type": "Type",
-   "value": "Golden God"
-  },
-  {
-   "trait_type": "Aura",
-   "value": "Golden"
-  },
-  {
-   "trait_type": "Chain",
-   "value": "Winslow Dual"
-  },
-  {
-   "trait_type": "Background",
-   "value": "Solana Vault"
-  },
-  {
-   "trait_type": "Fur",
-   "value": "24K Gold"
-  },
-  {
-   "trait_type": "Eyes",
-   "value": "Gold"
-  },
-  {
-   "trait_type": "Outfit",
-   "value": "Gold Drip"
-  },
-  {
-   "trait_type": "Headwear",
-   "value": "Crown"
-  },
-  {
-   "trait_type": "Accessory",
-   "value": "Diamond"
-  },
-  {
-   "trait_type": "Expression",
-   "value": "Fierce"
-  },
-  {
-   "trait_type": "Utility",
-   "value": "Founder"
-  },
-  {
-   "trait_type": "Rarity",
-   "value": "Legendary"
-  },
-  {
-   "display_type": "number",
-   "trait_type": "Rarity Rank",
-   "value": 1
-  }
- ],
- "properties": {
-  "files": [
-   {
-    "uri": "https://www.catboyonsol.fun/assets/nft/collection/001.jpg",
-    "type": "image/jpeg"
-   }
+  "name": "Catboy #001",
+  "symbol": "CATBOY",
+  "description": "$CATBOY — The Nine Lives Collection. Reborn on Solana. Holders unlock real utility across the Catboy ecosystem: casino perks, Catboy City ownership, fighter skins, the Cat's Den club, and allowlist. Part of the Winslow Ecosystem.\n\n🎁 Holder Perks: Stake to earn $CATBOY (10% of every NFT sale), whale-group access, casino edge, arcade fighter skin, merch discounts, free AI PFP, governance votes, and airdrop + whitelist priority. See catboyonsol.fun/stake.html",
+  "image": "https://www.catboyonsol.fun/assets/nft/collection/001.jpg",
+  "external_url": "https://www.catboyonsol.fun/market.html",
+  "attributes": [
+    {
+      "trait_type": "Type",
+      "value": "Golden God"
+    },
+    {
+      "trait_type": "Aura",
+      "value": "Golden"
+    },
+    {
+      "trait_type": "Chain",
+      "value": "Winslow Dual"
+    },
+    {
+      "trait_type": "Background",
+      "value": "Solana Vault"
+    },
+    {
+      "trait_type": "Fur",
+      "value": "24K Gold"
+    },
+    {
+      "trait_type": "Eyes",
+      "value": "Gold"
+    },
+    {
+      "trait_type": "Outfit",
+      "value": "Gold Drip"
+    },
+    {
+      "trait_type": "Headwear",
+      "value": "Crown"
+    },
+    {
+      "trait_type": "Accessory",
+      "value": "Diamond"
+    },
+    {
+      "trait_type": "Expression",
+      "value": "Fierce"
+    },
+    {
+      "trait_type": "Utility",
+      "value": "Founder"
+    },
+    {
+      "trait_type": "Rarity",
+      "value": "Legendary"
+    },
+    {
+      "display_type": "number",
+      "trait_type": "Rarity Rank",
+      "value": 1
+    }
   ],
-  "category": "image"
- }
+  "properties": {
+    "files": [
+      {
+        "uri": "https://www.catboyonsol.fun/assets/nft/collection/001.jpg",
+        "type": "image/jpeg"
+      }
+    ],
+    "category": "image"
+  }
 }

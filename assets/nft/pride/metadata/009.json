@@ -1,46 +1,46 @@
 {
- "name": "Pride Catboy \u2014 Varsity",
- "symbol": "CATBOYPRIDE",
- "description": "Catboy Pride Edition 2026 \u2014 a limited run of 10 original rainbow Catboys. Love is love. \ud83c\udff3\ufe0f\u200d\ud83c\udf08",
- "image": "https://www.catboyonsol.fun/assets/nft/pride/009.jpg",
- "external_url": "https://www.catboyonsol.fun/market.html",
- "attributes": [
-  {
-   "trait_type": "Character",
-   "value": "Catboy"
-  },
-  {
-   "trait_type": "Edition",
-   "value": "Pride 2026"
-  },
-  {
-   "trait_type": "Theme",
-   "value": "Street Pride"
-  },
-  {
-   "trait_type": "Flag",
-   "value": "Varsity"
-  },
-  {
-   "trait_type": "Vibe",
-   "value": "Proud"
-  },
-  {
-   "trait_type": "Utility",
-   "value": "Pride Holder"
-  },
-  {
-   "trait_type": "Rarity",
-   "value": "Pride"
-  }
- ],
- "properties": {
-  "files": [
-   {
-    "uri": "https://www.catboyonsol.fun/assets/nft/pride/009.jpg",
-    "type": "image/jpeg"
-   }
+  "name": "Pride Catboy — Varsity",
+  "symbol": "CATBOYPRIDE",
+  "description": "Catboy Pride Edition 2026 — a limited run of 10 original rainbow Catboys. Love is love. 🏳️‍🌈\n\n🎁 Holder Perks: Stake to earn $CATBOY (10% of every NFT sale), whale-group access, casino edge, arcade fighter skin, merch discounts, free AI PFP, governance votes, and airdrop + whitelist priority. See catboyonsol.fun/stake.html",
+  "image": "https://www.catboyonsol.fun/assets/nft/pride/009.jpg",
+  "external_url": "https://www.catboyonsol.fun/market.html",
+  "attributes": [
+    {
+      "trait_type": "Character",
+      "value": "Catboy"
+    },
+    {
+      "trait_type": "Edition",
+      "value": "Pride 2026"
+    },
+    {
+      "trait_type": "Theme",
+      "value": "Street Pride"
+    },
+    {
+      "trait_type": "Flag",
+      "value": "Varsity"
+    },
+    {
+      "trait_type": "Vibe",
+      "value": "Proud"
+    },
+    {
+      "trait_type": "Utility",
+      "value": "Pride Holder"
+    },
+    {
+      "trait_type": "Rarity",
+      "value": "Pride"
+    }
   ],
-  "category": "image"
- }
+  "properties": {
+    "files": [
+      {
+        "uri": "https://www.catboyonsol.fun/assets/nft/pride/009.jpg",
+        "type": "image/jpeg"
+      }
+    ],
+    "category": "image"
+  }
 }

@@ -1,67 +1,67 @@
 {
- "name": "Catboy #014",
- "symbol": "CATBOY",
- "description": "$CATBOY \u2014 The Nine Lives Collection. Reborn on Solana. Holders unlock real utility across the Catboy ecosystem: casino perks, Catboy City ownership, fighter skins, the Cat's Den club, and allowlist. Part of the Winslow Ecosystem.",
- "image": "https://www.catboyonsol.fun/assets/nft/collection/014.jpg",
- "external_url": "https://www.catboyonsol.fun/market.html",
- "attributes": [
-  {
-   "trait_type": "Aura",
-   "value": "Neon"
-  },
-  {
-   "trait_type": "Chain",
-   "value": "Solana"
-  },
-  {
-   "trait_type": "Background",
-   "value": "Neon Alley"
-  },
-  {
-   "trait_type": "Fur",
-   "value": "Ginger"
-  },
-  {
-   "trait_type": "Eyes",
-   "value": "Gold"
-  },
-  {
-   "trait_type": "Outfit",
-   "value": "Cyber Jacket"
-  },
-  {
-   "trait_type": "Headwear",
-   "value": "Snapback"
-  },
-  {
-   "trait_type": "Accessory",
-   "value": "Diamond"
-  },
-  {
-   "trait_type": "Expression",
-   "value": "Fanged"
-  },
-  {
-   "trait_type": "Utility",
-   "value": "Alpha"
-  },
-  {
-   "trait_type": "Rarity",
-   "value": "Epic"
-  },
-  {
-   "display_type": "number",
-   "trait_type": "Rarity Rank",
-   "value": 9
-  }
- ],
- "properties": {
-  "files": [
-   {
-    "uri": "https://www.catboyonsol.fun/assets/nft/collection/014.jpg",
-    "type": "image/jpeg"
-   }
+  "name": "Catboy #014",
+  "symbol": "CATBOY",
+  "description": "$CATBOY — The Nine Lives Collection. Reborn on Solana. Holders unlock real utility across the Catboy ecosystem: casino perks, Catboy City ownership, fighter skins, the Cat's Den club, and allowlist. Part of the Winslow Ecosystem.\n\n🎁 Holder Perks: Stake to earn $CATBOY (10% of every NFT sale), whale-group access, casino edge, arcade fighter skin, merch discounts, free AI PFP, governance votes, and airdrop + whitelist priority. See catboyonsol.fun/stake.html",
+  "image": "https://www.catboyonsol.fun/assets/nft/collection/014.jpg",
+  "external_url": "https://www.catboyonsol.fun/market.html",
+  "attributes": [
+    {
+      "trait_type": "Aura",
+      "value": "Neon"
+    },
+    {
+      "trait_type": "Chain",
+      "value": "Solana"
+    },
+    {
+      "trait_type": "Background",
+      "value": "Neon Alley"
+    },
+    {
+      "trait_type": "Fur",
+      "value": "Ginger"
+    },
+    {
+      "trait_type": "Eyes",
+      "value": "Gold"
+    },
+    {
+      "trait_type": "Outfit",
+      "value": "Cyber Jacket"
+    },
+    {
+      "trait_type": "Headwear",
+      "value": "Snapback"
+    },
+    {
+      "trait_type": "Accessory",
+      "value": "Diamond"
+    },
+    {
+      "trait_type": "Expression",
+      "value": "Fanged"
+    },
+    {
+      "trait_type": "Utility",
+      "value": "Alpha"
+    },
+    {
+      "trait_type": "Rarity",
+      "value": "Epic"
+    },
+    {
+      "display_type": "number",
+      "trait_type": "Rarity Rank",
+      "value": 9
+    }
   ],
-  "category": "image"
- }
+  "properties": {
+    "files": [
+      {
+        "uri": "https://www.catboyonsol.fun/assets/nft/collection/014.jpg",
+        "type": "image/jpeg"
+      }
+    ],
+    "category": "image"
+  }
 }
