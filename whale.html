@@ -20,7 +20,7 @@
     <div class="page-hero-inner">
       <span class="eyebrow" style="display:block;margin-top:1rem;">🐋 Whale Access</span>
       <h1>Whale <span class="grad">Verification</span></h1>
-      <p id="reqLine">Connect your wallet and sign to prove ownership — no transaction, no fee. Hold enough $CATBOY (or a Catboy NFT) and you're in.</p>
+      <p id="reqLine">Connect your wallet and sign to prove ownership — no transaction, no fee. Hold enough $CATBOY (or a Catboy NFT) and you're in. Got multiple wallets? Verify each one — the balances add up.</p>
     </div>
   </section>
 
@@ -88,10 +88,14 @@
           body: JSON.stringify({ tid, t, h, wallet, sig }) });
         const d = await r.json();
         if (d.ok && d.invite) {
-          st(d.byNft ? "Verified by NFT ✓ Welcome, whale. 🐋" : `Verified ✓ You hold ${fmt(d.balance)} $CATBOY. Welcome, whale. 🐋`);
+          const acct = d.wallets > 1 ? ` across ${d.wallets} wallets` : "";
+          st(d.byNft ? "Verified by NFT ✓ Welcome, whale. 🐋" : `Verified ✓ You hold ${fmt(d.balance)} $CATBOY${acct}. Welcome, whale. 🐋`);
           const j = $("join"); j.href = d.invite; j.style.display = "inline-block";
         } else if (d.error === "not_enough") {
-          st(`Not enough yet — you hold ${fmt(d.balance)} $CATBOY, need ${fmt(d.minTokens)}${d.nftGate ? " (or a Catboy NFT)" : ""}. Top up and try again.`, true);
+          const acct = d.wallets > 1 ? ` across ${d.wallets} wallets` : "";
+          st(`Not enough yet — ${fmt(d.balance)} $CATBOY${acct}, need ${fmt(d.minTokens)}${d.nftGate ? " (or a Catboy NFT)" : ""}. Add another wallet or top up, then verify again.`, true);
+        } else if (d.error === "wallet_linked_to_other") {
+          st("This wallet is already linked to a different Telegram account. Use a wallet that isn't linked elsewhere.", true);
         } else if (d.error === "signature_invalid") {
           st("Signature didn't verify — make sure you signed with the wallet you want to gate on.", true);
         } else {

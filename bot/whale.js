@@ -35,7 +35,9 @@ function parseAmount(s) {
 export async function whaleConfig() {
   const s = sql(); if (!s) return { minTokens: DEFAULT_MIN, nftGate: true };
   await s`CREATE TABLE IF NOT EXISTS whale_config (id INT PRIMARY KEY DEFAULT 1, min_tokens NUMERIC NOT NULL DEFAULT ${DEFAULT_MIN}, nft_gate BOOLEAN NOT NULL DEFAULT true)`;
-  await s`CREATE TABLE IF NOT EXISTS whale_members (tid TEXT PRIMARY KEY, wallet TEXT NOT NULL, verified_at TIMESTAMPTZ DEFAULT now())`;
+  await s`CREATE TABLE IF NOT EXISTS whale_wallets (wallet TEXT PRIMARY KEY, tid TEXT NOT NULL, verified_at TIMESTAMPTZ DEFAULT now())`;
+  await s`CREATE INDEX IF NOT EXISTS whale_wallets_tid ON whale_wallets (tid)`;
+  await s`CREATE TABLE IF NOT EXISTS whale_members (tid TEXT PRIMARY KEY, joined_at TIMESTAMPTZ DEFAULT now())`;
   const r = await s`SELECT min_tokens, nft_gate FROM whale_config WHERE id=1`;
   if (!r.length) { await s`INSERT INTO whale_config (id) VALUES (1) ON CONFLICT DO NOTHING`; return { minTokens: DEFAULT_MIN, nftGate: true }; }
   return { minTokens: Number(r[0].min_tokens), nftGate: !!r[0].nft_gate };
@@ -99,10 +101,12 @@ export async function whaleCommand(cmd, arg, m, ctx) {
   }
   if (cmd === "/whalestatus") {
     const cfg = await whaleConfig();
-    const s = sql(); const cnt = s ? (await s`SELECT count(*)::int AS n FROM whale_members`)[0].n : 0;
+    const s = sql();
+    const cnt = s ? (await s`SELECT count(*)::int AS n FROM whale_members`)[0].n : 0;
+    const wcnt = s ? (await s`SELECT count(*)::int AS n FROM whale_wallets`)[0].n : 0;
     return tgSendTo(m.chat.id,
-      `🐋 <b>Whale gate</b>\nThreshold: <b>${fmtN(cfg.minTokens)} $CATBOY</b>\nNFT gate: <b>${cfg.nftGate ? "on" : "off"}</b>\n` +
-      `Verified members: <b>${cnt}</b>\nGroup set: <b>${WHALE_CHAT ? "yes" : "NO — set WHALE_CHAT_ID"}</b>\n` +
+      `🐋 <b>Whale gate</b>\nThreshold: <b>${fmtN(cfg.minTokens)} $CATBOY</b> (summed across a member's wallets)\nNFT gate: <b>${cfg.nftGate ? "on" : "off"}</b>\n` +
+      `Members: <b>${cnt}</b> · linked wallets: <b>${wcnt}</b>\nGroup set: <b>${WHALE_CHAT ? "yes" : "NO — set WHALE_CHAT_ID"}</b>\n` +
       `Re-check every <b>${RECHECK_MS / 60000}m</b>\n\n<code>/setwhale 10m</code> · <code>/whalenft on|off</code>`);
   }
   return false;
@@ -120,16 +124,18 @@ export function startWhaleEnforcement(ctx) {
     try {
       const cfg = await whaleConfig();
       const s = sql(); if (!s) return;
-      const members = await s`SELECT tid, wallet FROM whale_members`;
+      const members = await s`SELECT tid FROM whale_members`;
       let removed = 0;
       for (const mem of members) {
-        const bal = await balanceOf(CFG.rpcUrl, mem.wallet);
-        const nft = cfg.nftGate ? await ownsNft(CFG.rpcUrl, mem.wallet) : false;
-        if (bal >= cfg.minTokens || nft) continue;
+        // sum across ALL of this member's verified wallets (supply may be spread around)
+        const wallets = (await s`SELECT wallet FROM whale_wallets WHERE tid=${mem.tid}`).map((r) => r.wallet);
+        let total = 0, nft = false;
+        for (const w of wallets) { total += await balanceOf(CFG.rpcUrl, w); if (cfg.nftGate && !nft && await ownsNft(CFG.rpcUrl, w)) nft = true; }
+        if (total >= cfg.minTokens || nft) continue;
         await kick(mem.tid);
         await s`DELETE FROM whale_members WHERE tid=${mem.tid}`;
         removed++;
-        log && log("whale removed:", mem.tid, "bal", bal);
+        log && log("whale removed:", mem.tid, "total", total, "across", wallets.length, "wallet(s)");
       }
       if (removed) log && log(`whale sweep: removed ${removed} below-threshold member(s)`);
     } catch (e) { log && log("whale sweep error", e.message); }

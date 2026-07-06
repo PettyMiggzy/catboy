@@ -40,11 +40,17 @@ async function rpc(method, params = []) {
   return j.result;
 }
 
+async function ensureTables(s) {
+  await s`CREATE TABLE IF NOT EXISTS whale_config (id INT PRIMARY KEY DEFAULT 1, min_tokens NUMERIC NOT NULL DEFAULT ${DEFAULT_MIN}, nft_gate BOOLEAN NOT NULL DEFAULT true)`;
+  // one row per (verified) wallet — a person can bind several; wallet is unique so it can't be shared across accounts
+  await s`CREATE TABLE IF NOT EXISTS whale_wallets (wallet TEXT PRIMARY KEY, tid TEXT NOT NULL, verified_at TIMESTAMPTZ DEFAULT now())`;
+  await s`CREATE INDEX IF NOT EXISTS whale_wallets_tid ON whale_wallets (tid)`;
+  await s`CREATE TABLE IF NOT EXISTS whale_members (tid TEXT PRIMARY KEY, joined_at TIMESTAMPTZ DEFAULT now())`;
+}
 async function config() {
   try {
     const s = sql();
-    await s`CREATE TABLE IF NOT EXISTS whale_config (id INT PRIMARY KEY DEFAULT 1, min_tokens NUMERIC NOT NULL DEFAULT ${DEFAULT_MIN}, nft_gate BOOLEAN NOT NULL DEFAULT true)`;
-    await s`CREATE TABLE IF NOT EXISTS whale_members (tid TEXT PRIMARY KEY, wallet TEXT NOT NULL, verified_at TIMESTAMPTZ DEFAULT now())`;
+    await ensureTables(s);
     const rows = await s`SELECT min_tokens, nft_gate FROM whale_config WHERE id=1`;
     if (!rows.length) { await s`INSERT INTO whale_config (id) VALUES (1) ON CONFLICT DO NOTHING`; return { minTokens: DEFAULT_MIN, nftGate: true }; }
     return { minTokens: Number(rows[0].min_tokens), nftGate: !!rows[0].nft_gate };
@@ -123,19 +129,29 @@ export default async function handler(req, res) {
     if (!wallet || !sig) return res.status(400).json({ ok: false, error: "missing_wallet_or_sig" });
     if (!verifySig(messageFor(tid, t), wallet, sig)) return res.status(401).json({ ok: false, error: "signature_invalid" });
 
-    const bal = await balanceOf(wallet);
-    const nft = cfg.nftGate ? await ownsNft(wallet) : false;
-    const qualifies = bal >= cfg.minTokens || nft;
-    if (!qualifies) {
-      return res.status(200).json({ ok: false, error: "not_enough", balance: bal, minTokens: cfg.minTokens, nftGate: cfg.nftGate, needed: Math.max(0, cfg.minTokens - bal) });
+    const s = sql();
+    await ensureTables(s);
+    // a wallet can only be bound to one Telegram account (no sharing a whale bag)
+    const owner = await s`SELECT tid FROM whale_wallets WHERE wallet=${wallet}`;
+    if (owner.length && String(owner[0].tid) !== String(tid)) return res.status(200).json({ ok: false, error: "wallet_linked_to_other" });
+    await s`INSERT INTO whale_wallets (wallet, tid, verified_at) VALUES (${wallet}, ${tid}, now())
+            ON CONFLICT (wallet) DO UPDATE SET tid=${tid}, verified_at=now()`;
+
+    // sum across ALL of this user's verified wallets (supply can be spread around)
+    const wallets = (await s`SELECT wallet FROM whale_wallets WHERE tid=${tid}`).map((r) => r.wallet);
+    let total = 0, byNft = false;
+    for (const w of wallets) {
+      total += await balanceOf(w);
+      if (cfg.nftGate && !byNft && await ownsNft(w)) byNft = true;
+    }
+    if (total < cfg.minTokens && !byNft) {
+      return res.status(200).json({ ok: false, error: "not_enough", balance: total, wallets: wallets.length, minTokens: cfg.minTokens, nftGate: cfg.nftGate, needed: Math.max(0, cfg.minTokens - total) });
     }
 
     if (!BOT || !WHALE_CHAT) return res.status(500).json({ ok: false, error: "whale_group_not_configured" });
     const invite = await makeInvite(tid);
-    const s = sql();
-    await s`INSERT INTO whale_members (tid, wallet, verified_at) VALUES (${tid}, ${wallet}, now())
-            ON CONFLICT (tid) DO UPDATE SET wallet=${wallet}, verified_at=now()`;
-    return res.status(200).json({ ok: true, invite, balance: bal, byNft: nft });
+    await s`INSERT INTO whale_members (tid, joined_at) VALUES (${tid}, now()) ON CONFLICT (tid) DO UPDATE SET joined_at=now()`;
+    return res.status(200).json({ ok: true, invite, balance: total, wallets: wallets.length, byNft });
   } catch (e) {
     return res.status(500).json({ ok: false, error: String((e && e.message) || e) });
   }
