@@ -21,6 +21,9 @@ jobs:
         with:
           host: ${{ secrets.DROPLET_HOST }}
           username: ${{ secrets.DROPLET_USER }}
+          # Password auth (mobile-friendly: no SSH key to generate on the box).
+          # If DROPLET_SSH_KEY is set instead, the action uses that and ignores password.
+          password: ${{ secrets.DROPLET_SSH_PASSWORD }}
           key: ${{ secrets.DROPLET_SSH_KEY }}
           port: ${{ secrets.DROPLET_PORT || 22 }}
           script_stop: true
