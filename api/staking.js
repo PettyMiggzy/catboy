@@ -65,7 +65,7 @@ function pendingOf(st, accPerShare) { return bi(st.pending) + (bi(st.shares) * b
 // list the wallet's Catboy NFTs on-chain (DAS), tagged with our tier from inventory
 async function ownedCatboys(s, wallet) {
   let items = [];
-  try { const r = await rpc("getAssetsByOwner", [{ ownerAddress: wallet, page: 1, limit: 1000 }]); items = r?.items || []; } catch { return []; }
+  try { const r = await rpc("getAssetsByOwner", { ownerAddress: wallet, page: 1, limit: 1000 }); items = r?.items || []; } catch { return []; }
   const mine = items.filter((a) => (a.grouping || []).some((g) => g.group_key === "collection" && COLLECTIONS.includes(g.group_value)));
   const out = [];
   for (const a of mine) {

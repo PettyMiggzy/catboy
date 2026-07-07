@@ -58,7 +58,7 @@ async function balanceOf(rpcUrl, wallet) {
 }
 async function ownsNft(rpcUrl, wallet) {
   if (!COLLECTIONS.length) return false;
-  try { const r = await rpc(rpcUrl, "getAssetsByOwner", [{ ownerAddress: wallet, page: 1, limit: 1000 }]);
+  try { const r = await rpc(rpcUrl, "getAssetsByOwner", { ownerAddress: wallet, page: 1, limit: 1000 });
     for (const a of (r?.items || [])) {
       const g = (a.grouping || []).find((x) => x.group_key === "collection");
       if (g && COLLECTIONS.includes(g.group_value)) return true;

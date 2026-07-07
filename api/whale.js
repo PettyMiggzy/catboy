@@ -90,7 +90,7 @@ async function ownsNft(wallet) {
   if (!COLLECTIONS.length) return false;
   try {
     // DAS getAssetsByOwner (Metaplex Core assets), match our collection groupings.
-    const r = await rpc("getAssetsByOwner", [{ ownerAddress: wallet, page: 1, limit: 1000 }]);
+    const r = await rpc("getAssetsByOwner", { ownerAddress: wallet, page: 1, limit: 1000 });
     const items = r?.items || [];
     for (const a of items) {
       const grp = (a.grouping || []).find((g) => g.group_key === "collection");
