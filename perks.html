@@ -98,6 +98,10 @@
     const $ = (id) => document.getElementById(id);
     const H = window.CATBOY_HOLDER, PK = window.CATBOY_PERKS;
     $("year").textContent = new Date().getFullYear();
+    // Collections are live -> ownership is verified on-chain; the demo preview is
+    // disabled, so hide the now-inert preview button.
+    const M = window.CATBOY_MINT || {};
+    if (M.genesisMint || M.prideMint || M.collectionMint) { const pb = $("previewBtn"); if (pb) pb.hidden = true; }
 
     // ---- treasury proposal (signal vote; on-chain snapshot at launch) ----
     const PROPOSAL = "tranche-01";

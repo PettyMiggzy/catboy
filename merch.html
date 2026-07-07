@@ -57,7 +57,7 @@
       <a href="index.html" class="back-link">&lsaquo; Back to Home</a>
       <span class="eyebrow" style="display:block;margin-top:1rem;">Printed on demand · shipped worldwide</span>
       <h1>Wear the <span class="grad">Legend</span></h1>
-      <p>Rep Catboy. Every item is <b>paid in $CATBOY</b>, printed on demand, and shipped to your door. Holder discounts &amp; drops coming.</p>
+      <p>Rep Catboy. Every item is <b>paid in $CATBOY</b>, printed on demand, and shipped to your door. <b>Catboy NFT holders save 10% · Genesis/Pride 20%</b> — auto-applied at checkout. 🐾</p>
     </div>
   </section>
 
@@ -76,6 +76,7 @@
 
   <script src="assets/merch-config.js"></script>
   <script src="assets/mint-config.js"></script>
+  <script src="assets/holder.js"></script>
   <script>
   (function () {
     const $ = (id) => document.getElementById(id);
@@ -170,7 +171,12 @@
         const fromAta = spl.getAssociatedTokenAddressSync(mint, buyer, false, prog);
         const toAta = spl.getAssociatedTokenAddressSync(mint, treasury, false, prog);
         const dec = CFG.decimals || 6;
-        const amount = BigInt(Math.round(p.priceCatboy * qty)) * (10n ** BigInt(dec));
+        // Holder discount — check the paying wallet's Catboys (server re-verifies on-chain).
+        let pct = 0;
+        try { const h = await window.CATBOY_HOLDER.connect(); pct = h.isElite ? (CFG.elitePct || 0) : h.isHolder ? (CFG.holderPct || 0) : 0; } catch (_) {}
+        if (pct > 0) st("✦ Holder discount −" + pct + "% applied — approve the payment…");
+        const payCatboy = Math.ceil(p.priceCatboy * qty * (1 - pct / 100));
+        const amount = BigInt(payCatboy) * (10n ** BigInt(dec));
         const tx = new web3.Transaction();
         tx.add(spl.createAssociatedTokenAccountIdempotentInstruction(buyer, toAta, treasury, mint, prog));
         tx.add(spl.createTransferCheckedInstruction(fromAta, mint, toAta, buyer, amount, dec, [], prog));

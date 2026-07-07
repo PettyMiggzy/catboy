@@ -21,7 +21,29 @@ const DECIMALS = parseInt(process.env.MERCH_DECIMALS || "6", 10);
 const PRINTFUL = (process.env.PRINTFUL_API_KEY || "").trim();
 const SITE = (process.env.SITE_URL || "https://www.catboyonsol.fun").replace(/\/$/, "");
 const CONN = (process.env.DATABASE_URL || process.env.POSTGRES_URL || "").trim();
-const HOLDER_DISCOUNT = 0; // applied at full price for v1 (discount is a follow-up)
+// Holder discount tiers — verified on-chain at checkout (authoritative).
+const HOLDER_PCT = Math.max(0, Math.min(90, parseInt(process.env.MERCH_HOLDER_PCT || "10", 10)));  // any Catboy
+const ELITE_PCT = Math.max(0, Math.min(90, parseInt(process.env.MERCH_ELITE_PCT || "20", 10)));    // Genesis / Pride
+const COLLECTIONS = {
+  nine: "33kxQv4Jo7u9edC4RipZckwkpRRdxg863b6cw2UGfh6S",
+  genesis: "HuLA9RRuG6s994eAiiY4cFhrhghCkCQWcNdm3e3wVD3x",
+  pride: "4N1d9umoscMYiwiqxXnkTbJD9pXLMZiPCw4H7fAUK93x",
+};
+// On-chain (DAS) holder tier for a wallet -> discount %. Elite = Genesis/Pride.
+async function holderPct(wallet) {
+  if (!wallet || !RPC) return { pct: 0, tier: "none" };
+  try {
+    const r = await rpc("getAssetsByOwner", { ownerAddress: wallet, page: 1, limit: 1000 });
+    let elite = false, holder = false;
+    for (const a of (r?.items || [])) {
+      const g = (a.grouping || []).find((x) => x.group_key === "collection");
+      if (!g) continue;
+      if (g.group_value === COLLECTIONS.genesis || g.group_value === COLLECTIONS.pride) elite = true;
+      else if (g.group_value === COLLECTIONS.nine) holder = true;
+    }
+    return elite ? { pct: ELITE_PCT, tier: "elite" } : holder ? { pct: HOLDER_PCT, tier: "holder" } : { pct: 0, tier: "none" };
+  } catch { return { pct: 0, tier: "none" }; }
+}
 
 // Server-side catalog = source of truth for price + Printful variant ids.
 // Fill `variants` with real Printful catalog variant ids (per option) once your
@@ -90,7 +112,7 @@ export default async function handler(req, res) {
   res.setHeader("Content-Type", "application/json");
   const ready = !!(RPC && TREASURY && PRINTFUL);
   if (req.method === "GET") {
-    return res.status(200).json({ ready, payTo: TREASURY, decimals: DECIMALS, holderDiscountPct: HOLDER_DISCOUNT });
+    return res.status(200).json({ ready, payTo: TREASURY, decimals: DECIMALS, holderPct: HOLDER_PCT, elitePct: ELITE_PCT });
   }
   if (req.method !== "POST") return res.status(405).json({ ok: false, error: "method" });
   try {
@@ -113,7 +135,9 @@ export default async function handler(req, res) {
       if (dup.length) return res.status(409).json({ ok: false, error: "payment_already_used" });
     }
 
-    const need = p.price * q;
+    // Holder discount — verified from the payer's on-chain NFTs (authoritative).
+    const disc = await holderPct(buyer);
+    const need = Math.ceil(p.price * q * (1 - disc.pct / 100));
     const pay = await verifyPayment(txSig, need);
     if (!pay.ok) return res.status(402).json({ ok: false, error: pay.err });
 
