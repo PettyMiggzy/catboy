@@ -10,6 +10,25 @@
 //      TOKEN_MINT, NFT_COLLECTION[_GENESIS|_PRIDE]
 import { neon } from "@neondatabase/serverless";
 import crypto from "node:crypto";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
+
+// Load .env from THIS file's directory before reading any env constants below.
+// Must be synchronous and run here: ESM imports evaluate before the importer's
+// body, so if index.js imports us its own loadEnv() hasn't run yet — and when
+// run standalone (pm2 start whale.js) nobody else loads .env at all. Either way
+// this guarantees WHALE_SECRET / WHALE_CHAT_ID / DATABASE_URL are populated.
+try {
+  const _dir = path.dirname(fileURLToPath(import.meta.url));
+  for (const line of readFileSync(path.join(_dir, ".env"), "utf8").split("\n")) {
+    const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/i);
+    if (!m) continue;
+    let v = m[2].trim();
+    if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) v = v.slice(1, -1);
+    if (process.env[m[1]] === undefined) process.env[m[1]] = v;
+  }
+} catch { /* no .env file — rely on real env vars */ }
 
 const CONN = (process.env.DATABASE_URL || process.env.POSTGRES_URL || "").trim();
 const WHALE_CHAT = (process.env.WHALE_CHAT_ID || "").trim();
