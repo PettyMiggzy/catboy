@@ -18,7 +18,7 @@ const RPC = (process.env.SOLANA_RPC || "").trim();
 const TREASURY = (process.env.AI_TREASURY || "").trim();
 const DECIMALS = parseInt(process.env.AI_DECIMALS || "6", 10);
 const LINK_TTL = 20 * 60 * 1000; // 20 min
-const PRICE_TOL = 0.90; // accept >=90% of the USD value in $CATBOY (absorbs price drift)
+const PRICE_TOL = 0.85; // accept >=85% of the USD value in $CATBOY (absorbs price drift between quote and pay)
 const BUNDLES = [{ usdCents: 500 }, { usdCents: 1500 }, { usdCents: 5000 }]; // $5 / $15 / $50
 
 const sql = () => { if (!CONN) throw new Error("db_not_configured"); return neon(CONN); };
@@ -53,8 +53,9 @@ async function priceUsd() {
     return Number(pairs[0].priceUsd) || 0;
   } catch { return 0; }
 }
-// confirm the tx moved >= needTokens (whole $CATBOY) into the treasury token account
-async function verifyPayment(txSig, needTokens) {
+// confirm the tx moved >= needTokens (whole $CATBOY) FROM `wallet` INTO the treasury.
+// Binding to `wallet` stops anyone from claiming someone else's pending payment.
+async function verifyPayment(txSig, needTokens, wallet) {
   if (!txSig || typeof txSig !== "string" || txSig.length < 32) return { ok: false, err: "bad_sig" };
   const tx = await rpc("getTransaction", [txSig, { maxSupportedTransactionVersion: 0, encoding: "jsonParsed", commitment: "confirmed" }]);
   if (!tx || !tx.meta) return { ok: false, err: "tx_not_found" };
@@ -62,10 +63,16 @@ async function verifyPayment(txSig, needTokens) {
   const pre = tx.meta.preTokenBalances || [], post = tx.meta.postTokenBalances || [];
   const k = (b) => `${b.owner}:${b.mint}`;
   const preMap = new Map(pre.map((b) => [k(b), Number(b.uiTokenAmount.amount)]));
-  let delta = 0;
-  for (const b of post) if (b.owner === TREASURY && b.mint === MINT) delta += Number(b.uiTokenAmount.amount) - (preMap.get(k(b)) || 0);
+  let delta = 0, fromWallet = 0;
+  for (const b of post) {
+    if (b.mint !== MINT) continue;
+    const d = Number(b.uiTokenAmount.amount) - (preMap.get(k(b)) || 0);
+    if (b.owner === TREASURY) delta += d;          // treasury received
+    if (b.owner === wallet) fromWallet += -d;       // signer sent (balance dropped)
+  }
   const needRaw = BigInt(Math.floor(needTokens * 10 ** DECIMALS));
   if (BigInt(Math.round(delta)) < needRaw) return { ok: false, err: "underpaid" };
+  if (BigInt(Math.round(fromWallet)) < needRaw) return { ok: false, err: "not_payer" };
   return { ok: true };
 }
 async function ensure(s) {
@@ -107,11 +114,17 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, credited: false, balanceCents: bal ? Number(bal.balance_cents) : 0, note: "already_credited" });
     }
     const needCatboy = (usdCents / 100) / px * PRICE_TOL;
-    const pay = await verifyPayment(txSig, needCatboy);
+    const pay = await verifyPayment(txSig, needCatboy, wallet);
     if (!pay.ok) return res.status(402).json({ ok: false, error: "payment_" + pay.err });
 
-    // credit + bind wallet + record (idempotent on the sig PK)
-    await s`INSERT INTO ai_topups (sig, tid, usd_cents) VALUES (${txSig}, ${tid}, ${usdCents}) ON CONFLICT (sig) DO NOTHING`;
+    // Atomic idempotency: only the request that actually INSERTs the topup row
+    // (xmax=0) credits the account, so concurrent/replayed POSTs can't double-credit.
+    const ins = await s`INSERT INTO ai_topups (sig, tid, usd_cents) VALUES (${txSig}, ${tid}, ${usdCents})
+                        ON CONFLICT (sig) DO NOTHING RETURNING sig`;
+    if (!ins.length) {
+      const b0 = (await s`SELECT balance_cents FROM ai_credits WHERE tid=${tid}`)[0];
+      return res.status(200).json({ ok: true, credited: false, balanceCents: b0 ? Number(b0.balance_cents) : 0, note: "already_credited" });
+    }
     await s`INSERT INTO ai_credits (tid, balance_cents) VALUES (${tid}, ${usdCents})
             ON CONFLICT (tid) DO UPDATE SET balance_cents = ai_credits.balance_cents + ${usdCents}, updated_at=now()`;
     await s`INSERT INTO ai_wallets (wallet, tid) VALUES (${wallet}, ${tid}) ON CONFLICT (wallet) DO UPDATE SET tid=${tid}, linked_at=now()`;

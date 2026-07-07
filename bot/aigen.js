@@ -181,7 +181,7 @@ export async function aiCommand(cmd, arg, m, ctx) {
     const t = Date.now().toString();
     const link = `${SITE}/credits.html?tid=${tid}&t=${t}&h=${hmac(`${tid}.${t}`)}`;
     const dm = await tgSendTo(tid, `💳 <b>Load $CATBOY AI credits</b>\nTap to top up with $CATBOY (secure, one wallet signature):\n${link}\n\nCredits never expire. Hold $CATBOY for monthly rebates. 🐾`).catch(() => null);
-    if (dm && dm.ok !== false) { if (chat.type !== "private") return reply("📩 Sent you a DM with your top-up link. 🐾"); return; }
+    if (dm && dm.ok) { if (chat.type !== "private") return reply("📩 Sent you a DM with your top-up link. 🐾"); return; }
     const bu = ctx.botUsername ? `https://t.me/${ctx.botUsername}` : "";
     return reply(`Start a chat with me first, then send <b>/credits</b> again.${bu ? ` 👉 <a href="${bu}">Open bot</a>` : ""}`);
   }
