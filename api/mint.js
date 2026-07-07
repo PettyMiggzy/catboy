@@ -38,7 +38,7 @@ import { tgAnnounce, esc } from "./_tg.js";
 
 const SITE = (process.env.SITE_URL || "https://www.catboyonsol.fun").trim();
 const TIER_EMOJI = { Common: "🐾", Rare: "💫", Epic: "🔥", Legendary: "👑", Pride: "🏳️‍🌈" };
-const COLL_LABEL = { nine: "Nine Lives", genesis: "Genesis", pride: "Pride" };
+const COLL_LABEL = { nine: "Nine Lives", genesis: "Genesis", pride: "Pride", resurrection: "OG Resurrection" };
 
 export const config = { maxDuration: 60 };
 
@@ -54,6 +54,7 @@ const COLL = {
   nine:    (process.env.NFT_COLLECTION || "").trim(),
   genesis: (process.env.NFT_COLLECTION_GENESIS || "").trim(),
   pride:   (process.env.NFT_COLLECTION_PRIDE || "").trim(),
+  resurrection: (process.env.NFT_COLLECTION_RESURRECTION || "").trim(),
 };
 
 // Price + odds live server-side so the client can't tamper. Each pack maps to a
@@ -64,6 +65,9 @@ const PACKS = {
   elite:    { coll: "nine", name: "Elite Pack",    priceSol: 2,    odds: { Common: 25, Rare: 40, Epic: 27, Legendary: 8 } },
   genesis:  { coll: "genesis", name: "Genesis Pack", priceSol: 2,   odds: { Common: 60, Rare: 25, Epic: 12, Legendary: 3 } },
   pride:    { coll: "pride",   name: "Pride Pack",   priceSol: 1.5, odds: { Pride: 100 } },
+  // OG Resurrection — 50 animated one-of-ones. Standard can pull commons; Elite never does.
+  resstd:   { coll: "resurrection", name: "Resurrection Pack",      priceSol: 0.25, odds: { Common: 60, Rare: 24, Epic: 10, Legendary: 6 } },
+  reselite: { coll: "resurrection", name: "Resurrection Elite Pack", priceSol: 0.5,  odds: { Rare: 60, Epic: 25, Legendary: 15 } },
   // legacy aliases (= nine Standard) so old links / the casino don't 400
   random:    { coll: "nine", name: "Standard Pack", priceSol: 1, odds: { Common: 65, Rare: 24, Epic: 9, Legendary: 2 } },
   alley:     { coll: "nine", name: "Standard Pack", priceSol: 1, odds: { Common: 65, Rare: 24, Epic: 9, Legendary: 2 } },

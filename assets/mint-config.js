@@ -40,5 +40,15 @@ window.CATBOY_MINT = {
       blurb: "Limited Pride Edition 2026 — 10 rainbow Catboys. Love is love. 🏳️‍🌈",
       odds: { Pride: 100 },
     },
+    {
+      id: "resstd", name: "Resurrection Pack", pack: "pack-resurrection", priceSol: 0.25, coll: "resurrection",
+      blurb: "One reborn Catboy from the 50-piece OG collection — fully animated, one-of-one.",
+      odds: { Common: 60, Rare: 24, Epic: 10, Legendary: 6 },
+    },
+    {
+      id: "reselite", name: "Resurrection Elite Pack", pack: "pack-resurrection-elite", priceSol: 0.5, coll: "resurrection",
+      blurb: "No commons — guaranteed Rare or better. Best shot at a Cosmic legendary. 🌌",
+      odds: { Rare: 60, Epic: 25, Legendary: 15 },
+    },
   ],
 };
