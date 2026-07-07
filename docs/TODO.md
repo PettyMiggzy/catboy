@@ -3,6 +3,9 @@
 Running list of parked work. Newest context at top of each section.
 
 ## Holder perks — remaining
+- [x] **Secondary NFT marketplace** — per-NFT Tensor/Magic Eden item links in the
+      market modal (by mint address, works today) + collection-aware Sell/Trade buttons
+      that follow the active tab. `api/mint.js` now exposes `mintedAssets`.
 - [ ] **City billboard (global display)** — the perks.html "claim billboard" currently
       saves text to localStorage only; it never shows in the 3D city and isn't shared.
       To finish: add a `billboards` table + `/api/billboard` (holder-gated claim + list),

@@ -80,10 +80,10 @@
       <h2 style="margin:.3rem 0 .5rem;">Sell &amp; Trade on <span class="grad">Magic Eden</span> / <span class="grad">Tensor</span></h2>
       <p class="muted-note" style="max-width:600px;margin:0 auto 1.1rem;">Your Catboy is a standard Solana NFT. List it, set your price, and trade it on the big marketplaces — where all the buyers are. Every resale pays <b>5% creator royalty</b> back to the project. (Your collection appears there once minting picks up.)</p>
       <div class="hero-actions" style="justify-content:center;flex-wrap:wrap;">
-        <a href="https://magiceden.io/marketplace/33kxQv4Jo7u9edC4RipZckwkpRRdxg863b6cw2UGfh6S" target="_blank" rel="noopener" class="btn btn-primary">List on Magic Eden &rsaquo;</a>
-        <a href="https://www.tensor.trade/trade/33kxQv4Jo7u9edC4RipZckwkpRRdxg863b6cw2UGfh6S" target="_blank" rel="noopener" class="btn btn-ghost">Trade on Tensor &rsaquo;</a>
+        <a id="collME" href="https://magiceden.io/marketplace/33kxQv4Jo7u9edC4RipZckwkpRRdxg863b6cw2UGfh6S" target="_blank" rel="noopener" class="btn btn-primary">List on Magic Eden &rsaquo;</a>
+        <a id="collTensor" href="https://www.tensor.trade/trade/33kxQv4Jo7u9edC4RipZckwkpRRdxg863b6cw2UGfh6S" target="_blank" rel="noopener" class="btn btn-ghost">Trade on Tensor &rsaquo;</a>
       </div>
-      <p class="muted-note" style="margin-top:1rem;font-size:.78rem;">Collection: <code style="user-select:all;">33kxQv4Jo7u9edC4RipZckwkpRRdxg863b6cw2UGfh6S</code></p>
+      <p class="muted-note" style="margin-top:1rem;font-size:.78rem;">Collection: <code style="user-select:all;" id="collAddr">33kxQv4Jo7u9edC4RipZckwkpRRdxg863b6cw2UGfh6S</code></p>
     </div>
   </section>
 
@@ -97,6 +97,13 @@
         <div class="nft-modal-head"><span class="nft-badge" id="mBadge"></span><span class="nft-rank-chip" id="mRank"></span></div>
         <h3 id="mName"></h3>
         <div class="nft-traits" id="mTraits"></div>
+        <div id="mMarket" hidden style="margin-top:1rem;text-align:center;background:linear-gradient(160deg,rgba(255,59,92,.10),rgba(155,77,255,.06));border:1px solid var(--border);border-radius:12px;padding:1rem;">
+          <b style="color:#ff3b5c;">Already minted</b> — grab it on the secondary market:
+          <div class="hero-actions" style="justify-content:center;margin-top:.6rem;flex-wrap:wrap;">
+            <a class="btn btn-primary btn-sm" id="mME" target="_blank" rel="noopener" href="#">Magic Eden &rsaquo;</a>
+            <a class="btn btn-ghost btn-sm" id="mTensor" target="_blank" rel="noopener" href="#">Tensor &rsaquo;</a>
+          </div>
+        </div>
         <a class="btn btn-primary" id="mMint" href="mint.html" style="width:100%;margin-top:1rem;display:block;text-align:center;box-sizing:border-box;">🎲 Mint a Random Catboy &rsaquo;</a>
         <p class="muted-note" style="text-align:center;margin-top:.6rem;">Preview gallery — you can't buy a specific one. Mint a random Catboy to collect.</p>
         <p class="form-status" id="mStatus" role="status" aria-live="polite"></p>
@@ -160,11 +167,21 @@
       const ANIM = { 57: "anim/057.mp4", 90: "anim/090.mp4", 92: "anim/092.mp4" };
       const animSrc = (i) => (PATH.indexOf("genesis") > -1 && ANIM[i.id]) ? PATH + ANIM[i.id] : null;
       // sold pieces (from /api/mint mintedIds) get a SOLD stamp so browsers see what's gone
-      let CURKEY = "nine", SOLD = {};
+      let CURKEY = "nine", SOLD = {}, SOLD_ASSETS = {};
       (function () { const s = document.createElement("style"); s.textContent = ".nft-card.sold .nft-thumb{filter:grayscale(.65) brightness(.5);}.nft-sold{position:absolute;top:8px;left:8px;z-index:4;background:#ff3b5c;color:#fff;font-weight:800;font-size:.68rem;letter-spacing:.08em;padding:.16rem .55rem;border-radius:6px;transform:rotate(-8deg);box-shadow:0 2px 8px rgba(0,0,0,.45);}.nft-card.sold .nft-buy{color:#ff3b5c;font-weight:700;}"; document.head.appendChild(s); })();
       const TIER_ORDER = { Legendary: 0, Legend: 0, Founder: 1, Epic: 2, Rare: 3, Common: 4 };
+      const COLL_ADDR = {
+        nine: "33kxQv4Jo7u9edC4RipZckwkpRRdxg863b6cw2UGfh6S",
+        genesis: "HuLA9RRuG6s994eAiiY4cFhrhghCkCQWcNdm3e3wVD3x",
+        pride: "4N1d9umoscMYiwiqxXnkTbJD9pXLMZiPCw4H7fAUK93x",
+      };
       function load(key) {
         const c = COLLS[key]; PATH = c.path; NOTE = c.note; filter = "all"; traitFilter = {}; CURKEY = key;
+        // point the secondary-market buttons at the active collection
+        const addr = COLL_ADDR[key] || COLL_ADDR.nine;
+        document.getElementById("collME").href = "https://magiceden.io/marketplace/" + addr;
+        document.getElementById("collTensor").href = "https://www.tensor.trade/trade/" + addr;
+        document.getElementById("collAddr").textContent = addr;
         document.getElementById("mktEyebrow").textContent = c.eyebrow;
         document.getElementById("mktTitle").innerHTML = c.title;
         document.getElementById("mktIntro").innerHTML = c.intro;
@@ -200,7 +217,7 @@
         try {
           const r = await fetch("/api/mint"); if (!r.ok) return;
           const d = await r.json();
-          SOLD = d.mintedIds || {}; render(); // stamp the sold pieces
+          SOLD = d.mintedIds || {}; SOLD_ASSETS = d.mintedAssets || {}; render(); // stamp the sold pieces
           const liveColls = new Set((d.packs || []).map((p) => p.coll));
           for (const key of ["genesis", "pride"]) {
             if (!liveColls.has(key) || !LIVE_COPY[key]) continue;
@@ -271,6 +288,15 @@
         document.getElementById("mTraits").innerHTML = Object.entries(i.traits).map(([k, v]) =>
           `<div class="nft-trait"><span>${k}</span><b>${v}</b><i class="trait-pct">${pct(k, v)}%</i></div>`).join("");
         document.getElementById("mStatus").textContent = "";
+        // If this exact Catboy is already minted, offer its secondary-market links
+        // (Tensor / Magic Eden item pages work for any Solana NFT by mint address).
+        const asset = (SOLD_ASSETS[CURKEY] || {})[i.id];
+        const mkt = document.getElementById("mMarket");
+        if (asset) {
+          document.getElementById("mME").href = "https://magiceden.io/item-details/" + asset;
+          document.getElementById("mTensor").href = "https://www.tensor.trade/item/" + asset;
+          mkt.hidden = false;
+        } else { mkt.hidden = true; }
         modal.hidden = false; document.body.style.overflow = "hidden";
       }
       function close() { modal.hidden = true; document.body.style.overflow = ""; }
