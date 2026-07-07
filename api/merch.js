@@ -13,6 +13,7 @@
 //   SITE_URL          public base for design files (default https://www.catboyonsol.fun)
 //   DATABASE_URL      optional — dedupes used payment signatures
 import { neon } from "@neondatabase/serverless";
+import { isBlocked } from "./_blocklist.js";
 
 const RPC = (process.env.SOLANA_RPC || "").trim();
 const MINT = (process.env.TOKEN_MINT || "3UCdpV5mTb4TmJSCyPkaAsuUFvaF4ofc2uXCEj3Jpump").trim();
@@ -32,6 +33,7 @@ const COLLECTIONS = {
 // On-chain (DAS) holder tier for a wallet -> discount %. Elite = Genesis/Pride.
 async function holderPct(wallet) {
   if (!wallet || !RPC) return { pct: 0, tier: "none" };
+  if (isBlocked(wallet)) return { pct: 0, tier: "blocked" }; // no holder discount for wash wallets
   try {
     const r = await rpc("getAssetsByOwner", { ownerAddress: wallet, page: 1, limit: 1000 });
     let elite = false, holder = false;

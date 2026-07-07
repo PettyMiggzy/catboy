@@ -22,6 +22,7 @@ import { getAssociatedTokenAddressSync, createAssociatedTokenAccountIdempotentIn
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { isBlocked } from "../api/_blocklist.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 async function loadEnv() {
@@ -132,6 +133,7 @@ async function processClaims(dec, prog) {
   for (const c of pend) {
     const whole = Math.round(Number(c.amount));
     if (whole <= 0) { await sql`UPDATE stake_claims SET status='skipped' WHERE id=${c.id}`; continue; }
+    if (isBlocked(c.wallet)) { await sql`UPDATE stake_claims SET status='blocked' WHERE id=${c.id}`; log("claim blocked (wash wallet):", c.wallet.slice(0, 6)); continue; }
     try {
       const sig = await payout(c.wallet, whole, dec, prog);
       await sql`UPDATE stake_claims SET status='paid', sig=${sig} WHERE id=${c.id}`;

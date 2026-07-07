@@ -16,6 +16,7 @@ import { neon } from "@neondatabase/serverless";
 import { PublicKey } from "@solana/web3.js";
 import crypto from "crypto";
 import { tgAnnounce, esc } from "./_tg.js";
+import { isBlocked } from "./_blocklist.js";
 
 const SITE = (process.env.SITE_URL || "https://www.catboyonsol.fun").trim();
 
@@ -105,6 +106,8 @@ export default async function handler(req, res) {
       try { const rr = await rpc("getTokenAccountsByOwner", [POOL_WALLET, { mint: MINT }, { encoding: "jsonParsed" }]); live = 0; for (const v of (rr.value || [])) live += Number(v.account?.data?.parsed?.info?.tokenAmount?.uiAmount || 0); } catch {}
       const base = { pool: { deposited: (live != null ? live : Number(p.deposited)), totalShares }, napShares: NAP, claimDays: CLAIM_DAYS };
       if (!wallet) return res.status(200).json(base);
+      // Wash-trade / chart-farm wallets earn nothing from the pool.
+      if (isBlocked(wallet)) return res.status(200).json({ ...base, wallet, stakeable: [], staked: [], yourShares: 0, accrued: 0, canClaim: false, nextClaimAt: null, blocked: true });
       const owned = await ownedCatboys(s, wallet);
       const stakedRows = await s`SELECT asset FROM staked_assets WHERE wallet=${wallet}`;
       const stakedSet = new Set(stakedRows.map((r) => r.asset));
@@ -131,6 +134,8 @@ export default async function handler(req, res) {
     // reject stale signatures (replay hardening); the page signs a fresh Date.now() each action
     if (Math.abs(Date.now() - Number(ts)) > 15 * 60000) return res.status(401).json({ ok: false, error: "signature_expired" });
     if (!verifySig(messageFor(wallet, ts), wallet, sig)) return res.status(401).json({ ok: false, error: "signature_invalid" });
+    // Locked out: wash-trade / chart-farm wallets can't stake, accrue, or claim.
+    if (isBlocked(wallet)) return res.status(403).json({ ok: false, error: "wallet_not_eligible" });
 
     // settle helper: roll a staker's pending forward at current accPerShare, set new shares
     async function settleAndSet(newShares) {

@@ -19,6 +19,7 @@ import { neon } from "@neondatabase/serverless";
 import { PublicKey } from "@solana/web3.js";
 import crypto from "crypto";
 import { tgAnnounce } from "./_tg.js";
+import { isBlocked } from "./_blocklist.js";
 
 const SITE = (process.env.SITE_URL || "https://www.catboyonsol.fun").trim();
 const CONN = (process.env.DATABASE_URL || process.env.POSTGRES_URL || "").trim();
@@ -133,6 +134,8 @@ export default async function handler(req, res) {
     const sig = String(q.sig || "").trim();
     if (!wallet || !sig) return res.status(400).json({ ok: false, error: "missing_wallet_or_sig" });
     if (!verifySig(messageFor(tid, t), wallet, sig)) return res.status(401).json({ ok: false, error: "signature_invalid" });
+    // Wash-trade / chart-farm wallets can't buy their way into the whale pod.
+    if (isBlocked(wallet)) return res.status(403).json({ ok: false, error: "wallet_not_eligible" });
 
     const s = sql();
     await ensureTables(s);
@@ -146,6 +149,7 @@ export default async function handler(req, res) {
     const wallets = (await s`SELECT wallet FROM whale_wallets WHERE tid=${tid}`).map((r) => r.wallet);
     let total = 0, byNft = false;
     for (const w of wallets) {
+      if (isBlocked(w)) continue; // blocked wallets don't count toward the whale threshold
       total += await balanceOf(w);
       if (cfg.nftGate && !byNft && await ownsNft(w)) byNft = true;
     }
