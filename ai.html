@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>$CATBOY AI — Generate in Chat</title>
+  <meta name="description" content="$CATBOY AI turns your words into custom Catboy art and video, right inside the Telegram chat. Pay in $CATBOY, hold for rebates." />
+  <meta property="og:title" content="$CATBOY AI — Generate Catboy art & video in chat" />
+  <meta property="og:image" content="assets/catboy.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <link rel="icon" type="image/png" href="assets/solana.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    :root{ --ai1:#19e0ff; --ai2:#c04dff; --ai3:#ff3df0; --ink:#080810; }
+    .ai-wrap{max-width:1180px;margin:0 auto;padding:0 clamp(1rem,4vw,2rem);}
+    .ai-grad{background:linear-gradient(100deg,var(--ai1) 0%,var(--ai2) 55%,var(--ai3) 100%);-webkit-background-clip:text;background-clip:text;color:transparent;font-family:'Orbitron',sans-serif;}
+    .ai-hero{position:relative;text-align:center;padding:3.4rem 1rem 1.6rem;}
+    .ai-hero h1{font-family:'Orbitron',sans-serif;font-weight:900;font-size:clamp(2.6rem,8vw,5rem);line-height:1;margin:.4rem 0;letter-spacing:-1px;}
+    .ai-hero p{max-width:640px;margin:.8rem auto 0;color:var(--muted,#c9c9d6);font-size:clamp(1rem,2.4vw,1.2rem);}
+    .ai-eyebrow{display:inline-flex;gap:.5rem;align-items:center;font-family:'Orbitron',sans-serif;font-size:.8rem;letter-spacing:3px;color:var(--ai1);border:1px solid rgba(25,224,255,.35);padding:.4rem .9rem;border-radius:999px;background:rgba(25,224,255,.06);}
+    .ai-cmds{display:flex;gap:.8rem;justify-content:center;flex-wrap:wrap;margin-top:1.4rem;}
+    .ai-chip{font-family:'Orbitron',monospace;font-size:.95rem;padding:.55rem 1rem;border-radius:12px;border:1px solid rgba(192,77,255,.4);background:rgba(192,77,255,.08);color:#fff;}
+    .ai-chip b{color:var(--ai1);}
+    .ai-sec{padding:2.4rem 0;}
+    .ai-h2{font-family:'Orbitron',sans-serif;font-weight:800;font-size:clamp(1.5rem,4vw,2.1rem);text-align:center;margin:0 0 .4rem;color:#fff;}
+    .ai-sub{text-align:center;color:var(--muted,#9a9ab0);max-width:560px;margin:0 auto 1.8rem;}
+    .ai-steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;}
+    .ai-step{background:linear-gradient(160deg,rgba(25,224,255,.07),rgba(192,77,255,.05));border:1px solid var(--border,#22223a);border-radius:16px;padding:1.4rem;}
+    .ai-step .n{font-family:'Orbitron',sans-serif;font-weight:900;font-size:1.4rem;color:var(--ai1);}
+    .ai-step b{display:block;color:#fff;margin:.5rem 0 .3rem;font-size:1.05rem;}
+    .ai-step p{margin:0;color:var(--muted,#9a9ab0);font-size:.92rem;line-height:1.45;}
+    .price-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1.2rem;max-width:720px;margin:0 auto;}
+    .price-card{position:relative;background:linear-gradient(165deg,rgba(20,20,34,.9),rgba(12,12,22,.9));border:1px solid var(--border,#22223a);border-radius:20px;padding:1.8rem 1.5rem;text-align:center;overflow:hidden;}
+    .price-card.vid{border-color:rgba(255,61,240,.4);}
+    .price-card .tag{font-family:'Orbitron',sans-serif;letter-spacing:2px;font-size:.75rem;color:var(--ai1);}
+    .price-card.vid .tag{color:var(--ai3);}
+    .price-card .big{font-family:'Orbitron',sans-serif;font-weight:900;font-size:2.8rem;line-height:1;margin:.4rem 0;}
+    .price-card .cmd{font-family:'Orbitron',monospace;color:#fff;background:rgba(255,255,255,.06);border-radius:8px;padding:.35rem .7rem;display:inline-block;margin:.4rem 0 .8rem;font-size:.9rem;}
+    .price-card ul{list-style:none;margin:.6rem 0 0;padding:0;text-align:left;display:grid;gap:.5rem;}
+    .price-card li{color:var(--muted,#c9c9d6);font-size:.9rem;display:flex;gap:.5rem;}
+    .price-card li::before{content:"⚡";}
+    .rebate-box{max-width:760px;margin:0 auto;background:linear-gradient(160deg,rgba(192,77,255,.08),rgba(25,224,255,.05));border:1px solid rgba(192,77,255,.35);border-radius:20px;padding:1.8rem clamp(1rem,4vw,2rem);}
+    .rebate-lead{text-align:center;color:var(--muted,#c9c9d6);margin:0 0 1.3rem;}
+    .rebate-lead b{color:#fff;}
+    .tier-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:.6rem;}
+    .tier{background:rgba(8,8,18,.6);border:1px solid var(--border,#22223a);border-radius:12px;padding:.7rem .4rem;text-align:center;}
+    .tier .h{font-family:'Orbitron',sans-serif;color:#fff;font-size:.95rem;}
+    .tier .r{color:var(--ai1);font-weight:700;margin-top:.2rem;}
+    .tier.whale{border-color:var(--ai3);background:linear-gradient(160deg,rgba(255,61,240,.14),rgba(192,77,255,.08));grid-column:1/-1;}
+    .tier.whale .h{font-size:1.15rem;}
+    .tier.whale .r{color:var(--ai3);font-size:1.4rem;font-family:'Orbitron',sans-serif;}
+    .ai-note{max-width:760px;margin:1.4rem auto 0;text-align:center;color:var(--muted,#8a8a9e);font-size:.85rem;}
+    .ai-cta{text-align:center;padding:2.6rem 0 1rem;}
+  </style>
+</head>
+<body>
+  <div class="bg-grid" aria-hidden="true"></div>
+  <div class="bg-glow" aria-hidden="true"></div>
+
+  <header class="nav">
+    <a href="index.html" class="brand"><img src="assets/catboy.png" alt="Catboy logo" class="brand-logo" /><span class="brand-name">CATBOY</span></a>
+    <nav class="nav-links">
+      <a href="index.html#lore">Lore</a>
+      <a href="trench.html">Terminal</a>
+      <a href="nft.html">NFTs</a>
+      <a href="stake.html">Stake</a>
+      <a href="ai.html" class="active">AI</a>
+      <a href="casino.html">Casino</a>
+      <a href="arcade.html">Arcade</a>
+      <a href="pfp.html">PFP</a>
+      <a href="club.html">Club</a>
+      <a href="wallet.html">Wallet</a>
+      <a href="merch.html">Merch</a>
+      <a href="index.html#faq">FAQ</a>
+    </nav>
+    <a href="wallet.html" class="btn btn-primary nav-cta">Get Credits</a>
+  </header>
+
+  <section class="ai-hero">
+    <div class="ai-wrap">
+      <span class="ai-eyebrow">⚡ POWERED BY $CATBOY AI</span>
+      <h1><span class="ai-grad">$CATBOY AI</span></h1>
+      <p>Turn your words into a custom <b>Catboy</b> — art or video — right inside the chat. Type it, and the $CATBOY AI engine forges it in seconds. Every creation is <b>your</b> Catboy, in any scene you dream up.</p>
+      <div class="ai-cmds">
+        <span class="ai-chip"><b>/img</b> a samurai in neon Tokyo</span>
+        <span class="ai-chip"><b>/vid</b> riding a dragon</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section class="ai-sec">
+    <div class="ai-wrap">
+      <h2 class="ai-h2">How it works</h2>
+      <p class="ai-sub">No apps, no sign-ups. It all happens in the Telegram group.</p>
+      <div class="ai-steps">
+        <div class="ai-step"><div class="n">01</div><b>Load credits</b><p>Top up with $CATBOY. Credits are priced in USD and converted live at checkout — you always pay fair market value.</p></div>
+        <div class="ai-step"><div class="n">02</div><b>Type your idea</b><p>Drop <code>/img</code> or <code>/vid</code> in the group with whatever scene you want. The Catboy character is baked in automatically.</p></div>
+        <div class="ai-step"><div class="n">03</div><b>Get your Catboy</b><p>Seconds later your creation posts right in the chat for everyone to see. Save it, share it, flex it.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PRICING -->
+  <section class="ai-sec">
+    <div class="ai-wrap">
+      <h2 class="ai-h2">Pricing</h2>
+      <p class="ai-sub">Simple, flat pricing. Pay per creation in $CATBOY — hold to earn it back (below).</p>
+      <div class="price-grid">
+        <div class="price-card">
+          <div class="tag">IMAGE</div>
+          <div class="big ai-grad">$0.30</div>
+          <div class="cmd">/img &lt;prompt&gt;</div>
+          <ul>
+            <li>High-detail Catboy art</li>
+            <li>Any scene, outfit or style</li>
+            <li>Ready in ~5 seconds</li>
+            <li>Posts straight to the chat</li>
+          </ul>
+        </div>
+        <div class="price-card vid">
+          <div class="tag">VIDEO</div>
+          <div class="big ai-grad">$1.50</div>
+          <div class="cmd">/vid &lt;prompt&gt;</div>
+          <ul>
+            <li>5-second animated clip</li>
+            <li>Cinematic motion &amp; effects</li>
+            <li>Ready in ~1–2 minutes</li>
+            <li>Your Catboy, brought to life</li>
+          </ul>
+        </div>
+      </div>
+      <p class="ai-note">Prices shown in USD and charged in the equivalent amount of $CATBOY at the live market rate.</p>
+    </div>
+  </section>
+
+  <!-- HOLDER REBATES -->
+  <section class="ai-sec">
+    <div class="ai-wrap">
+      <h2 class="ai-h2">Holder Rebates 🐾</h2>
+      <p class="ai-sub">The more $CATBOY you hold, the more of your spend you get back — paid monthly in $CATBOY.</p>
+      <div class="rebate-box">
+        <p class="rebate-lead"><b>+0.5% back for every 1M $CATBOY you hold</b> — then holders of <b>10M+</b> unlock the whale tier.</p>
+        <div class="tier-grid">
+          <div class="tier"><div class="h">1M</div><div class="r">0.5%</div></div>
+          <div class="tier"><div class="h">2M</div><div class="r">1.0%</div></div>
+          <div class="tier"><div class="h">3M</div><div class="r">1.5%</div></div>
+          <div class="tier"><div class="h">4M</div><div class="r">2.0%</div></div>
+          <div class="tier"><div class="h">5M</div><div class="r">2.5%</div></div>
+          <div class="tier"><div class="h">6M</div><div class="r">3.0%</div></div>
+          <div class="tier"><div class="h">7M</div><div class="r">3.5%</div></div>
+          <div class="tier"><div class="h">8M</div><div class="r">4.0%</div></div>
+          <div class="tier"><div class="h">9M</div><div class="r">4.5%</div></div>
+          <div class="tier whale"><div class="h">🐋 10M+ WHALE</div><div class="r">20% BACK</div></div>
+        </div>
+        <p class="ai-note" style="margin-top:1.1rem;">Rebate = that % of everything you spent on $CATBOY AI that month, sent back to your wallet in $CATBOY. Auto-calculated from your verified holdings.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="ai-cta">
+    <div class="ai-wrap">
+      <h2 class="ai-h2">Ready to create?</h2>
+      <p class="ai-sub">Load credits, jump in the group, and make your first Catboy.</p>
+      <a href="wallet.html" class="btn btn-primary" style="margin:.4rem;">Get Credits</a>
+      <a href="https://t.me/CatBoyOnSolana" class="btn btn-ghost" style="margin:.4rem;">Open the Group</a>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="footer-brand"><img src="assets/catboy.png" alt="Catboy" class="footer-logo" /><span>CATBOY</span></div>
+    <p class="footer-copy">© <span id="year"></span> CATBOY · The Legend Evolves on Solana</p>
+  </footer>
+
+  <script>document.getElementById("year").textContent = new Date().getFullYear();</script>
+  <script src="assets/token-config.js"></script>
+  <script src="assets/ticker.js"></script>
+</body>
+</html>
