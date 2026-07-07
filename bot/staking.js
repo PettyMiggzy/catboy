@@ -89,7 +89,7 @@ async function rpc(method, params) {
   const j = await r.json(); if (j.error) throw new Error(j.error.message); return j.result;
 }
 async function owns(wallet, asset) {
-  try { const r = await rpc("getAssetsByOwner", [{ ownerAddress: wallet, page: 1, limit: 1000 }]); return (r?.items || []).some((a) => a.id === asset); }
+  try { const r = await rpc("getAssetsByOwner", { ownerAddress: wallet, page: 1, limit: 1000 }); return (r?.items || []).some((a) => a.id === asset); }
   catch { return true; } // on RPC failure, don't wrongly forfeit
 }
 // send `whole` $CATBOY from the pool wallet to `toOwner`; returns sig
