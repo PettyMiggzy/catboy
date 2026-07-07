@@ -29,7 +29,23 @@ address, then we confirm eligibility one of two ways:
 Option 1 is preferred (self-contained, cheap at claim). It requires one data pull
 from an indexer with historical support — that's the only remaining step.
 
+## Implementation (lazy archive check — chosen)
+`api/og-check.js` verifies eligibility with no pre-pulled list:
+1. Caller signs `messageFor(wallet, ts)` with their BNB wallet (personal_sign);
+   the endpoint recovers the signer (native `@noble/curves`, no new deps) and
+   confirms it matches the claimed wallet — so nobody can claim another OG's spot.
+2. It reads `balanceOf(wallet)` for both CATBOY contracts **at block 108609459**
+   via a BSC **archive** RPC. Held then → `eligible: true`.
+
+**Env:** `BSC_RPC` = the Alchemy BNB endpoint (archive). Set it in Vercel like the
+other RPC keys — it is intentionally NOT hardcoded so the key can't be scraped
+from this public repo (that would let anyone burn the Alchemy quota).
+
+Validated: EVM sign→recover round-trips correctly; archive `eth_call` at the
+snapshot block returns historical state.
+
 ## Status
 - [x] Snapshot block + contracts frozen and committed (pre-announcement).
-- [ ] Materialize the holder list at block 108609459 → `resurrection-og.json`.
+- [x] OG eligibility check built + validated (`api/og-check.js`, lazy archive).
+- [ ] Set `BSC_RPC` in Vercel (Alchemy BNB archive endpoint).
 - [ ] Wire the OG gate into the Resurrection claim (at-cost vs 0.25/0.5).
