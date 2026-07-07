@@ -1,4 +1,9 @@
 {
+  "git": {
+    "deploymentEnabled": {
+      "claude/catboy-website-nspovy": false
+    }
+  },
   "headers": [
     {
       "source": "/(.*)\\.(html|css|js|json)",
