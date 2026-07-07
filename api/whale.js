@@ -18,7 +18,9 @@
 import { neon } from "@neondatabase/serverless";
 import { PublicKey } from "@solana/web3.js";
 import crypto from "crypto";
+import { tgAnnounce } from "./_tg.js";
 
+const SITE = (process.env.SITE_URL || "https://www.catboyonsol.fun").trim();
 const CONN = (process.env.DATABASE_URL || process.env.POSTGRES_URL || "").trim();
 const RPC = (process.env.SOLANA_RPC || "").trim();
 const BOT = (process.env.TELEGRAM_BOT_TOKEN || "").trim();
@@ -153,7 +155,16 @@ export default async function handler(req, res) {
 
     if (!BOT || !WHALE_CHAT) return res.status(500).json({ ok: false, error: "whale_group_not_configured" });
     const invite = await makeInvite(tid);
-    await s`INSERT INTO whale_members (tid, joined_at) VALUES (${tid}, now()) ON CONFLICT (tid) DO UPDATE SET joined_at=now()`;
+    // xmax=0 means this was a fresh INSERT (a brand-new whale), not a re-verify.
+    const ins = await s`INSERT INTO whale_members (tid, joined_at) VALUES (${tid}, now())
+                        ON CONFLICT (tid) DO UPDATE SET joined_at=now() RETURNING (xmax = 0) AS is_new`;
+    if (ins[0]?.is_new) {
+      const count = (await s`SELECT COUNT(*)::int AS n FROM whale_members`)[0]?.n || 1;
+      await tgAnnounce(
+        `🐋 <b>NEW WHALE JOINED THE POD!</b>\nA big holder just verified and entered the whale group.\n` +
+        `<b>${count}</b> whale${count === 1 ? "" : "s"} strong 🐾\n\nHold enough $CATBOY or a Catboy NFT? <a href="${SITE}/whale.html">Join the pod</a>`
+      );
+    }
     return res.status(200).json({ ok: true, invite, balance: total, wallets: wallets.length, byNft });
   } catch (e) {
     return res.status(500).json({ ok: false, error: String((e && e.message) || e) });
