@@ -34,6 +34,11 @@ import { neon } from "@neondatabase/serverless";
 import { createUmi } from "@metaplex-foundation/umi-bundle-defaults";
 import { keypairIdentity, generateSigner, publicKey } from "@metaplex-foundation/umi";
 import { create, fetchCollection, mplCore } from "@metaplex-foundation/mpl-core";
+import { tgAnnounce, esc } from "./_tg.js";
+
+const SITE = (process.env.SITE_URL || "https://www.catboyonsol.fun").trim();
+const TIER_EMOJI = { Common: "🐾", Rare: "💫", Epic: "🔥", Legendary: "👑", Pride: "🏳️‍🌈" };
+const COLL_LABEL = { nine: "Nine Lives", genesis: "Genesis", pride: "Pride" };
 
 export const config = { maxDuration: 60 };
 
@@ -216,6 +221,15 @@ export default async function handler(req, res) {
     catch (e) { return res.status(502).json({ error: "mint_failed", detail: String(e.message || e) }); }
     await s`UPDATE nft_orders SET status='minted', asset=${asset} WHERE sig=${txSig}`;
     await s`UPDATE nft_inventory SET asset=${asset} WHERE id=${item.id}`;
+    // Announce the sale to the channel (never let this break the mint response).
+    const em = TIER_EMOJI[item.tier] || "🐾";
+    const legend = /legend/i.test(item.tier || "") ? " — a LEGENDARY pull! 🎉" : "";
+    await tgAnnounce(
+      `${em} <b>NEW CATBOY MINTED!</b>${legend}\n` +
+      `<b>${esc(item.name)}</b> · ${em} <b>${esc(item.tier)}</b>\n` +
+      `From the <b>${esc(COLL_LABEL[P.coll] || P.coll)}</b> collection · ${P.priceSol} SOL\n\n` +
+      `🛒 <a href="${SITE}/market.html">View the collection</a> · <a href="${SITE}/mint.html">Mint yours 🐾</a>`
+    );
     return res.status(200).json({ ok: true, asset, name: item.name, image: item.image, tier: item.tier });
   } catch (e) {
     return res.status(500).json({ error: String((e && e.message) || e) });
