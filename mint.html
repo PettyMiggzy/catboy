@@ -45,6 +45,14 @@
     .perks-rarity > b { display: block; margin-bottom: 0.55rem; font-size: 0.85rem; color: #fff; }
     .rarity-row { display: flex; justify-content: space-between; padding: 0.18rem 0; font-size: 0.86rem; }
     .rarity-row b { color: #fff; }
+    /* grouped pack layout — one labelled band per collection */
+    #packGrid { display: block !important; }   /* override base grid so bands stack */
+    .pack-collgroup { margin-bottom: 1.8rem; }
+    .pack-collhead { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; margin: 0 0 .9rem; padding-bottom: .55rem; border-bottom: 1px solid var(--border); }
+    .pack-colltitle { font-family: 'Orbitron', sans-serif; font-weight: 800; font-size: 1.1rem; color: #fff; }
+    .pack-colltag { font-size: .62rem; font-weight: 800; letter-spacing: .08em; padding: .14rem .5rem; border-radius: 5px; background: #14f195; color: #04120a; }
+    .pack-collnote { color: var(--muted); font-size: .82rem; flex: 1 1 240px; }
+    .pack-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 1rem; }
   </style>
 </head>
 <body>
@@ -173,15 +181,36 @@
           <span class="odds-pct">${v}%</span></div>`;
       }).join("");
     }
-    function renderPacks() {
-      $("packGrid").innerHTML = PACKS.map((p) => `
-        <button class="pack-card${sel && p.id === sel.id ? " sel" : ""}" data-id="${p.id}" type="button">
+    // Per-collection headers so buyers see which packs are the SAME collection
+    // (pick your odds) vs. a different collection entirely.
+    const COLL_META = {
+      nine:         { label: "🐾 Nine Lives",   tag: "LIVE", note: "The core collection — same 100 cats. Higher pack = better odds." },
+      genesis:      { label: "✦ Genesis",       tag: "",     note: "Launch edition — top utility, 3 animated Legendaries." },
+      pride:        { label: "🏳️‍🌈 Pride",       tag: "",     note: "Limited Pride Edition — 10 rainbow Catboys." },
+      resurrection: { label: "🐦‍🔥 Resurrection", tag: "NEW",  note: "OG reborn on Solana — 50 animated one-of-ones." },
+    };
+    function packCard(p) {
+      return `<button class="pack-card${sel && p.id === sel.id ? " sel" : ""}" data-id="${p.id}" type="button">
           <div class="pack-foil-wrap"><img src="assets/nft/packs/${p.pack || p.id}.jpg" alt="${p.name}" loading="lazy" onerror="this.outerHTML='${p.emoji || "🎲"}'" style="width:100%;max-height:250px;object-fit:contain;filter:drop-shadow(0 10px 24px rgba(0,0,0,.6))"></div>
           <div class="pack-name">${p.name}</div>
           <div class="pack-price">${p.priceSol} SOL ${C.enabled ? "" : '<span class="pack-free">free demo</span>'}</div>
           <p class="pack-blurb">${p.blurb}</p>
           <div class="odds">${oddsBars(p.odds)}</div>
-        </button>`).join("");
+        </button>`;
+    }
+    function renderPacks() {
+      // group by collection, keep a sensible display order
+      const groups = {};
+      PACKS.forEach((p) => { const c = p.coll || "nine"; (groups[c] = groups[c] || []).push(p); });
+      const order = ["nine", "resurrection", "genesis", "pride"];
+      const keys = order.filter((k) => groups[k]).concat(Object.keys(groups).filter((k) => !order.includes(k)));
+      // always show the collection header — it's what makes "same cats, better
+      // odds" (Standard/Rare/Elite) legible vs. a separate collection.
+      $("packGrid").innerHTML = keys.map((c) => {
+        const m = COLL_META[c] || { label: c, tag: "", note: "" };
+        const head = `<div class="pack-collhead"><span class="pack-colltitle">${m.label}</span>${m.tag ? `<span class="pack-colltag">${m.tag}</span>` : ""}<span class="pack-collnote">${m.note}</span></div>`;
+        return `<div class="pack-collgroup">${head}<div class="pack-row">${groups[c].map(packCard).join("")}</div></div>`;
+      }).join("");
       document.querySelectorAll(".pack-card").forEach((c) => c.onclick = () => selectPack(c.dataset.id));
       if (sel) selectPack(sel.id);
     }
