@@ -158,24 +158,34 @@ CREATE TABLE IF NOT EXISTS ai_rebates (
 
 ---
 
-## 8. Env vars (droplet `bot/.env` ONLY — never committed)
+## 8. Env vars (as implemented)
 
+**Droplet `bot/.env`** (provider secrets live here ONLY):
 ```
 AI_PROVIDER_KEY      # provider API key
-AI_PROVIDER_BASE     # provider base url
+AI_PROVIDER_BASE     # provider base url (e.g. .../api/v1) — no default, keeps repo clean
 AI_IMAGE_MODEL       # image model id
-AI_VIDEO_MODEL       # video (image-to-video) model id
-AI_IMAGE_PRICE_USD=0.30
-AI_VIDEO_PRICE_USD=1.50
+AI_VIDEO_MODEL       # image-to-video model id
+AI_SECRET            # HMAC for the top-up link — MUST match Vercel
+AI_SITE=https://www.catboyonsol.fun
+AI_IMG_PRICE_CENTS=30
+AI_VID_PRICE_CENTS=150
 AI_COOLDOWN_SEC=20
+AI_ENABLE_VIDEO=false   # flip to true for phase 2
 AI_LOW_BALANCE_USD=10
-AI_TREASURY          # wallet that receives $CATBOY top-ups
-AI_REBATE_SECRET     # signs the monthly rebate payouts (hot wallet key, droplet only)
 # reuses: DATABASE_URL, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, TOKEN_MINT,
-#         RPC_URL, WHALE_SECRET (for the verify link)
+#         NOTIFY_CHAT_ID/ADMIN_CHAT_ID (for /ban + low-balance alert)
 ```
-Vercel (top-up page) needs: `AI_IMAGE_PRICE_USD`, `AI_VIDEO_PRICE_USD`,
-`TOKEN_MINT`, price feed — **no provider keys**.
+
+**Vercel** (payments only — NO provider keys):
+```
+AI_SECRET            # same value as the droplet
+AI_TREASURY          # wallet that receives $CATBOY top-ups
+TOKEN_MINT           # $CATBOY mint (already set)
+SOLANA_RPC           # already set
+AI_DECIMALS=6
+```
+Bundles ($5/$15/$50) and prices are defined in `api/credits.js` / `bot/aigen.js`.
 
 ---
 

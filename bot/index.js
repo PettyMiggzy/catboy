@@ -11,6 +11,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import WebSocket from "ws";
 import { whaleCommand, startWhaleEnforcement } from "./whale.js";
+import { aiCommand } from "./aigen.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -139,6 +140,9 @@ async function registerCommands() {
     { command: "buy", description: "Buy $CATBOY" },
     { command: "chart", description: "Live chart" },
     { command: "whale", description: "Verify wallet for the whale group 🐋" },
+    { command: "img", description: "Generate a Catboy image 🎨 ($CATBOY AI)" },
+    { command: "credits", description: "Load $CATBOY AI credits 💳" },
+    { command: "balance", description: "Your $CATBOY AI credit balance" },
     { command: "help", description: "Show all commands" },
   ];
   try {
@@ -266,6 +270,12 @@ async function handleCommand(m) {
   // ---- whale-group gate (its own module) ----
   if (["/whale", "/verify", "/setwhale", "/whalenft", "/whalestatus"].includes(cmd)) {
     await whaleCommand(cmd, arg, m, { API, tgSendTo, isAdmin, log, botUsername }).catch((e) => log("whale cmd error", e.message));
+    return;
+  }
+
+  // ---- $CATBOY AI generator (its own module) ----
+  if (["/img", "/vid", "/credits", "/topup", "/buycredits", "/balance", "/ban", "/aistats"].includes(cmd)) {
+    await aiCommand(cmd, arg, m, { API, tgSendTo, isAdmin, log, botUsername, CHAT_ID: CFG.chatId }).catch((e) => log("ai cmd error", e.message));
     return;
   }
 

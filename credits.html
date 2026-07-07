@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Load Credits — $CATBOY AI</title>
+  <meta name="description" content="Top up your $CATBOY AI credits with $CATBOY." />
+  <link rel="icon" type="image/png" href="assets/solana.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    :root{ --ai1:#19e0ff; --ai2:#c04dff; --ai3:#ff3df0; }
+    .cr-wrap{max-width:560px;margin:0 auto;padding:2.4rem clamp(1rem,4vw,1.6rem) 3rem;}
+    .cr-grad{background:linear-gradient(100deg,var(--ai1),var(--ai2) 55%,var(--ai3));-webkit-background-clip:text;background-clip:text;color:transparent;font-family:'Orbitron',sans-serif;}
+    .cr-head{text-align:center;margin-bottom:1.6rem;}
+    .cr-head h1{font-family:'Orbitron',sans-serif;font-weight:900;font-size:clamp(2rem,7vw,2.8rem);margin:.3rem 0;}
+    .cr-bal{display:inline-block;margin-top:.4rem;padding:.4rem 1rem;border-radius:999px;border:1px solid rgba(25,224,255,.35);background:rgba(25,224,255,.07);color:#fff;font-family:'Orbitron',sans-serif;font-size:.9rem;}
+    .cr-bundles{display:grid;gap:.9rem;margin:1.4rem 0;}
+    .cr-b{display:flex;justify-content:space-between;align-items:center;gap:1rem;padding:1.1rem 1.2rem;border-radius:16px;border:2px solid var(--border,#22223a);background:linear-gradient(160deg,rgba(20,20,34,.9),rgba(12,12,22,.9));cursor:pointer;transition:border-color .15s,transform .12s;}
+    .cr-b:hover{transform:translateY(-2px);}
+    .cr-b.sel{border-color:var(--ai1);box-shadow:0 0 22px rgba(25,224,255,.28);}
+    .cr-b .u{font-family:'Orbitron',sans-serif;font-weight:800;font-size:1.5rem;color:#fff;}
+    .cr-b .sub{color:var(--muted,#9a9ab0);font-size:.82rem;margin-top:.15rem;}
+    .cr-b .cat{text-align:right;color:var(--ai1);font-weight:700;font-size:.92rem;}
+    .cr-b .cat small{display:block;color:var(--muted,#8a8a9e);font-weight:500;}
+    .cr-pay{width:100%;margin-top:.6rem;font-size:1.1rem;padding:1rem;}
+    .cr-status{text-align:center;margin-top:1rem;min-height:1.4em;color:var(--muted,#c9c9d6);}
+    .cr-note{text-align:center;color:var(--muted,#8a8a9e);font-size:.8rem;margin-top:1.2rem;line-height:1.5;}
+    .cr-logo{display:block;width:64px;height:64px;border-radius:50%;margin:0 auto .4rem;}
+  </style>
+</head>
+<body>
+  <div class="bg-grid" aria-hidden="true"></div>
+  <div class="bg-glow" aria-hidden="true"></div>
+
+  <div class="cr-wrap">
+    <div class="cr-head">
+      <img src="assets/catboy.png" alt="Catboy" class="cr-logo" />
+      <h1><span class="cr-grad">$CATBOY AI</span></h1>
+      <div style="color:var(--muted,#9a9ab0);">Load credits with $CATBOY</div>
+      <div class="cr-bal" id="bal">Balance: —</div>
+    </div>
+
+    <div id="bundles" class="cr-bundles"></div>
+    <button class="btn btn-primary cr-pay" id="pay" type="button" disabled>Select a bundle</button>
+    <p class="cr-status" id="status" role="status" aria-live="polite"></p>
+    <p class="cr-note">You sign one message to link your wallet, then send $CATBOY in one transaction. Credits are added instantly and never expire. Hold $CATBOY for monthly rebates. 🐾</p>
+  </div>
+
+  <script src="assets/mint-config.js"></script>
+  <script>
+  (function () {
+    const $ = (id) => document.getElementById(id);
+    const P = new URLSearchParams(location.search);
+    const TID = P.get("tid") || "", T = P.get("t") || "", H = P.get("h") || "";
+    const qs = `tid=${encodeURIComponent(TID)}&t=${encodeURIComponent(T)}&h=${encodeURIComponent(H)}`;
+    let CFG = null, sel = null;
+    const st = (m, err) => { const s = $("status"); s.textContent = m; s.style.color = err ? "var(--magenta,#ff5a6a)" : "var(--muted,#c9c9d6)"; };
+    const getProvider = () => (window.solana && window.solana.isPhantom) ? window.solana : (window.solflare || window.backpack || (window.phantom && window.phantom.solana) || null);
+    const fmt$ = (c) => "$" + (c / 100).toFixed(2);
+
+    if (!TID || !T || !H) { st("Open this page from the /credits link the bot sent you.", true); }
+
+    async function load() {
+      try {
+        const r = await fetch("/api/credits?" + qs);
+        CFG = await r.json();
+        if (!CFG.ok) { st(CFG.error === "bad_or_expired_link" ? "This link expired — send /credits again in the group." : ("Error: " + CFG.error), true); return; }
+        $("bal").textContent = "Balance: " + fmt$(CFG.balanceCents || 0);
+        $("bundles").innerHTML = CFG.bundles.map((b, i) => `
+          <div class="cr-b" data-i="${i}">
+            <div><div class="u">$${b.usd}</div><div class="sub">${Math.floor(b.usdCents / 30)} images · ${Math.floor(b.usdCents / 150)} videos</div></div>
+            <div class="cat">${b.catboy ? Number(b.catboy).toLocaleString() + " $CATBOY" : "—"}<small>${CFG.priceUsd ? "@ $" + Number(CFG.priceUsd).toPrecision(3) : "price loading"}</small></div>
+          </div>`).join("");
+        $("bundles").querySelectorAll("[data-i]").forEach(el => el.onclick = () => {
+          $("bundles").querySelectorAll(".cr-b").forEach(x => x.classList.remove("sel"));
+          el.classList.add("sel"); sel = CFG.bundles[+el.dataset.i];
+          $("pay").disabled = false; $("pay").textContent = "Pay " + Number(sel.catboy).toLocaleString() + " $CATBOY → +" + sel.usd + " credits";
+        });
+      } catch (e) { st("Couldn't load — refresh and try again.", true); }
+    }
+
+    $("pay").addEventListener("click", async () => {
+      if (!sel || !CFG) return;
+      const provider = getProvider();
+      if (!provider) { st("No Solana wallet found — install Phantom.", true); return; }
+      if (!CFG.payTo) { st("Top-ups aren't configured yet.", true); return; }
+      $("pay").disabled = true;
+      try {
+        const web3 = await import("https://esm.sh/@solana/web3.js@1.95.3");
+        const spl = await import("https://esm.sh/@solana/spl-token@0.4.8");
+        const conn = new web3.Connection(location.origin + ((window.CATBOY_MINT && window.CATBOY_MINT.rpc) || "/api/solrpc"), "confirmed");
+        const cr = await provider.connect();
+        const buyer = (cr && cr.publicKey ? cr.publicKey : provider.publicKey);
+        // 1) sign the link message (proves wallet ownership → binds to your Telegram)
+        st("Sign to link your wallet (free)…");
+        const signed = await provider.signMessage(new TextEncoder().encode(CFG.message), "utf8");
+        const bytes = signed.signature ? signed.signature : signed;
+        const sigB64 = btoa(String.fromCharCode.apply(null, Array.from(bytes)));
+        // 2) pay $CATBOY (Token-2022 transfer to the AI treasury)
+        st("Approve the " + Number(sel.catboy).toLocaleString() + " $CATBOY payment…");
+        const mint = new web3.PublicKey(CFG.mint);
+        const prog = spl.TOKEN_2022_PROGRAM_ID;
+        const treasury = new web3.PublicKey(CFG.payTo);
+        const dec = CFG.decimals || 6;
+        const fromAta = spl.getAssociatedTokenAddressSync(mint, buyer, false, prog);
+        const toAta = spl.getAssociatedTokenAddressSync(mint, treasury, false, prog);
+        const amount = BigInt(Math.round(Number(sel.catboy))) * (10n ** BigInt(dec));
+        const tx = new web3.Transaction();
+        tx.add(spl.createAssociatedTokenAccountIdempotentInstruction(buyer, toAta, treasury, mint, prog));
+        tx.add(spl.createTransferCheckedInstruction(fromAta, mint, toAta, buyer, amount, dec, [], prog));
+        tx.feePayer = buyer;
+        tx.recentBlockhash = (await conn.getLatestBlockhash()).blockhash;
+        let simErr = null;
+        try { const sim = await conn.simulateTransaction(tx); simErr = sim && sim.value && sim.value.err; } catch (_) {}
+        if (simErr) throw new Error("Payment would fail — make sure you hold enough $CATBOY + a little SOL for gas.");
+        const res = await provider.signAndSendTransaction(tx);
+        const txSig = res && res.signature ? res.signature : res;
+        st("Paid ✓ — adding your credits…");
+        const pr = await fetch("/api/credits?" + qs, { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tid: TID, t: T, h: H, wallet: buyer.toString(), sig: sigB64, usdCents: sel.usdCents, txSig }) });
+        const d = await pr.json();
+        if (d.ok) { $("bal").textContent = "Balance: " + fmt$(d.balanceCents); st("✅ " + (d.credited ? ("Added " + sel.usd + " in credits!") : "Already credited.") + " Head back to the group and use /img 🐾"); }
+        else st("Payment landed but crediting failed (" + (d.error || "unknown") + "). Screenshot your tx + DM us.", true);
+      } catch (e) {
+        st("Failed: " + ((e && e.message) || e), true);
+      } finally { $("pay").disabled = false; }
+    });
+
+    load();
+  })();
+  </script>
+</body>
+</html>
