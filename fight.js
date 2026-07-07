@@ -873,8 +873,20 @@
     return { x: (e.clientX - r.left) * (W / r.width), y: (e.clientY - r.top) * (H / r.height) };
   }
 
+  // Holder skin — tint the Catboy fighter (glow, sparks, specials, name bar) by
+  // NFT tier. Clones the def so the shared roster is never mutated; only the
+  // Catboy, only for holders. Non-holders play the default purple Catboy.
+  const SKIN = { genesis: { color: "#f7c43c", tag: " ✦" }, pride: { color: "#ff3df0", tag: " 🏳️‍🌈" }, nine: { color: "#19e0ff", tag: " ⚡" } };
+  function skinPlayer(def) {
+    if (!def || def.id !== "catboy") return def;
+    const PK = window.CATBOY_PERKS, HLD = window.CATBOY_HOLDER;
+    if (!PK || !HLD) return def;
+    const s = SKIN[PK.skin(HLD.get())];
+    return s ? Object.assign({}, def, { color: s.color, name: def.name + s.tag }) : def;
+  }
+
   function startGame(idx) {
-    const player = ROSTER[idx];
+    const player = skinPlayer(ROSTER[idx]);
     let opps;
     if (/[?&]boss\b/.test(location.search)) {
       opps = [BOSS];   // boss rush: straight to Winslow
@@ -891,7 +903,7 @@
   // Boss challenge: CATBOY straight into Winslow (used by the promo panel)
   function startBossChallenge() {
     WAGER = 0;
-    G = newMatch(ROSTER[0], [BOSS]);
+    G = newMatch(skinPlayer(ROSTER[0]), [BOSS]);
     G.challenge = true;
     G.phase = "intro"; startRound(false); stakeBout();
     const shell = document.querySelector(".fight-shell"); if (shell) shell.scrollIntoView({ behavior: "smooth", block: "center" });
