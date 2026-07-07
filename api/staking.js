@@ -15,6 +15,9 @@
 import { neon } from "@neondatabase/serverless";
 import { PublicKey } from "@solana/web3.js";
 import crypto from "crypto";
+import { tgAnnounce, esc } from "./_tg.js";
+
+const SITE = (process.env.SITE_URL || "https://www.catboyonsol.fun").trim();
 
 const CONN = (process.env.DATABASE_URL || process.env.POSTGRES_URL || "").trim();
 const RPC = (process.env.SOLANA_RPC || "").trim();
@@ -154,6 +157,17 @@ export default async function handler(req, res) {
       const newShares = Math.max(0, Number(cur ? cur.shares : 0) + delta);
       await settleAndSet(newShares);
       await s`UPDATE stake_pool SET total_shares = GREATEST(0, total_shares + ${delta}) WHERE id=1`;
+      // Announce to the channel (fire-and-forget; never blocks the action).
+      const names = list.map((a) => ownedMap.get(a)?.name).filter(Boolean).map(esc).join(", ");
+      const total = (await s`SELECT total_shares FROM stake_pool WHERE id=1`)[0]?.total_shares || 0;
+      if (action === "stake") {
+        await tgAnnounce(
+          `😴 <b>NEW STAKE!</b>\nA holder just put <b>${names}</b> down for a nap (+${Math.abs(delta)}× share).\n` +
+          `Now <b>${total}</b> nap-share${Number(total) === 1 ? "" : "s"} earning from the pool.\n\n💤 <a href="${SITE}/stake.html">Nap yours to earn $CATBOY</a>`
+        );
+      } else {
+        await tgAnnounce(`🙀 <b>Woke up!</b>\nA holder pulled <b>${names}</b> out of the nap pool.\n💤 <a href="${SITE}/stake.html">Stake to earn</a>`);
+      }
       return res.status(200).json({ ok: true, action, shares: newShares });
     }
     if (action === "claim") {
