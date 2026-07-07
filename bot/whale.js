@@ -15,7 +15,9 @@ const CONN = (process.env.DATABASE_URL || process.env.POSTGRES_URL || "").trim()
 const WHALE_CHAT = (process.env.WHALE_CHAT_ID || "").trim();
 const SECRET = (process.env.WHALE_SECRET || "").trim();
 const SITE = (process.env.WHALE_SITE || "https://www.catboyonsol.fun").replace(/\/$/, "");
-const RECHECK_MS = Math.max(5, parseInt(process.env.WHALE_RECHECK_MIN || "30", 10)) * 60000;
+// Default: re-check holdings once a day. Cheap (~2 RPC calls per member per day)
+// and still removes sellers within 24h. Override with WHALE_RECHECK_MIN (minutes).
+const RECHECK_MS = Math.max(5, parseInt(process.env.WHALE_RECHECK_MIN || "1440", 10)) * 60000;
 const MINT = (process.env.TOKEN_MINT || "").trim();
 // Collection addresses are public on-chain ids (not secrets) — default to the
 // known Catboy collections so the droplet doesn't need to set them.
