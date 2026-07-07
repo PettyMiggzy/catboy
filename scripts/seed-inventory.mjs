@@ -23,12 +23,13 @@ if (!CONN) { console.error("Set DATABASE_URL"); process.exit(1); }
 
 // dir = folder under assets/nft; offset = id range so PKs never collide.
 const COLLS = {
-  nine:    { dir: "collection", offset: 0 },
-  genesis: { dir: "genesis",    offset: 1000 },
-  pride:   { dir: "pride",      offset: 2000 },
+  nine:         { dir: "collection",   offset: 0 },
+  genesis:      { dir: "genesis",      offset: 1000 },
+  pride:        { dir: "pride",        offset: 2000 },
+  resurrection: { dir: "resurrection", offset: 3000 },
 };
 const cfg = COLLS[COLLECTION];
-if (!cfg) { console.error("Unknown COLLECTION:", COLLECTION, "— use nine|genesis|pride"); process.exit(1); }
+if (!cfg) { console.error("Unknown COLLECTION:", COLLECTION, "— use nine|genesis|pride|resurrection"); process.exit(1); }
 
 const s = neon(CONN);
 const man = JSON.parse(fs.readFileSync(`assets/nft/${cfg.dir}/manifest.json`, "utf8"));
