@@ -1,0 +1,47 @@
+{
+  "name": "Catboy Resurrection #08",
+  "symbol": "CATBOYOG",
+  "description": "$CATBOY OG Resurrection \u2014 Catboy died on BNB and rose again on Solana. A limited, fully-animated 50-piece collection, every one a one-of-one. Holders unlock the full Catboy ecosystem.\n\n\ud83c\udf81 Holder Perks: Stake to earn $CATBOY (Nap to Earn), whale-group access, casino edge, arcade fighter skin, merch discounts, $CATBOY AI perks, governance votes, and airdrop + whitelist priority. See catboyonsol.fun/stake.html",
+  "image": "https://www.catboyonsol.fun/assets/nft/resurrection/img/08.jpg",
+  "animation_url": "https://www.catboyonsol.fun/assets/nft/resurrection/animated/08.mp4",
+  "external_url": "https://www.catboyonsol.fun/market.html",
+  "attributes": [
+    {
+      "trait_type": "Collection",
+      "value": "OG Resurrection"
+    },
+    {
+      "trait_type": "Rarity",
+      "value": "Common"
+    },
+    {
+      "trait_type": "Energy",
+      "value": "Cyan Phoenix"
+    },
+    {
+      "trait_type": "Origin",
+      "value": "Reborn from BNB"
+    },
+    {
+      "trait_type": "Animated",
+      "value": "Yes"
+    },
+    {
+      "trait_type": "Utility",
+      "value": "Stakeable"
+    }
+  ],
+  "properties": {
+    "files": [
+      {
+        "uri": "https://www.catboyonsol.fun/assets/nft/resurrection/img/08.jpg",
+        "type": "image/jpeg"
+      },
+      {
+        "uri": "https://www.catboyonsol.fun/assets/nft/resurrection/animated/08.mp4",
+        "type": "video/mp4"
+      }
+    ],
+    "category": "video"
+  }
+}
