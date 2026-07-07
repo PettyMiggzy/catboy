@@ -39,7 +39,9 @@ const CHECK_MS = Math.max(1, parseInt(process.env.STAKE_CHECK_MIN || "3", 10)) *
 const CLAIM_DAYS = Math.max(1, parseInt(process.env.CLAIM_INTERVAL_DAYS || "30", 10));
 const DEFAULT_COLLS = ["33kxQv4Jo7u9edC4RipZckwkpRRdxg863b6cw2UGfh6S", "HuLA9RRuG6s994eAiiY4cFhrhghCkCQWcNdm3e3wVD3x", "4N1d9umoscMYiwiqxXnkTbJD9pXLMZiPCw4H7fAUK93x"];
 const _ec = [process.env.NFT_COLLECTION, process.env.NFT_COLLECTION_GENESIS, process.env.NFT_COLLECTION_PRIDE].map((x) => (x || "").trim()).filter(Boolean);
-const COLLECTIONS = _ec.length ? _ec : DEFAULT_COLLS;
+let COLLECTIONS = _ec.length ? _ec : DEFAULT_COLLS;
+const _res = (process.env.NFT_COLLECTION_RESURRECTION || "").trim();
+if (_res && !COLLECTIONS.includes(_res)) COLLECTIONS = [...COLLECTIONS, _res];
 const NAP = { Common: 1, Rare: 3, Epic: 6, Legendary: 12, Legend: 12, Founder: 12, Pride: 8 };
 const SCALE = 1_000_000_000_000n; // fixed-point for accPerShare (matches api/staking.js)
 const REWARD_UNIT = 1_000_000_000n; // internal reward unit = 1e-9 CATBOY (matches api)

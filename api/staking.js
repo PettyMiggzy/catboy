@@ -27,7 +27,10 @@ const SECRET = (process.env.STAKE_SECRET || "").trim();
 const CLAIM_DAYS = Math.max(1, parseInt(process.env.CLAIM_INTERVAL_DAYS || "30", 10));
 const DEFAULT_COLLECTIONS = ["33kxQv4Jo7u9edC4RipZckwkpRRdxg863b6cw2UGfh6S", "HuLA9RRuG6s994eAiiY4cFhrhghCkCQWcNdm3e3wVD3x", "4N1d9umoscMYiwiqxXnkTbJD9pXLMZiPCw4H7fAUK93x"];
 const _envColls = [process.env.NFT_COLLECTION, process.env.NFT_COLLECTION_GENESIS, process.env.NFT_COLLECTION_PRIDE].map((x) => (x || "").trim()).filter(Boolean);
-const COLLECTIONS = _envColls.length ? _envColls : DEFAULT_COLLECTIONS;
+let COLLECTIONS = _envColls.length ? _envColls : DEFAULT_COLLECTIONS;
+// OG Resurrection is stakeable too — merge its collection in once its address is set.
+const _res = (process.env.NFT_COLLECTION_RESURRECTION || "").trim();
+if (_res && !COLLECTIONS.includes(_res)) COLLECTIONS = [...COLLECTIONS, _res];
 // "nap shares" per tier — higher tier earns proportionally more of the pool
 const NAP = { Common: 1, Rare: 3, Epic: 6, Legendary: 12, Legend: 12, Founder: 12, Pride: 8 };
 const SCALE = 1_000_000_000_000n; // 1e12 fixed-point for accPerShare
