@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Load Credits — $CATBOY AI</title>
-  <meta name="description" content="Top up your $CATBOY AI credits with $CATBOY." />
+  <meta name="description" content="Top up your $CATBOY AI credits with SOL." />
   <link rel="icon" type="image/png" href="assets/solana.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -39,14 +39,14 @@
     <div class="cr-head">
       <img src="assets/catboy.png" alt="Catboy" class="cr-logo" />
       <h1><span class="cr-grad">$CATBOY AI</span></h1>
-      <div style="color:var(--muted,#9a9ab0);">Load credits with $CATBOY</div>
+      <div style="color:var(--muted,#9a9ab0);">Load credits with SOL</div>
       <div class="cr-bal" id="bal">Balance: —</div>
     </div>
 
     <div id="bundles" class="cr-bundles"></div>
     <button class="btn btn-primary cr-pay" id="pay" type="button" disabled>Select a bundle</button>
     <p class="cr-status" id="status" role="status" aria-live="polite"></p>
-    <p class="cr-note">You sign one message to link your wallet, then send $CATBOY in one transaction. Credits are added instantly and never expire. Hold $CATBOY for monthly rebates. 🐾</p>
+    <p class="cr-note">You sign one message to link your wallet, then send SOL in one transaction. Credits are added instantly and never expire. 🐾</p>
   </div>
 
   <script src="assets/mint-config.js"></script>
@@ -72,12 +72,12 @@
         $("bundles").innerHTML = CFG.bundles.map((b, i) => `
           <div class="cr-b" data-i="${i}">
             <div><div class="u">$${b.usd}</div><div class="sub">${Math.floor(b.usdCents / 30)} images · ${Math.floor(b.usdCents / 150)} videos</div></div>
-            <div class="cat">${b.catboy ? Number(b.catboy).toLocaleString() + " $CATBOY" : "—"}<small>${CFG.priceUsd ? "@ $" + Number(CFG.priceUsd).toPrecision(3) : "price loading"}</small></div>
+            <div class="cat">${b.sol ? b.sol + " SOL" : "—"}<small>${CFG.priceUsd ? "@ $" + Number(CFG.priceUsd).toPrecision(4) + "/SOL" : "price loading"}</small></div>
           </div>`).join("");
         $("bundles").querySelectorAll("[data-i]").forEach(el => el.onclick = () => {
           $("bundles").querySelectorAll(".cr-b").forEach(x => x.classList.remove("sel"));
           el.classList.add("sel"); sel = CFG.bundles[+el.dataset.i];
-          $("pay").disabled = false; $("pay").textContent = "Pay " + Number(sel.catboy).toLocaleString() + " $CATBOY → +" + sel.usd + " credits";
+          $("pay").disabled = false; $("pay").textContent = "Pay " + sel.sol + " SOL → +$" + sel.usd + " credits";
         });
       } catch (e) { st("Couldn't load — refresh and try again.", true); }
     }
@@ -90,7 +90,6 @@
       $("pay").disabled = true;
       try {
         const web3 = await import("https://esm.sh/@solana/web3.js@1.95.3");
-        const spl = await import("https://esm.sh/@solana/spl-token@0.4.8");
         const conn = new web3.Connection(location.origin + ((window.CATBOY_MINT && window.CATBOY_MINT.rpc) || "/api/solrpc"), "confirmed");
         const cr = await provider.connect();
         const buyer = (cr && cr.publicKey ? cr.publicKey : provider.publicKey);
@@ -99,31 +98,23 @@
         const signed = await provider.signMessage(new TextEncoder().encode(CFG.message), "utf8");
         const bytes = signed.signature ? signed.signature : signed;
         const sigB64 = btoa(String.fromCharCode.apply(null, Array.from(bytes)));
-        // 2) pay $CATBOY (Token-2022 transfer to the AI treasury)
-        st("Approve the " + Number(sel.catboy).toLocaleString() + " $CATBOY payment…");
-        const mint = new web3.PublicKey(CFG.mint);
-        const prog = spl.TOKEN_2022_PROGRAM_ID;
+        // 2) pay SOL (native transfer to the AI treasury)
+        st("Approve the " + sel.sol + " SOL payment…");
         const treasury = new web3.PublicKey(CFG.payTo);
-        const dec = CFG.decimals || 6;
-        const fromAta = spl.getAssociatedTokenAddressSync(mint, buyer, false, prog);
-        const toAta = spl.getAssociatedTokenAddressSync(mint, treasury, false, prog);
-        const amount = BigInt(Math.round(Number(sel.catboy))) * (10n ** BigInt(dec));
+        const lamports = Math.round(Number(sel.sol) * 1e9);
         const tx = new web3.Transaction();
-        tx.add(spl.createAssociatedTokenAccountIdempotentInstruction(buyer, toAta, treasury, mint, prog));
-        tx.add(spl.createTransferCheckedInstruction(fromAta, mint, toAta, buyer, amount, dec, [], prog));
+        tx.add(web3.SystemProgram.transfer({ fromPubkey: buyer, toPubkey: treasury, lamports }));
         tx.feePayer = buyer;
         // Pre-sign balance guard — Phantom shows its scary "malicious/blocked" warning when the
-        // wallet can't cover the tx. Check SOL (gas + ATA rent) AND $CATBOY BEFORE signing so
-        // short users get a friendly message instead. This page has no other backstop.
+        // wallet can't cover the tx. Check the wallet holds the payment + a little gas BEFORE
+        // signing so short users get a friendly message instead. This page has no other backstop.
+        const GAS = 3000000; // ~0.003 SOL headroom for the network fee
         const _sol = await conn.getBalance(buyer).catch(() => null);
-        if (_sol != null && _sol < 3000000) throw new Error("You need a little SOL for gas (~0.003). Add some and retry.");
-        const _tb = await conn.getTokenAccountBalance(fromAta).catch(() => null);
-        const _held = _tb && _tb.value ? BigInt(_tb.value.amount) : 0n;
-        if (_held < amount) throw new Error("Not enough $CATBOY — you hold " + (Number(_held) / 10 ** dec).toLocaleString() + ", need " + Number(sel.catboy).toLocaleString() + ".");
+        if (_sol != null && _sol < lamports + GAS) throw new Error("Not enough SOL — you need " + sel.sol + " + ~0.003 for gas. You have " + (_sol / 1e9).toFixed(4) + ".");
         tx.recentBlockhash = (await conn.getLatestBlockhash()).blockhash;
         let simErr = null;
         try { const sim = await conn.simulateTransaction(tx); simErr = sim && sim.value && sim.value.err; } catch (_) {}
-        if (simErr) throw new Error("Payment would fail — make sure you hold enough $CATBOY + a little SOL for gas.");
+        if (simErr) throw new Error("Payment would fail — make sure you hold enough SOL (" + sel.sol + " + gas).");
         const res = await provider.signAndSendTransaction(tx);
         const txSig = res && res.signature ? res.signature : res;
         st("Paid ✓ — adding your credits…");

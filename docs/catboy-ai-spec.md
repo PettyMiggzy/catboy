@@ -180,12 +180,11 @@ AI_LOW_BALANCE_USD=10
 **Vercel** (payments only — NO provider keys):
 ```
 AI_SECRET            # same value as the droplet
-AI_TREASURY          # wallet that receives $CATBOY top-ups
-TOKEN_MINT           # $CATBOY mint (already set)
+AI_TREASURY          # wallet that receives the SOL top-ups
 SOLANA_RPC           # already set
-AI_DECIMALS=6
 ```
-Bundles ($5/$15/$50) and prices are defined in `api/credits.js` / `bot/aigen.js`.
+Bundles ($5/$15/$50, paid in SOL at the live price) are defined in `api/credits.js` / `bot/aigen.js`.
+`AI_DECIMALS` / `TOKEN_MINT` are no longer needed for top-ups (native SOL, not an SPL transfer).
 
 ---
 
