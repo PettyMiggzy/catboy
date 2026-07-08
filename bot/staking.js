@@ -22,6 +22,7 @@ import { getAssociatedTokenAddressSync, createAssociatedTokenAccountIdempotentIn
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { isBlocked } from "../api/_blocklist.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 async function loadEnv() {
@@ -132,12 +133,23 @@ async function processClaims(dec, prog) {
   for (const c of pend) {
     const whole = Math.round(Number(c.amount));
     if (whole <= 0) { await sql`UPDATE stake_claims SET status='skipped' WHERE id=${c.id}`; continue; }
+    if (isBlocked(c.wallet)) { await sql`UPDATE stake_claims SET status='blocked' WHERE id=${c.id}`; log("claim blocked (wash wallet):", c.wallet.slice(0, 6)); continue; }
+    // Atomically take ownership of this claim BEFORE any funds move. If the process crashed or
+    // was restarted (pm2) mid-payout, the row is already 'processing' and will never be selected
+    // or paid again — closes the double-payout window from the hot wallet.
+    const taken = await sql`UPDATE stake_claims SET status='processing' WHERE id=${c.id} AND status='pending' RETURNING id`;
+    if (!taken.length) continue; // another cycle/instance already claimed it
     try {
       const sig = await payout(c.wallet, whole, dec, prog);
       await sql`UPDATE stake_claims SET status='paid', sig=${sig} WHERE id=${c.id}`;
       paidWhole += whole;
       log("claim paid:", whole, "CATBOY ->", c.wallet.slice(0, 6), sig.slice(0, 12));
-    } catch (e) { log("claim payout failed id", c.id, e.message); /* leave pending; retry next cycle */ }
+    } catch (e) {
+      // Do NOT revert to 'pending': the transfer may actually have landed (a confirm timeout
+      // still throws). Leave it 'processing' for ops reconciliation rather than risk paying twice.
+      await sql`UPDATE stake_claims SET sig=${"ERR:" + String(e.message || "").slice(0, 80)} WHERE id=${c.id}`;
+      log("claim payout ERROR id", c.id, "— left 'processing' for review:", e.message);
+    }
   }
   return paidWhole;
 }

@@ -19,6 +19,7 @@ import { neon } from "@neondatabase/serverless";
 import { PublicKey } from "@solana/web3.js";
 import crypto from "crypto";
 import { tgAnnounce } from "./_tg.js";
+import { isBlocked } from "./_blocklist.js";
 
 const SITE = (process.env.SITE_URL || "https://www.catboyonsol.fun").trim();
 const CONN = (process.env.DATABASE_URL || process.env.POSTGRES_URL || "").trim();
@@ -46,7 +47,10 @@ async function rpc(method, params = []) {
 }
 
 async function ensureTables(s) {
-  await s`CREATE TABLE IF NOT EXISTS whale_config (id INT PRIMARY KEY DEFAULT 1, min_tokens NUMERIC NOT NULL DEFAULT ${DEFAULT_MIN}, nft_gate BOOLEAN NOT NULL DEFAULT true)`;
+  // DEFAULT must be an inline literal — Postgres forbids bind params in DDL, so ${DEFAULT_MIN}
+  // sent 1 param for a 0-param statement and threw "bind message supplies 1 parameters, but
+  // prepared statement requires 0", breaking whale verification. Keep literal in sync w/ DEFAULT_MIN.
+  await s`CREATE TABLE IF NOT EXISTS whale_config (id INT PRIMARY KEY DEFAULT 1, min_tokens NUMERIC NOT NULL DEFAULT 10000000, nft_gate BOOLEAN NOT NULL DEFAULT true)`;
   // one row per (verified) wallet — a person can bind several; wallet is unique so it can't be shared across accounts
   await s`CREATE TABLE IF NOT EXISTS whale_wallets (wallet TEXT PRIMARY KEY, tid TEXT NOT NULL, verified_at TIMESTAMPTZ DEFAULT now())`;
   await s`CREATE INDEX IF NOT EXISTS whale_wallets_tid ON whale_wallets (tid)`;
@@ -64,7 +68,12 @@ async function config() {
 
 // The bot signs `${tid}.${t}` with WHALE_SECRET so nobody can verify for a tid they don't control.
 const hmac = (data) => crypto.createHmac("sha256", SECRET).update(data).digest("hex");
-const linkOk = (tid, t, h) => SECRET && h && h === hmac(`${tid}.${t}`) && (Date.now() - Number(t)) < LINK_TTL && Number(t) <= Date.now() + 60000;
+// Constant-time compare so the HMAC check can't be probed via timing (matches credits.js).
+const hmacEq = (a, b) => {
+  if (!a || !b || a.length !== b.length) return false;
+  try { return crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b)); } catch { return false; }
+};
+const linkOk = (tid, t, h) => SECRET && h && hmacEq(h, hmac(`${tid}.${t}`)) && (Date.now() - Number(t)) < LINK_TTL && Number(t) <= Date.now() + 60000;
 
 // The exact human-readable string the wallet signs.
 const messageFor = (tid, t) =>
@@ -133,6 +142,8 @@ export default async function handler(req, res) {
     const sig = String(q.sig || "").trim();
     if (!wallet || !sig) return res.status(400).json({ ok: false, error: "missing_wallet_or_sig" });
     if (!verifySig(messageFor(tid, t), wallet, sig)) return res.status(401).json({ ok: false, error: "signature_invalid" });
+    // Wash-trade / chart-farm wallets can't buy their way into the whale pod.
+    if (isBlocked(wallet)) return res.status(403).json({ ok: false, error: "wallet_not_eligible" });
 
     const s = sql();
     await ensureTables(s);
@@ -146,6 +157,7 @@ export default async function handler(req, res) {
     const wallets = (await s`SELECT wallet FROM whale_wallets WHERE tid=${tid}`).map((r) => r.wallet);
     let total = 0, byNft = false;
     for (const w of wallets) {
+      if (isBlocked(w)) continue; // blocked wallets don't count toward the whale threshold
       total += await balanceOf(w);
       if (cfg.nftGate && !byNft && await ownsNft(w)) byNft = true;
     }

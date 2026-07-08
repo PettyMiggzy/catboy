@@ -16,6 +16,7 @@ import { neon } from "@neondatabase/serverless";
 import { PublicKey } from "@solana/web3.js";
 import crypto from "crypto";
 import { tgAnnounce, esc } from "./_tg.js";
+import { isBlocked } from "./_blocklist.js";
 
 const SITE = (process.env.SITE_URL || "https://www.catboyonsol.fun").trim();
 
@@ -59,6 +60,7 @@ async function ensure(s) {
   await s`CREATE TABLE IF NOT EXISTS staked_assets (asset TEXT PRIMARY KEY, wallet TEXT NOT NULL, tier TEXT, shares INT, staked_at TIMESTAMPTZ DEFAULT now())`;
   await s`CREATE INDEX IF NOT EXISTS staked_assets_wallet ON staked_assets (wallet)`;
   await s`CREATE TABLE IF NOT EXISTS stake_claims (id SERIAL PRIMARY KEY, wallet TEXT, amount NUMERIC, status TEXT DEFAULT 'pending', sig TEXT, created_at TIMESTAMPTZ DEFAULT now())`;
+  await s`CREATE TABLE IF NOT EXISTS used_sigs (sig TEXT PRIMARY KEY, wallet TEXT, used_at TIMESTAMPTZ DEFAULT now())`;
 }
 async function pool(s) { return (await s`SELECT * FROM stake_pool WHERE id=1`)[0]; }
 // Parse Postgres NUMERIC (returned as a string) straight to BigInt — going via
@@ -92,6 +94,27 @@ async function estApy(s, p) {
   return null; // the UI shows a live estimate from pool inflow once the bot records it
 }
 
+// Re-sync a wallet's staked shares to what it CURRENTLY owns on-chain. Any staked NFT the
+// wallet no longer holds (sold/transferred) is dropped and its shares removed — closes the
+// "stake then sell and keep claiming" hole. Settles pending at the current accPerShare first
+// so the wallet keeps what it fairly accrued while holding, then stops earning on the lost NFTs.
+async function reconcileOwnership(s, wallet, p) {
+  const owned = new Set((await ownedCatboys(s, wallet)).map((o) => o.asset));
+  const staked = await s`SELECT asset, shares FROM staked_assets WHERE wallet=${wallet}`;
+  const gone = staked.filter((r) => !owned.has(r.asset));
+  if (!gone.length) return;
+  const lost = gone.reduce((n, r) => n + Number(r.shares), 0);
+  const goneAssets = gone.map((r) => r.asset);
+  await s`DELETE FROM staked_assets WHERE wallet=${wallet} AND asset = ANY(${goneAssets})`;
+  const st = (await s`SELECT * FROM stakers WHERE wallet=${wallet}`)[0];
+  if (!st) return;
+  const pend = pendingOf(st, p.acc_per_share);
+  const newShares = Math.max(0, Number(st.shares) - lost);
+  const debt = (bi(newShares) * bi(p.acc_per_share)) / SCALE;
+  await s`UPDATE stakers SET shares=${String(newShares)}, reward_debt=${debt.toString()}, pending=${pend.toString()} WHERE wallet=${wallet}`;
+  await s`UPDATE stake_pool SET total_shares = GREATEST(0, total_shares - ${lost}) WHERE id=1`;
+}
+
 export default async function handler(req, res) {
   res.setHeader("Content-Type", "application/json");
   try {
@@ -105,6 +128,8 @@ export default async function handler(req, res) {
       try { const rr = await rpc("getTokenAccountsByOwner", [POOL_WALLET, { mint: MINT }, { encoding: "jsonParsed" }]); live = 0; for (const v of (rr.value || [])) live += Number(v.account?.data?.parsed?.info?.tokenAmount?.uiAmount || 0); } catch {}
       const base = { pool: { deposited: (live != null ? live : Number(p.deposited)), totalShares }, napShares: NAP, claimDays: CLAIM_DAYS };
       if (!wallet) return res.status(200).json(base);
+      // Wash-trade / chart-farm wallets earn nothing from the pool.
+      if (isBlocked(wallet)) return res.status(200).json({ ...base, wallet, stakeable: [], staked: [], yourShares: 0, accrued: 0, canClaim: false, nextClaimAt: null, blocked: true });
       const owned = await ownedCatboys(s, wallet);
       const stakedRows = await s`SELECT asset FROM staked_assets WHERE wallet=${wallet}`;
       const stakedSet = new Set(stakedRows.map((r) => r.asset));
@@ -131,6 +156,12 @@ export default async function handler(req, res) {
     // reject stale signatures (replay hardening); the page signs a fresh Date.now() each action
     if (Math.abs(Date.now() - Number(ts)) > 15 * 60000) return res.status(401).json({ ok: false, error: "signature_expired" });
     if (!verifySig(messageFor(wallet, ts), wallet, sig)) return res.status(401).json({ ok: false, error: "signature_invalid" });
+    // Single-use signature guard: reject any signature we've already accepted (replay within
+    // the 15-min window). The client signs a fresh Date.now() nonce per action, so each is unique.
+    const freshSig = await s`INSERT INTO used_sigs (sig, wallet) VALUES (${sig}, ${wallet}) ON CONFLICT (sig) DO NOTHING RETURNING sig`;
+    if (!freshSig.length) return res.status(409).json({ ok: false, error: "signature_replayed" });
+    // Locked out: wash-trade / chart-farm wallets can't stake, accrue, or claim.
+    if (isBlocked(wallet)) return res.status(403).json({ ok: false, error: "wallet_not_eligible" });
 
     // settle helper: roll a staker's pending forward at current accPerShare, set new shares
     async function settleAndSet(newShares) {
@@ -146,11 +177,20 @@ export default async function handler(req, res) {
     if (action === "stake" || action === "unstake") {
       const owned = await ownedCatboys(s, wallet);
       const ownedMap = new Map(owned.map((o) => [o.asset, o]));
-      const list = Array.isArray(assets) ? assets.filter((a) => ownedMap.has(a)) : [];
+      // De-dup the caller-supplied list: a wallet can't stake the same asset twice, and
+      // counting duplicates would inflate shares (each asset is one row, PRIMARY KEY = asset).
+      const list = Array.isArray(assets) ? [...new Set(assets.filter((a) => ownedMap.has(a)))] : [];
       if (!list.length) return res.status(400).json({ ok: false, error: "no_valid_assets" });
       let delta = 0;
       if (action === "stake") {
-        for (const a of list) { const o = ownedMap.get(a); await s`INSERT INTO staked_assets (asset, wallet, tier, shares) VALUES (${a}, ${wallet}, ${o.tier}, ${o.shares}) ON CONFLICT (asset) DO UPDATE SET wallet=${wallet}, tier=${o.tier}, shares=${o.shares}`; delta += o.shares; }
+        for (const a of list) {
+          const o = ownedMap.get(a);
+          // Only credit shares when this INSERT actually creates a NEW row. RETURNING (xmax=0)
+          // is true only on insert; a re-stake of an already-staked asset updates in place and
+          // adds ZERO shares — prevents minting unlimited shares from one NFT.
+          const ins = await s`INSERT INTO staked_assets (asset, wallet, tier, shares) VALUES (${a}, ${wallet}, ${o.tier}, ${o.shares}) ON CONFLICT (asset) DO UPDATE SET wallet=${wallet}, tier=${o.tier}, shares=${o.shares} RETURNING (xmax = 0) AS is_new`;
+          if (ins[0]?.is_new) delta += o.shares;
+        }
       } else {
         const rows = await s`SELECT asset, shares FROM staked_assets WHERE wallet=${wallet} AND asset = ANY(${list})`;
         for (const r of rows) { delta -= Number(r.shares); }
@@ -174,6 +214,8 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, action, shares: newShares });
     }
     if (action === "claim") {
+      // Re-verify on-chain ownership before paying out (stake-then-sell guard).
+      await reconcileOwnership(s, wallet, p);
       const st = (await s`SELECT * FROM stakers WHERE wallet=${wallet}`)[0];
       if (!st) return res.status(400).json({ ok: false, error: "nothing_staked" });
       if (st.last_claim_at && (Date.now() - new Date(st.last_claim_at).getTime()) < CLAIM_DAYS * 86400000)

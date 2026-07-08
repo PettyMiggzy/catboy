@@ -58,7 +58,11 @@ function parseAmount(s) {
 
 export async function whaleConfig() {
   const s = sql(); if (!s) return { minTokens: DEFAULT_MIN, nftGate: true };
-  await s`CREATE TABLE IF NOT EXISTS whale_config (id INT PRIMARY KEY DEFAULT 1, min_tokens NUMERIC NOT NULL DEFAULT ${DEFAULT_MIN}, nft_gate BOOLEAN NOT NULL DEFAULT true)`;
+  // NOTE: the default MUST be an inline literal, not ${DEFAULT_MIN}. Postgres forbids bind
+  // parameters in DDL — interpolating here sent 1 param for a statement needing 0, which threw
+  // "bind message supplies 1 parameters, but prepared statement requires 0" and killed every sweep.
+  // DEFAULT_MIN is 10_000_000; keep this literal in sync with it.
+  await s`CREATE TABLE IF NOT EXISTS whale_config (id INT PRIMARY KEY DEFAULT 1, min_tokens NUMERIC NOT NULL DEFAULT 10000000, nft_gate BOOLEAN NOT NULL DEFAULT true)`;
   await s`CREATE TABLE IF NOT EXISTS whale_wallets (wallet TEXT PRIMARY KEY, tid TEXT NOT NULL, verified_at TIMESTAMPTZ DEFAULT now())`;
   await s`CREATE INDEX IF NOT EXISTS whale_wallets_tid ON whale_wallets (tid)`;
   await s`CREATE TABLE IF NOT EXISTS whale_members (tid TEXT PRIMARY KEY, joined_at TIMESTAMPTZ DEFAULT now())`;

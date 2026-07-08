@@ -99,8 +99,9 @@ async function ensureTables() {
     created_at TIMESTAMPTZ DEFAULT now() )`;
 }
 
-// Verify the buyer paid at least the pack price to MINT_WALLET, recently, confirmed.
-async function verifyPayment(txSig, priceSol) {
+// Verify the buyer paid at least the pack price to MINT_WALLET, recently, confirmed,
+// AND that the payment came from `buyer` (their SOL balance dropped in the same tx).
+async function verifyPayment(txSig, priceSol, buyer) {
   if (!txSig || typeof txSig !== "string" || txSig.length < 32) return { ok: false, err: "bad_sig" };
   let tx = null;
   for (let i = 0; i < 8; i++) {
@@ -116,6 +117,11 @@ async function verifyPayment(txSig, priceSol) {
   const i = keys.indexOf(MINT_WALLET);
   const recv = i < 0 ? 0 : Math.max(0, post[i] - pre[i]);
   if (recv < Math.round(priceSol * PRICE_TOLERANCE * 1e9)) return { ok: false, err: "underpaid" };
+  // Bind the payment to `buyer`: their own SOL balance must have dropped by ~price in this same
+  // tx (i.e. buyer actually paid). Blocks front-running a stranger's tx to mint the NFT to yourself.
+  const bidx = buyer ? keys.indexOf(buyer) : -1;
+  const paid = bidx < 0 ? 0 : Math.max(0, pre[bidx] - post[bidx]);
+  if (paid < Math.round(priceSol * PRICE_TOLERANCE * 1e9)) return { ok: false, err: "payer_mismatch" };
   return { ok: true };
 }
 
@@ -195,7 +201,7 @@ export default async function handler(req, res) {
 
     // First time for this sig: verify payment, then claim the sig (unique row).
     if (!order) {
-      const v = await verifyPayment(txSig, P.priceSol);
+      const v = await verifyPayment(txSig, P.priceSol, buyer);
       if (!v.ok) return res.status(402).json({ error: "payment_" + v.err });
       await s`INSERT INTO nft_orders (sig, pack, buyer, collection) VALUES (${txSig},${pack},${buyer},${P.coll}) ON CONFLICT (sig) DO NOTHING`;
       order = (await s`SELECT * FROM nft_orders WHERE sig=${txSig}`)[0];
