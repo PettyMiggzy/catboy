@@ -13,6 +13,9 @@ import { neon } from "@neondatabase/serverless";
 import { PublicKey } from "@solana/web3.js";
 import crypto from "crypto";
 
+// getTransaction is retried up to ~16s while the RPC indexes a just-sent payment.
+export const config = { maxDuration: 60 };
+
 const CONN = (process.env.DATABASE_URL || process.env.POSTGRES_URL || "").trim();
 const SECRET = (process.env.AI_SECRET || "").trim();
 const RPC = (process.env.SOLANA_RPC || "").trim();
@@ -21,7 +24,10 @@ const LAMPORTS = 1e9; // lamports per SOL
 const WSOL = "So11111111111111111111111111111111111111112"; // wrapped-SOL mint (for the SOL/USD quote)
 const LINK_TTL = 20 * 60 * 1000; // 20 min
 const MAX_TX_AGE_S = 30 * 60;    // only credit recent payments
-const PRICE_TOL = 0.85; // accept >=85% of the USD value in SOL (absorbs price drift between quote and pay)
+// accept >=97% of the USD value in SOL — absorbs the small price drift between the GET quote and the
+// POST verify (which happens seconds later). Matches api/mint.js. Looser values (e.g. 0.85) are a
+// standing discount to a hand-built client, since the credited USD is fixed regardless of SOL sent.
+const PRICE_TOL = 0.97;
 const BUNDLES = [{ usdCents: 500 }, { usdCents: 1500 }, { usdCents: 5000 }]; // $5 / $15 / $50
 
 const sql = () => { if (!CONN) throw new Error("db_not_configured"); return neon(CONN); };
@@ -60,7 +66,14 @@ async function solPriceUsd() {
 // Binding to `wallet` stops anyone from claiming someone else's pending payment.
 async function verifyPayment(txSig, needSol, wallet) {
   if (!txSig || typeof txSig !== "string" || txSig.length < 32) return { ok: false, err: "bad_sig" };
-  const tx = await rpc("getTransaction", [txSig, { maxSupportedTransactionVersion: 0, encoding: "jsonParsed", commitment: "confirmed" }]);
+  // The client POSTs within ms of signAndSendTransaction, so the RPC often hasn't indexed the tx at
+  // 'confirmed' yet. Retry a few times before giving up, else honest paid top-ups fail as tx_not_found.
+  let tx = null;
+  for (let i = 0; i < 8; i++) {
+    tx = await rpc("getTransaction", [txSig, { maxSupportedTransactionVersion: 0, encoding: "jsonParsed", commitment: "confirmed" }]);
+    if (tx) break;
+    await new Promise((r) => setTimeout(r, 2000));
+  }
   if (!tx || !tx.meta) return { ok: false, err: "tx_not_found" };
   if (tx.meta.err) return { ok: false, err: "tx_failed" };
   if (tx.blockTime && (Date.now() / 1000 - tx.blockTime) > MAX_TX_AGE_S) return { ok: false, err: "tx_too_old" };

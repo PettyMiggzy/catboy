@@ -56,7 +56,7 @@
     const P = new URLSearchParams(location.search);
     const TID = P.get("tid") || "", T = P.get("t") || "", H = P.get("h") || "";
     const qs = `tid=${encodeURIComponent(TID)}&t=${encodeURIComponent(T)}&h=${encodeURIComponent(H)}`;
-    let CFG = null, sel = null;
+    let CFG = null, sel = null, pending = null; // pending = a sent-but-not-yet-credited payment (retry without re-paying)
     const st = (m, err) => { const s = $("status"); s.textContent = m; s.style.color = err ? "var(--magenta,#ff5a6a)" : "var(--muted,#c9c9d6)"; };
     const getProvider = () => (window.solana && window.solana.isPhantom) ? window.solana : (window.solflare || window.backpack || (window.phantom && window.phantom.solana) || null);
     const fmt$ = (c) => "$" + (c / 100).toFixed(2);
@@ -75,15 +75,47 @@
             <div class="cat">${b.sol ? b.sol + " SOL" : "—"}<small>${CFG.priceUsd ? "@ $" + Number(CFG.priceUsd).toPrecision(4) + "/SOL" : "price loading"}</small></div>
           </div>`).join("");
         $("bundles").querySelectorAll("[data-i]").forEach(el => el.onclick = () => {
+          const b = CFG.bundles[+el.dataset.i];
+          if (!b || !b.sol) { st("SOL price is loading — refresh in a moment and try again.", true); return; }
           $("bundles").querySelectorAll(".cr-b").forEach(x => x.classList.remove("sel"));
-          el.classList.add("sel"); sel = CFG.bundles[+el.dataset.i];
+          el.classList.add("sel"); sel = b; pending = null;
           $("pay").disabled = false; $("pay").textContent = "Pay " + sel.sol + " SOL → +$" + sel.usd + " credits";
         });
       } catch (e) { st("Couldn't load — refresh and try again.", true); }
     }
 
+    // POST the payment to be credited. On success returns true; on failure keeps `pending` so the
+    // user can retry crediting the SAME tx (never pays again).
+    async function credit(txSig, wallet, sigB64) {
+      st("Adding your credits…");
+      const pr = await fetch("/api/credits?" + qs, { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tid: TID, t: T, h: H, wallet, sig: sigB64, usdCents: sel.usdCents, txSig }) });
+      const d = await pr.json();
+      if (d.ok) {
+        pending = null;
+        $("bal").textContent = "Balance: " + fmt$(d.balanceCents);
+        st("✅ " + (d.credited ? ("Added " + sel.usd + " in credits!") : "Already credited.") + " Head back to the group and use /img 🐾");
+        $("pay").textContent = "Done ✓";
+        return true;
+      }
+      pending = { txSig, wallet, sigB64 };
+      st("Paid ✓ but crediting didn't finish (" + (d.error || "unknown") + "). Tap Retry — you won't be charged again.", true);
+      $("pay").textContent = "Retry crediting (no new charge)";
+      return false;
+    }
+
     $("pay").addEventListener("click", async () => {
-      if (!sel || !CFG) return;
+      if (!CFG) return;
+      let done = false;
+      // Retry path: a payment already went out — re-credit the same tx, never pay twice.
+      if (pending) {
+        $("pay").disabled = true;
+        try { if (await credit(pending.txSig, pending.wallet, pending.sigB64)) done = true; }
+        catch (e) { st("Retry failed: " + ((e && e.message) || e), true); }
+        finally { if (!done) $("pay").disabled = false; }
+        return;
+      }
+      if (!sel || !sel.sol) { st("Pick a bundle first.", true); return; }
       const provider = getProvider();
       if (!provider) { st("No Solana wallet found — install Phantom.", true); return; }
       if (!CFG.payTo) { st("Top-ups aren't configured yet.", true); return; }
@@ -117,15 +149,13 @@
         if (simErr) throw new Error("Payment would fail — make sure you hold enough SOL (" + sel.sol + " + gas).");
         const res = await provider.signAndSendTransaction(tx);
         const txSig = res && res.signature ? res.signature : res;
-        st("Paid ✓ — adding your credits…");
-        const pr = await fetch("/api/credits?" + qs, { method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ tid: TID, t: T, h: H, wallet: buyer.toString(), sig: sigB64, usdCents: sel.usdCents, txSig }) });
-        const d = await pr.json();
-        if (d.ok) { $("bal").textContent = "Balance: " + fmt$(d.balanceCents); st("✅ " + (d.credited ? ("Added " + sel.usd + " in credits!") : "Already credited.") + " Head back to the group and use /img 🐾"); }
-        else st("Payment landed but crediting failed (" + (d.error || "unknown") + "). Screenshot your tx + DM us.", true);
+        // Record the sent payment BEFORE crediting, so any crediting failure retries the CREDIT
+        // (same txSig) instead of signing a brand-new payment and double-charging the user.
+        pending = { txSig, wallet: buyer.toString(), sigB64 };
+        if (await credit(txSig, buyer.toString(), sigB64)) done = true;
       } catch (e) {
         st("Failed: " + ((e && e.message) || e), true);
-      } finally { $("pay").disabled = false; }
+      } finally { if (!done) $("pay").disabled = false; }
     });
 
     load();
