@@ -177,10 +177,15 @@
       $("availGrid").innerHTML = avail.length ? avail.map(c => card(c, selAvail)).join("") : `<p style="color:#9a9ab0;">No un-staked Catboys in this wallet.</p>`;
       wire();
     }
+    // Escape on-chain metadata (name/tier come from NFT metadata) before injecting as HTML, and
+    // only allow safe image URL schemes — defense-in-depth against a malicious collection member.
+    const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
+    const safeImg = (u) => (/^(https?:|ipfs:|data:image\/)/i.test(String(u || "")) ? esc(u) : "");
     function card(c, sel) {
-      return `<div class="stk-card${sel.has(c.asset) ? " sel" : ""}" data-a="${c.asset}">
-        ${c.image ? `<img src="${c.image}" alt="${c.name}" loading="lazy"/>` : `<div style="aspect-ratio:1;background:#1a1a28;"></div>`}
-        <div class="cb"><b>${c.name}</b><span>${c.tier} · ${c.shares}× nap</span></div></div>`;
+      const img = safeImg(c.image);
+      return `<div class="stk-card${sel.has(c.asset) ? " sel" : ""}" data-a="${esc(c.asset)}">
+        ${img ? `<img src="${img}" alt="${esc(c.name)}" loading="lazy"/>` : `<div style="aspect-ratio:1;background:#1a1a28;"></div>`}
+        <div class="cb"><b>${esc(c.name)}</b><span>${esc(c.tier)} · ${esc(c.shares)}× nap</span></div></div>`;
     }
     function wire() {
       $("stakedGrid").querySelectorAll("[data-a]").forEach(el => el.onclick = () => { toggle(selStaked, el.dataset.a); el.classList.toggle("sel"); $("unstakeBtn").hidden = !selStaked.size; });

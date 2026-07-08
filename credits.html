@@ -112,6 +112,14 @@
         tx.add(spl.createAssociatedTokenAccountIdempotentInstruction(buyer, toAta, treasury, mint, prog));
         tx.add(spl.createTransferCheckedInstruction(fromAta, mint, toAta, buyer, amount, dec, [], prog));
         tx.feePayer = buyer;
+        // Pre-sign balance guard — Phantom shows its scary "malicious/blocked" warning when the
+        // wallet can't cover the tx. Check SOL (gas + ATA rent) AND $CATBOY BEFORE signing so
+        // short users get a friendly message instead. This page has no other backstop.
+        const _sol = await conn.getBalance(buyer).catch(() => null);
+        if (_sol != null && _sol < 3000000) throw new Error("You need a little SOL for gas (~0.003). Add some and retry.");
+        const _tb = await conn.getTokenAccountBalance(fromAta).catch(() => null);
+        const _held = _tb && _tb.value ? BigInt(_tb.value.amount) : 0n;
+        if (_held < amount) throw new Error("Not enough $CATBOY — you hold " + (Number(_held) / 10 ** dec).toLocaleString() + ", need " + Number(sel.catboy).toLocaleString() + ".");
         tx.recentBlockhash = (await conn.getLatestBlockhash()).blockhash;
         let simErr = null;
         try { const sim = await conn.simulateTransaction(tx); simErr = sim && sim.value && sim.value.err; } catch (_) {}

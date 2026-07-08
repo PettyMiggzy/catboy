@@ -105,6 +105,7 @@
       // BEFORE building/signing so underfunded users get a friendly message and never
       // reach a failing signature Phantom would flag.
       const wallet = new web3.PublicKey(from); // connected wallet: same for fromPubkey + feePayer
+      paidFrom = wallet.toBase58(); // bind the payment to this wallet server-side (anti front-run)
       const need = Math.round(CFG.feeSol * 1e9) + 6000000; // fee + ~0.006 SOL for network fee/priority
       let bal = null; try { bal = await conn.getBalance(wallet); } catch (_) {}
       if (bal != null && bal < need) throw new Error("Not enough SOL — you have " + (bal / 1e9).toFixed(3) + ", need about " + (need / 1e9).toFixed(3) + " (" + CFG.feeSol + " + fees). Top up and retry.");
@@ -150,11 +151,11 @@
       return false; // not confirmed in time — let the server be the source of truth
     }
 
-    async function generate(prompt, txSig) {
+    async function generate(prompt, txSig, payer) {
       let lastErr = "generation failed";
       for (let attempt = 0; attempt < 4; attempt++) {
         const r = await fetch("/api/pfp", { method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ prompt, txSig }) });
+          body: JSON.stringify({ prompt, txSig, payer }) });
         const d = await r.json().catch(() => ({}));
         if (r.ok && d.image) return d;
         lastErr = (d && d.error) || ("http_" + r.status);
@@ -166,6 +167,7 @@
     }
 
     let paidSig = null; // keep a successful payment so a retry never charges twice
+    let paidFrom = null; // wallet that paid — sent to the server to bind the payment
     $("pfpGo").addEventListener("click", async () => {
       const prompt = $("pfpPrompt").value.trim();
       if (!prompt) { st("Describe your PFP first.", true); return; }
@@ -179,7 +181,7 @@
         }
         st("Paid ✓ — generating your PFP with the top model (this takes ~10–20s)…");
         $("pfpCanvas").classList.add("loading");
-        const d = await generate(prompt, txSig);
+        const d = await generate(prompt, txSig, paidFrom);
         const url = "data:image/png;base64," + d.image;
         $("pfpCanvas").innerHTML = '<img src="' + url + '" alt="Your PFP">';
         const dl = $("pfpDownload"); dl.href = url; dl.hidden = false;

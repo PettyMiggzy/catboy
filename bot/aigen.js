@@ -62,9 +62,17 @@ const CATBOY_TAIL =
   ". consistent character design, vibrant cyan magenta and gold palette, cinematic dramatic " +
   "lighting, ultra detailed, safe for work, no text no words no watermark.";
 
-// Prompt moderation — reject before spending a credit. Keep it broad/simple.
-const BLOCK = /\b(nsfw|nude|naked|nudes|porn|sex|sexual|hentai|rape|underage|loli|shota|cp|child|kids?\s+(nude|sex)|gore|behead|corpse|nazi|hitler|swastika|isis|terror|bomb\s+making|kill\s+(yourself|myself)|suicide)\b/i;
-const looksBad = (p) => BLOCK.test(p);
+// Prompt moderation — reject before spending a credit. Defense-in-depth alongside the
+// provider's safe_mode + the SFW tail prompt (this regex is not a guarantee).
+// RAW: word-boundary list (catches normal usage; short/collision-prone terms live here only).
+const BLOCK_RAW = /\b(nsfw|nude|naked|nudes|porn|sex|sexual|hentai|rape|raped|underage|loli|shota|cp|child|kids?|minor|boob|breast|nipple|genital|penis|vagina|cum|gore|behead|corpse|nazi|hitler|swastika|isis|terror|bomb\s*making|kill\s+(yourself|myself)|suicide)\b/i;
+// NORM: distinctive terms (low false-positive as substrings) checked against the DE-OBFUSCATED
+// prompt so "n u d e" / "n-u-d-e" / "nak3d" / "pr0n" / "h3ntai" can't slip past the boundaries.
+const BLOCK_NORM = /(nsfw|nude|naked|porn|pron|hentai|underage|loli|shota|sexual|genital|penis|vagina|nipple|molest|beastial|suicide|behead|swastika|childporn)/i;
+const normalize = (p) => String(p || "").toLowerCase()
+  .replace(/[048135@$]/g, (c) => ({ "0": "o", "4": "a", "8": "b", "1": "i", "3": "e", "5": "s", "@": "a", "$": "s" }[c] || c))
+  .replace(/[^a-z]+/g, "");
+const looksBad = (p) => BLOCK_RAW.test(String(p)) || BLOCK_NORM.test(normalize(p));
 
 const cooldowns = new Map(); // tid -> last ms
 let _lowBalPinged = 0;
@@ -236,16 +244,23 @@ export async function aiCommand(cmd, arg, m, ctx) {
   const who = m.from?.username ? "@" + m.from.username : (m.from?.first_name || "someone");
   await reply(isVid ? "🎬 Animating your Catboy… (~1–2 min)" : "🎨 Painting your Catboy…");
 
+  // ONLY generation + delivery may trigger a refund. The success-bookkeeping insert is kept
+  // OUT of this try — otherwise a DB blip AFTER the media was already posted would refund a
+  // user who received their paid image (free generation).
+  let msgId;
   try {
     const buf = isVid ? await genVideo(prompt) : await genImage(prompt);
     const caption = `🐾 <b>${esc(who)}</b>: <i>${esc(prompt)}</i>\n— made with $CATBOY AI`;
-    const msgId = await sendMedia(API, chat.id, isVid ? "vid" : "img", buf, caption);
-    await s`INSERT INTO ai_gens (tid, kind, prompt, cost_cents, status, tg_msg_id, chat_id) VALUES (${tid}, ${isVid ? "vid" : "img"}, ${prompt}, ${cost}, 'ok', ${msgId || null}, ${String(chat.id)})`;
+    msgId = await sendMedia(API, chat.id, isVid ? "vid" : "img", buf, caption);
   } catch (e) {
     await refund(s, tid, cost);
-    await s`INSERT INTO ai_gens (tid, kind, prompt, cost_cents, status, chat_id) VALUES (${tid}, ${isVid ? "vid" : "img"}, ${prompt}, ${cost}, 'refunded', ${String(chat.id)})`;
+    try { await s`INSERT INTO ai_gens (tid, kind, prompt, cost_cents, status, chat_id) VALUES (${tid}, ${isVid ? "vid" : "img"}, ${prompt}, ${cost}, 'refunded', ${String(chat.id)})`; } catch {}
     log && log("ai gen fail", e.status || "", e.message, (e.body || "").slice(0, 160));
     if (e.status === 402 || /insufficient|balance|quota/i.test(e.body || "")) await pingLowBalance({ tgSendTo, CHAT_ID: ctx.CHAT_ID }, "provider balance low");
     return reply("😿 That one didn't work — you were <b>not</b> charged. Try again.");
   }
+  // Media delivered + user charged. Record success; a failure here must NOT refund.
+  try {
+    await s`INSERT INTO ai_gens (tid, kind, prompt, cost_cents, status, tg_msg_id, chat_id) VALUES (${tid}, ${isVid ? "vid" : "img"}, ${prompt}, ${cost}, 'ok', ${msgId || null}, ${String(chat.id)})`;
+  } catch (e) { log && log("ai gens record fail (image already delivered, user charged):", e.message); }
 }

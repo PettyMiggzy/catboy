@@ -65,7 +65,12 @@ async function config() {
 
 // The bot signs `${tid}.${t}` with WHALE_SECRET so nobody can verify for a tid they don't control.
 const hmac = (data) => crypto.createHmac("sha256", SECRET).update(data).digest("hex");
-const linkOk = (tid, t, h) => SECRET && h && h === hmac(`${tid}.${t}`) && (Date.now() - Number(t)) < LINK_TTL && Number(t) <= Date.now() + 60000;
+// Constant-time compare so the HMAC check can't be probed via timing (matches credits.js).
+const hmacEq = (a, b) => {
+  if (!a || !b || a.length !== b.length) return false;
+  try { return crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b)); } catch { return false; }
+};
+const linkOk = (tid, t, h) => SECRET && h && hmacEq(h, hmac(`${tid}.${t}`)) && (Date.now() - Number(t)) < LINK_TTL && Number(t) <= Date.now() + 60000;
 
 // The exact human-readable string the wallet signs.
 const messageFor = (tid, t) =>

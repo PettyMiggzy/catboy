@@ -103,8 +103,8 @@ async function rpc(method, params = []) {
   return j.result;
 }
 
-// verify txSig paid at least the fee to our wallet, recently, confirmed
-async function verifyPayment(txSig) {
+// verify txSig paid at least the fee to our wallet, recently, confirmed, and FROM `payer`
+async function verifyPayment(txSig, payer) {
   if (!txSig || typeof txSig !== "string" || txSig.length < 32) return "bad_sig";
   if (usedSigs.has(txSig)) return "already_used";
   // The client waits for 'confirmed' before posting; getTransaction defaults to
@@ -129,6 +129,11 @@ async function verifyPayment(txSig) {
   // so a legit payer is never rejected and we never lose money on a sale.
   const minLamports = Math.round(feeSol * 0.85 * 1e9);
   if (total < minLamports) return "underpaid";
+  // Bind to the payer: their SOL balance must have dropped by ~fee in this same tx, so an
+  // attacker can't front-run a stranger's payment to get a free generation on their dime.
+  const pidx = payer ? keys.indexOf(payer) : -1;
+  const paid = pidx < 0 ? 0 : Math.max(0, pre[pidx] - post[pidx]);
+  if (paid < minLamports) return "payer_mismatch";
   // Consume the signature exactly once (durable) before we generate anything.
   if (!(await claimSig(txSig))) return "already_used";
   return "ok";
@@ -184,7 +189,8 @@ export default async function handler(req, res) {
     if (!prompt) return res.status(400).json({ error: "empty_prompt" });
     if (BANNED.test(prompt)) return res.status(400).json({ error: "prompt_not_allowed" });
 
-    const v = await verifyPayment(txSig);
+    const payer = (b.payer || "").toString().trim();
+    const v = await verifyPayment(txSig, payer);
     if (v !== "ok") return res.status(402).json({ error: "payment_" + v });
 
     // Anchor the Catboy identity, then apply the user's prompt as customization.

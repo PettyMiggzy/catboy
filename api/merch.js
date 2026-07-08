@@ -70,25 +70,22 @@ async function rpc(method, params = []) {
   return j.result;
 }
 
-// Confirm the tx moved >= `needTokens` of $CATBOY into the treasury's token account.
-async function verifyPayment(txSig, needTokens) {
+// Confirm the tx moved >= `needTokens` of $CATBOY into the treasury's token account AND that
+// those tokens came out of `payer`'s account (binds the payment — and thus the holder discount —
+// to the wallet that actually paid, so nobody can claim a stranger's discount or front-run a payment).
+async function verifyPayment(txSig, needTokens, payer) {
   if (!txSig || typeof txSig !== "string" || txSig.length < 32) return { ok: false, err: "bad_sig" };
   const tx = await rpc("getTransaction", [txSig, { maxSupportedTransactionVersion: 0, encoding: "jsonParsed", commitment: "confirmed" }]);
   if (!tx || !tx.meta) return { ok: false, err: "tx_not_found" };
   if (tx.meta.err) return { ok: false, err: "tx_failed" };
   const pre = tx.meta.preTokenBalances || [];
   const post = tx.meta.postTokenBalances || [];
-  const key = (b) => `${b.owner}:${b.mint}`;
-  const preMap = new Map(pre.map((b) => [key(b), Number(b.uiTokenAmount.amount)]));
-  let delta = 0;
-  for (const b of post) {
-    if (b.owner === TREASURY && b.mint === MINT) {
-      const before = preMap.get(key(b)) || 0;
-      delta += Number(b.uiTokenAmount.amount) - before;
-    }
-  }
-  const needRaw = BigInt(Math.round(needTokens)) * (10n ** BigInt(DECIMALS));
-  if (BigInt(Math.round(delta)) < needRaw) return { ok: false, err: "underpaid" };
+  const sumFor = (arr, owner) => arr.filter((x) => x.owner === owner && x.mint === MINT).reduce((n, x) => n + Number(x.uiTokenAmount.amount), 0);
+  const needRaw = Number(BigInt(Math.round(needTokens)) * (10n ** BigInt(DECIMALS)));
+  const treasuryDelta = sumFor(post, TREASURY) - sumFor(pre, TREASURY);
+  if (treasuryDelta < needRaw) return { ok: false, err: "underpaid" };
+  const payerDrop = payer ? (sumFor(pre, payer) - sumFor(post, payer)) : 0;
+  if (payerDrop < needRaw) return { ok: false, err: "payer_mismatch" };
   return { ok: true };
 }
 
@@ -129,23 +126,33 @@ export default async function handler(req, res) {
     const q = Math.max(1, Math.min(20, parseInt(qty, 10) || 1));
     if (!ready) return res.status(503).json({ ok: false, error: "store_not_configured" });
 
-    // one payment can't be reused for multiple orders
+    // A durable payment-dedup store is REQUIRED — without it a single payment could be reused
+    // across many orders. No DB configured = don't take orders.
     const s = sql();
-    if (s) {
-      await s`CREATE TABLE IF NOT EXISTS merch_orders (sig TEXT PRIMARY KEY, product TEXT, buyer TEXT, printful_id TEXT, created_at TIMESTAMPTZ DEFAULT now())`;
-      const dup = await s`SELECT sig FROM merch_orders WHERE sig=${txSig}`;
-      if (dup.length) return res.status(409).json({ ok: false, error: "payment_already_used" });
-    }
+    if (!s) return res.status(503).json({ ok: false, error: "store_not_configured" });
+    await s`CREATE TABLE IF NOT EXISTS merch_orders (sig TEXT PRIMARY KEY, product TEXT, buyer TEXT, printful_id TEXT, created_at TIMESTAMPTZ DEFAULT now())`;
 
-    // Holder discount — verified from the payer's on-chain NFTs (authoritative).
+    // Holder discount — from `buyer`, which the payment is bound to below (payer must == buyer).
     const disc = await holderPct(buyer);
     const need = Math.ceil(p.price * q * (1 - disc.pct / 100));
-    const pay = await verifyPayment(txSig, need);
+    const pay = await verifyPayment(txSig, need, buyer);
     if (!pay.ok) return res.status(402).json({ ok: false, error: pay.err });
 
+    // Atomically claim the payment signature BEFORE ordering — a duplicate or concurrent request
+    // gets no row and is rejected, so one payment can never produce two orders.
+    const claim = await s`INSERT INTO merch_orders (sig, product, buyer) VALUES (${txSig}, ${productId}, ${buyer || ""}) ON CONFLICT (sig) DO NOTHING RETURNING sig`;
+    if (!claim.length) return res.status(409).json({ ok: false, error: "payment_already_used" });
+
     const designUrl = /^https?:/.test(p.design) ? p.design : `${SITE}/${p.design}`;
-    const orderId = await printfulOrder({ variantId, qty: q, designUrl, ship });
-    if (s) await s`INSERT INTO merch_orders (sig, product, buyer, printful_id) VALUES (${txSig}, ${productId}, ${buyer || ""}, ${String(orderId)}) ON CONFLICT (sig) DO NOTHING`;
+    let orderId;
+    try {
+      orderId = await printfulOrder({ variantId, qty: q, designUrl, ship });
+    } catch (e) {
+      // Printful failed — release the claim so the buyer can retry with the same payment.
+      await s`DELETE FROM merch_orders WHERE sig=${txSig}`;
+      return res.status(502).json({ ok: false, error: (e && e.message) || "printful_failed" });
+    }
+    await s`UPDATE merch_orders SET printful_id=${String(orderId)} WHERE sig=${txSig}`;
     return res.status(200).json({ ok: true, orderId });
   } catch (e) {
     return res.status(500).json({ ok: false, error: String((e && e.message) || e) });
