@@ -47,7 +47,10 @@ async function rpc(method, params = []) {
 }
 
 async function ensureTables(s) {
-  await s`CREATE TABLE IF NOT EXISTS whale_config (id INT PRIMARY KEY DEFAULT 1, min_tokens NUMERIC NOT NULL DEFAULT ${DEFAULT_MIN}, nft_gate BOOLEAN NOT NULL DEFAULT true)`;
+  // DEFAULT must be an inline literal — Postgres forbids bind params in DDL, so ${DEFAULT_MIN}
+  // sent 1 param for a 0-param statement and threw "bind message supplies 1 parameters, but
+  // prepared statement requires 0", breaking whale verification. Keep literal in sync w/ DEFAULT_MIN.
+  await s`CREATE TABLE IF NOT EXISTS whale_config (id INT PRIMARY KEY DEFAULT 1, min_tokens NUMERIC NOT NULL DEFAULT 10000000, nft_gate BOOLEAN NOT NULL DEFAULT true)`;
   // one row per (verified) wallet — a person can bind several; wallet is unique so it can't be shared across accounts
   await s`CREATE TABLE IF NOT EXISTS whale_wallets (wallet TEXT PRIMARY KEY, tid TEXT NOT NULL, verified_at TIMESTAMPTZ DEFAULT now())`;
   await s`CREATE INDEX IF NOT EXISTS whale_wallets_tid ON whale_wallets (tid)`;
