@@ -362,13 +362,33 @@ setDraw(0);
 const flying=[];
 const stuck=[];
 function fireArrow(dir,power){
-  const a=makeArrow();
+  const a=makeArrow(); a.scale.setScalar(1.15);
   const start=new THREE.Vector3(); nockArrow.getWorldPosition(start);
   a.position.copy(start); a.quaternion.copy(cam.quaternion);
-  const speed=36+power*36;
-  flying.push({mesh:a,vel:dir.clone().multiplyScalar(speed),done:false,lastZ:start.z,prevX:start.x,prevY:start.y});
+  const speed=28+power*30;            // slower → the arrow is clearly seen leaving
+  // bright tracer trail so the shot is unmistakable
+  const MAXT=26;
+  const tg=new THREE.BufferGeometry(); tg.setAttribute('position',new THREE.BufferAttribute(new Float32Array(MAXT*3),3));
+  tg.setDrawRange(0,0);
+  const trail=new THREE.Line(tg,new THREE.LineBasicMaterial({color:0xd6ff5a,transparent:true,opacity:.85}));
+  trail.frustumCulled=false; scene.add(trail);
+  flying.push({mesh:a,vel:dir.clone().multiplyScalar(speed),done:false,lastZ:start.z,prevX:start.x,prevY:start.y,
+    trail,tpos:[],MAXT});
   scene.add(a);
+  // the nocked arrow visibly leaves the bow, then a fresh one is drawn (unless we're out)
+  nockArrow.visible=false;
+  setTimeout(()=>{ if(S.arrows>0 && S.mode==='play') nockArrow.visible=true; },340);
 }
+function pushTrail(f){
+  f.tpos.push(f.mesh.position.x,f.mesh.position.y,f.mesh.position.z);
+  if(f.tpos.length>f.MAXT*3) f.tpos.splice(0,3);
+  const arr=f.trail.geometry.attributes.position.array;
+  for(let i=0;i<f.tpos.length;i++) arr[i]=f.tpos[i];
+  f.trail.geometry.setDrawRange(0,f.tpos.length/3);
+  f.trail.geometry.attributes.position.needsUpdate=true;
+}
+function killTrail(f){ if(!f.trail)return; const t=f.trail; let o=.85;
+  const iv=setInterval(()=>{ o-=.12; t.material.opacity=Math.max(o,0); if(o<=0){clearInterval(iv);scene.remove(t);} },40); }
 
 /* ============================ WIND ============================ */
 const WIND=new THREE.Vector3(); let windStrength=0;
@@ -399,7 +419,8 @@ applyAim();
 
 function resetRound(){
   S.score=0;S.arrows=3;S.combo=0;S.power=0;S.aimYaw=0;S.aimPitch=0;
-  flying.forEach(f=>scene.remove(f.mesh));flying.length=0;
+  nockArrow.visible=true;
+  flying.forEach(f=>{scene.remove(f.mesh); if(f.trail)scene.remove(f.trail);});flying.length=0;
   stuck.forEach(m=>scene.remove(m));stuck.length=0;
   applyAim();placeTarget();rollWind();setDraw(0);bow.position.set(0,0,0);renderHUD();
 }
@@ -445,14 +466,18 @@ function release(){
   S.drawing=false;$('#power').classList.remove('on');$('#powerFill').style.height='0%';
   if(ptrId!==null){try{stage.releasePointerCapture(ptrId);}catch(_){}}
   ptrId=null;
-  const power=S.power;S.power=0;setDraw(0);bow.position.set(0,0,0);
-  if(power<0.12)return;
+  const power=Math.max(S.power,0.4);   // every release fires — a quick tap still shoots
+  S.power=0;setDraw(0);bow.position.set(0,0,0);
+  if(S.arrows<=0)return;               // out of arrows, ignore
   const dir=new THREE.Vector3(0,0,-1).applyQuaternion(cam.quaternion).normalize();
   fireArrow(dir,power);
   S.arrows--;renderHUD();
 }
+// listen on window too — some mobile browsers drop pointerup on the canvas after capture
 stage.addEventListener('pointerup',e=>{if(e.pointerId===ptrId)release();});
+addEventListener('pointerup',e=>{if(e.pointerId===ptrId)release();});
 stage.addEventListener('pointercancel',e=>{if(e.pointerId===ptrId)release();});
+addEventListener('pointercancel',e=>{if(e.pointerId===ptrId)release();});
 
 /* ============================ HIT TEST ============================ */
 function scoreHit(f){
@@ -491,16 +516,17 @@ function tick(now){
     f.vel.x+=WIND.x*dt*0.9; f.vel.z+=WIND.z*dt*0.9;
     f.mesh.position.addScaledVector(f.vel,dt);
     f.mesh.lookAt(f.mesh.position.clone().add(f.vel));
+    pushTrail(f);
     // crossed target plane?
     if(f.lastZ>targetPos.z && f.mesh.position.z<=targetPos.z){
       const t=(f.lastZ-targetPos.z)/((f.lastZ-f.mesh.position.z)||1e-6);
       f.mesh.position.x=lerp(f.prevX,f.mesh.position.x,t);
       f.mesh.position.y=lerp(f.prevY,f.mesh.position.y,t);
       f.mesh.position.z=targetPos.z;
-      scoreHit(f); continue;
+      scoreHit(f); killTrail(f); continue;
     }
-    if(f.mesh.position.y<0.03){ f.mesh.position.y=0.03; f.done=true; stuck.push(f.mesh); S.combo=0; popup('MISS'); renderHUD(); maybeEnd(); continue; }
-    if(f.mesh.position.z<-130||Math.abs(f.mesh.position.x)>95){ f.done=true; scene.remove(f.mesh); maybeEnd(); }
+    if(f.mesh.position.y<0.03){ f.mesh.position.y=0.03; f.done=true; stuck.push(f.mesh); S.combo=0; popup('MISS'); renderHUD(); killTrail(f); maybeEnd(); continue; }
+    if(f.mesh.position.z<-130||Math.abs(f.mesh.position.x)>95){ f.done=true; scene.remove(f.mesh); killTrail(f); maybeEnd(); }
   }
   renderer.render(scene,cam);
   requestAnimationFrame(tick);
