@@ -44,10 +44,15 @@
   #wind .wneedle{position:absolute;top:50%;left:50%;width:5px;height:5px;border-radius:50%;background:var(--neon);
     box-shadow:0 0 8px var(--neon);transform:translate(-50%,-50%);transition:left .35s cubic-bezier(.3,1.4,.5,1),background .3s,box-shadow .3s}
 
-  #arrows{position:absolute;left:14px;bottom:calc(env(safe-area-inset-bottom) + 16px);display:flex;gap:7px}
-  #arrows .a{width:8px;height:34px;border-radius:4px;background:linear-gradient(#e9ffd0,#8fd23a);
-    box-shadow:0 2px 6px rgba(0,0,0,.4);opacity:.95;transition:opacity .2s,transform .2s}
-  #arrows .a.spent{opacity:.16;transform:scaleY(.5)}
+  #arrows{position:absolute;left:14px;bottom:calc(env(safe-area-inset-bottom) + 16px);display:flex;gap:5px;align-items:center}
+  #arrows .life{font-size:22px;line-height:1;filter:drop-shadow(0 2px 3px rgba(0,0,0,.5));transition:opacity .25s,transform .25s,filter .25s}
+  #arrows .life.lost{opacity:.22;transform:scale(.8);filter:grayscale(1) drop-shadow(0 2px 3px rgba(0,0,0,.5))}
+  #dist{position:absolute;left:14px;bottom:calc(env(safe-area-inset-bottom) + 46px);
+    font:var(--mono);font-size:12px;color:var(--muted);background:var(--panel);border:1px solid var(--stroke);
+    padding:4px 10px;border-radius:999px}
+  #mute{position:absolute;left:14px;top:calc(env(safe-area-inset-top) + 74px);pointer-events:auto;cursor:pointer;
+    width:38px;height:38px;border-radius:11px;border:1px solid var(--stroke);background:var(--panel);
+    font-size:17px;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(8px)}
 
   #power{position:absolute;right:16px;bottom:calc(env(safe-area-inset-bottom) + 16px);width:14px;height:150px;
     border-radius:8px;background:rgba(0,0,0,.4);border:1px solid var(--stroke);overflow:hidden;opacity:0;transition:opacity .18s}
@@ -139,6 +144,8 @@
     <div class="wbar"><div class="wneedle" id="windNeedle"></div></div>
   </div>
   <div id="arrows"></div>
+  <div id="dist">—</div>
+  <button id="mute" type="button" aria-label="Mute">🔊</button>
   <div id="power"><div class="fill" id="powerFill"></div></div>
   <div id="hint">Hold to draw · drag to aim · release to fire</div>
   <div id="stag" aria-hidden="true">
@@ -156,7 +163,7 @@
 <div class="screen hide" id="start">
   <div class="sub">First-Person Archery</div>
   <h1>STAG <span>ARCHERY</span></h1>
-  <p>Draw the bow, read the wind, sink the bullseye. Three arrows a round — chase the golden 10 and stack streaks.</p>
+  <p>Draw the bow, read the wind, sink the bullseye. Every hit pushes the target back — 3 misses and your run is over. Chase the golden 10 and stack streaks.</p>
   <button class="btn" id="startBtn">Shoot</button>
   <div class="lb" id="lbStart"><h3>Top Archers</h3><div id="lbStartRows"></div></div>
 </div>
@@ -186,6 +193,58 @@ const lerp=(a,b,t)=>a+(b-a)*t;
 const LBKEY='stag_archery_lb_v1';
 function showFail(msg){ const f=$('#loadFail'); if(f){f.style.display='block';f.textContent=msg;} const t=$('#load .t'); if(t)t.textContent='Could not start'; }
 
+/* ============================ AUDIO (synthesized, no files) ============================ */
+const AK={
+  ctx:null,master:null,muted:false,started:false,
+  init(){ if(this.ctx)return; try{
+    const AC=window.AudioContext||window.webkitAudioContext; if(!AC)return;
+    this.ctx=new AC(); this.master=this.ctx.createGain(); this.master.gain.value=this.muted?0:0.85;
+    this.master.connect(this.ctx.destination);
+  }catch(e){} },
+  resume(){ try{ if(this.ctx&&this.ctx.state==='suspended')this.ctx.resume(); }catch(e){} },
+  now(){ return this.ctx?this.ctx.currentTime:0; },
+  env(node,t,a,d,peak){ const g=this.ctx.createGain(); g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(peak,t+a); g.gain.exponentialRampToValueAtTime(0.0001,t+a+d);
+    node.connect(g); g.connect(this.master); return g; },
+  tone(f0,f1,t,dur,type,peak){ if(!this.ctx)return; const o=this.ctx.createOscillator();
+    o.type=type||'sine'; o.frequency.setValueAtTime(f0,t); if(f1!==f0)o.frequency.exponentialRampToValueAtTime(Math.max(f1,1),t+dur);
+    this.env(o,t,0.008,dur,peak||0.2); o.start(t); o.stop(t+dur+0.05); },
+  noise(dur,t,type,f0,f1,peak){ if(!this.ctx)return; const n=Math.floor(this.ctx.sampleRate*dur);
+    const buf=this.ctx.createBuffer(1,n,this.ctx.sampleRate); const dch=buf.getChannelData(0);
+    for(let i=0;i<n;i++)dch[i]=(Math.random()*2-1)*(1-i/n);
+    const src=this.ctx.createBufferSource(); src.buffer=buf;
+    const bq=this.ctx.createBiquadFilter(); bq.type=type||'lowpass';
+    bq.frequency.setValueAtTime(f0,t); if(f1!==f0)bq.frequency.exponentialRampToValueAtTime(Math.max(f1,20),t+dur);
+    src.connect(bq); this.env(bq,t,0.006,dur,peak||0.15); src.start(t); src.stop(t+dur+0.05); },
+  draw(){ if(!this.ctx)return; const t=this.now(); this.noise(0.5,t,'bandpass',300,650,0.05); this.tone(90,120,t,0.5,'sawtooth',0.03); },
+  release(){ if(!this.ctx)return; const t=this.now();
+    this.tone(240,90,t,0.14,'triangle',0.22);         // string twang
+    this.noise(0.34,t,'highpass',1800,600,0.12); },   // whoosh
+  hit(ring){ if(!this.ctx)return; const t=this.now(); const p=0.6+ring*0.05;
+    this.tone(150*p,80,t,0.12,'sine',0.28); this.noise(0.09,t,'lowpass',900,300,0.14); },
+  bull(combo){ if(!this.ctx)return; const t=this.now(); const m=1+Math.min(combo,8)*0.06;
+    this.tone(880*m,880*m,t,0.5,'sine',0.18); this.tone(1320*m,1320*m,t+0.01,0.45,'sine',0.1);
+    [0,1,2,3].forEach((i)=>this.tone(660*m*(1+i*0.25),0,t+0.04*i,0.12,'square',0.06)); },  // sparkle
+  coins(){ if(!this.ctx)return; const t=this.now();
+    for(let i=0;i<6;i++)this.tone(1200+Math.floor(i*180),0,t+i*0.03,0.1,'square',0.05); },
+  miss(){ if(!this.ctx)return; const t=this.now(); this.tone(360,150,t,0.28,'sawtooth',0.14); this.tone(180,90,t+0.06,0.3,'sine',0.1); },
+  over(){ if(!this.ctx)return; const t=this.now(); [523,392,330,262].forEach((f,i)=>this.tone(f,f,t+i*0.13,0.28,'triangle',0.16)); },
+  ambient(){ if(!this.ctx||this.started)return; this.started=true; try{
+    // soft wind bed
+    const n=Math.floor(this.ctx.sampleRate*2); const buf=this.ctx.createBuffer(1,n,this.ctx.sampleRate);
+    const d=buf.getChannelData(0); for(let i=0;i<n;i++)d[i]=Math.random()*2-1;
+    const src=this.ctx.createBufferSource(); src.buffer=buf; src.loop=true;
+    const bq=this.ctx.createBiquadFilter(); bq.type='lowpass'; bq.frequency.value=380;
+    const g=this.ctx.createGain(); g.gain.value=0.03;
+    const lfo=this.ctx.createOscillator(); lfo.frequency.value=0.1; const lg=this.ctx.createGain(); lg.gain.value=0.015;
+    lfo.connect(lg); lg.connect(g.gain); src.connect(bq); bq.connect(g); g.connect(this.master);
+    src.start(); lfo.start();
+  }catch(e){} },
+  toggle(){ this.muted=!this.muted; if(this.master)this.master.gain.value=this.muted?0:0.85;
+    const b=$('#mute'); if(b)b.textContent=this.muted?'🔇':'🔊'; return this.muted; }
+};
+function buzz(p){ try{ if(navigator.vibrate)navigator.vibrate(p); }catch(e){} }
+
 /* ============================ RENDERER / SCENE ============================ */
 let renderer,scene,cam;
 try{
@@ -213,10 +272,28 @@ cam.position.copy(EYE);
   const g=new THREE.SphereGeometry(220,32,16);
   const m=new THREE.ShaderMaterial({
     side:THREE.BackSide,depthWrite:false,
-    uniforms:{top:{value:SKY_TOP},bot:{value:SKY_BOT}},
+    uniforms:{top:{value:SKY_TOP},bot:{value:SKY_BOT},sunDir:{value:new THREE.Vector3(-24,42,26).normalize()}},
     vertexShader:`varying vec3 vp;void main(){vp=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
-    fragmentShader:`varying vec3 vp;uniform vec3 top;uniform vec3 bot;
-      void main(){float h=clamp(normalize(vp).y*0.5+0.5,0.,1.);gl_FragColor=vec4(mix(bot,top,pow(h,0.8)),1.);}`
+    fragmentShader:`varying vec3 vp;uniform vec3 top;uniform vec3 bot;uniform vec3 sunDir;
+      float hash(vec2 p){return fract(sin(dot(p,vec2(41.3,289.1)))*43758.5453);}
+      float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);
+        return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);}
+      void main(){
+        vec3 d=normalize(vp);
+        float h=clamp(d.y*0.5+0.5,0.,1.);
+        vec3 col=mix(bot,top,pow(h,0.8));
+        // soft clouds banded near the mid-sky
+        float band=smoothstep(0.02,0.28,d.y)*smoothstep(0.62,0.30,d.y);
+        vec2 uv=vec2(atan(d.z,d.x)*1.6, d.y*3.0);
+        float cl=noise(uv*2.0)*0.55+noise(uv*4.3)*0.3+noise(uv*8.0)*0.15;
+        cl=smoothstep(0.55,0.9,cl)*band;
+        col=mix(col,vec3(1.0),cl*0.7);
+        // sun disc + glow
+        float s=max(dot(d,normalize(sunDir)),0.0);
+        col+=vec3(1.0,0.95,0.8)*pow(s,220.0)*1.4;          // disc
+        col+=vec3(1.0,0.92,0.72)*pow(s,7.0)*0.28;           // halo
+        gl_FragColor=vec4(col,1.);
+      }`
   });
   scene.add(new THREE.Mesh(g,m));
 }
@@ -331,11 +408,22 @@ const target=new THREE.Group();
 }
 scene.add(target);
 const targetPos=new THREE.Vector3(0,0,-34);
+const sway={base:0,amp:0,freq:0,phase:0};
 function placeTarget(){
-  const dist=25+Math.random()*13, side=(Math.random()*2-1)*7;
-  targetPos.set(side,0,-dist);
+  const lvl=S.hits||0;
+  const dist=Math.min(24+lvl*1.7,58)+Math.random()*4;   // farther (=smaller) as your run climbs
+  const spread=Math.min(6+lvl*0.4,13);
+  sway.base=(Math.random()*2-1)*spread;
+  sway.amp=lvl>=5?Math.min((lvl-4)*0.28,2.4):0;          // starts drifting after 5 hits
+  sway.freq=0.5+lvl*0.02; sway.phase=Math.random()*6.28;
+  targetPos.set(sway.base,0,-dist);
   target.position.copy(targetPos);
   target.lookAt(cam.position.x,1.35,cam.position.z);
+}
+function animateTarget(gt){
+  if(sway.amp<=0)return;
+  targetPos.x=sway.base+Math.sin(gt*sway.freq+sway.phase)*sway.amp;
+  target.position.x=targetPos.x;
 }
 
 /* ============================ BOW VIEW-MODEL ============================ */
@@ -394,6 +482,7 @@ setDraw(0);
 /* ============================ FLYING ARROWS ============================ */
 const flying=[];
 const stuck=[];
+function stickArrow(m){ stuck.push(m); setTimeout(()=>{ const i=stuck.indexOf(m); if(i>=0){scene.remove(m);stuck.splice(i,1);} },1100); }
 function fireArrow(dir,power){
   const a=makeArrow(); a.scale.setScalar(1.15);
   const start=new THREE.Vector3(); nockArrow.getWorldPosition(start);
@@ -408,9 +497,9 @@ function fireArrow(dir,power){
   flying.push({mesh:a,vel:dir.clone().multiplyScalar(speed),done:false,lastZ:start.z,prevX:start.x,prevY:start.y,
     trail,tpos:[],MAXT});
   scene.add(a);
-  // the nocked arrow visibly leaves the bow, then a fresh one is drawn (unless we're out)
+  // the nocked arrow visibly leaves the bow, then a fresh one is drawn
   nockArrow.visible=false;
-  setTimeout(()=>{ if(S.arrows>0 && S.mode==='play') nockArrow.visible=true; },340);
+  setTimeout(()=>{ if(S.mode==='play') nockArrow.visible=true; },340);
 }
 function pushTrail(f){
   f.tpos.push(f.mesh.position.x,f.mesh.position.y,f.mesh.position.z);
@@ -422,6 +511,39 @@ function pushTrail(f){
 }
 function killTrail(f){ if(!f.trail)return; const t=f.trail; let o=.85;
   const iv=setInterval(()=>{ o-=.12; t.material.opacity=Math.max(o,0); if(o<=0){clearInterval(iv);scene.remove(t);} },40); }
+
+/* ============================ GOLD COINS ("steal from the rich") ============================ */
+const coins=[];
+const coinGeo=new THREE.CylinderGeometry(0.11,0.11,0.03,14);
+const coinMat=new THREE.MeshStandardMaterial({color:0xffcf4a,roughness:.25,metalness:.95,emissive:0x3a2a00,emissiveIntensity:.4});
+function spawnCoins(pos){
+  for(let i=0;i<12;i++){
+    const c=new THREE.Mesh(coinGeo,coinMat); c.castShadow=true;
+    c.position.copy(pos);
+    const ang=Math.random()*Math.PI*2, sp=2+Math.random()*3.5;
+    c.rotation.set(Math.random()*3,Math.random()*3,Math.random()*3);
+    coins.push({mesh:c,vel:new THREE.Vector3(Math.cos(ang)*sp,4+Math.random()*4,Math.sin(ang)*sp*0.5+3),
+      spin:new THREE.Vector3(Math.random()*12-6,Math.random()*12-6,Math.random()*12-6),life:2.6});
+    scene.add(c);
+  }
+}
+const _camAt=new THREE.Vector3();
+function updateCoins(dt){
+  for(let i=coins.length-1;i>=0;i--){
+    const c=coins[i];
+    // loot flies home to the shooter — "give to the poor"
+    _camAt.copy(cam.position).sub(c.mesh.position);
+    const d=_camAt.length(); _camAt.normalize();
+    c.life-=dt;
+    const pull=c.life<2.35?15:0;          // burst outward first (~0.25s), then home in
+    c.vel.y-=6*dt;                         // light gravity
+    c.vel.addScaledVector(_camAt, pull*dt);
+    c.vel.clampLength(0,13);
+    c.mesh.position.addScaledVector(c.vel,dt);
+    c.mesh.rotation.x+=c.spin.x*dt; c.mesh.rotation.y+=c.spin.y*dt; c.mesh.rotation.z+=c.spin.z*dt;
+    if(d<1.6 || c.life<=0){ scene.remove(c.mesh); coins.splice(i,1); }
+  }
+}
 
 /* ============================ AIM TRAJECTORY (dotted green arc) ============================ */
 function dotTex(){
@@ -445,7 +567,7 @@ aimRing.renderOrder=1000; aimRing.visible=false; scene.add(aimRing);
 
 const _mz=new THREE.Vector3(), _dir=new THREE.Vector3();
 function updateTrajectory(){
-  if(!S.drawing || S.arrows<=0){ trajDots.visible=false; aimRing.visible=false; return; }
+  if(!S.drawing || S.mode!=='play'){ trajDots.visible=false; aimRing.visible=false; return; }
   // mirror the exact shot the release will fire
   nockArrow.getWorldPosition(_mz);
   _dir.set(0,0,-1).applyQuaternion(cam.quaternion).normalize();
@@ -509,24 +631,28 @@ function ringScore(nr){
 }
 
 /* ============================ STATE ============================ */
-const S={mode:'menu',score:0,arrows:3,combo:0,drawing:false,power:0,aimYaw:0,aimPitch:0};
+const S={mode:'menu',score:0,lives:3,hits:0,combo:0,drawing:false,power:0,aimYaw:0,aimPitch:0};
 const BASE_PITCH=0.02;
+let recoil=0, camFov=62, gameT=0;
 function applyAim(){ cam.rotation.order='YXZ'; cam.rotation.y=S.aimYaw; cam.rotation.x=BASE_PITCH+S.aimPitch; }
 applyAim();
 
 function resetRound(){
-  S.score=0;S.arrows=3;S.combo=0;S.power=0;S.aimYaw=0;S.aimPitch=0;
+  S.score=0;S.lives=3;S.hits=0;S.combo=0;S.power=0;S.aimYaw=0;S.aimPitch=0;
+  recoil=0;camFov=62;cam.fov=62;cam.updateProjectionMatrix();
   nockArrow.visible=true;
   flying.forEach(f=>{scene.remove(f.mesh); if(f.trail)scene.remove(f.trail);});flying.length=0;
   stuck.forEach(m=>scene.remove(m));stuck.length=0;
+  coins.forEach(c=>scene.remove(c.mesh));coins.length=0;
   applyAim();placeTarget();rollWind();setDraw(0);bow.position.set(0,0,0);renderHUD();
 }
 function renderHUD(){
   $('#score').querySelector('.big').textContent=S.score;
   const ac=$('#arrows');ac.innerHTML='';
-  for(let i=0;i<3;i++){const d=document.createElement('div');d.className='a'+(i>=S.arrows?' spent':'');ac.appendChild(d);}
+  for(let i=0;i<3;i++){const d=document.createElement('div');d.className='life'+(i>=S.lives?' lost':'');d.textContent='🎯';ac.appendChild(d);}
   const cb=$('#combo');
   if(S.combo>=2){cb.style.display='';cb.querySelector('b').textContent='x'+S.combo;}else cb.style.display='none';
+  const dl=$('#dist'); if(dl)dl.textContent=Math.round(-targetPos.z)+'m';
 }
 function popup(text,gold){
   const v=targetPos.clone();v.y=1.35;v.project(cam);
@@ -546,9 +672,11 @@ let ptrId=null,lastX=0,lastY=0,drawStart=0;
 const stage=renderer.domElement;
 stage.addEventListener('pointerdown',e=>{
   if(S.mode!=='play'||ptrId!==null)return;
+  if(flying.some(f=>!f.done))return;           // one arrow at a time — wait for it to land
   ptrId=e.pointerId;lastX=e.clientX;lastY=e.clientY;
   S.drawing=true;drawStart=performance.now();
   $('#power').classList.add('on');$('#hint').style.opacity=0;
+  AK.resume(); AK.draw();
   try{stage.setPointerCapture(e.pointerId);}catch(_){}
 });
 stage.addEventListener('pointermove',e=>{
@@ -566,10 +694,10 @@ function release(){
   const power=Math.max(S.power,0.4);   // every release fires — a quick tap still shoots
   S.power=0;setDraw(0);bow.position.set(0,0,0);
   trajDots.visible=false;aimRing.visible=false;
-  if(S.arrows<=0)return;               // out of arrows, ignore
+  if(S.mode!=='play')return;
   const dir=new THREE.Vector3(0,0,-1).applyQuaternion(cam.quaternion).normalize();
   fireArrow(dir,power);
-  S.arrows--;renderHUD();
+  AK.release(); recoil=0.05+power*0.05; bow.position.z=0.05;  // kick
 }
 // listen on window too — some mobile browsers drop pointerup on the canvas after capture
 stage.addEventListener('pointerup',e=>{if(e.pointerId===ptrId)release();});
@@ -584,22 +712,27 @@ function scoreHit(f){
   const sc=ringScore(nr);
   f.done=true;
   f.mesh.position.set(targetPos.x+dx,1.35+dy,targetPos.z+0.03);
-  stuck.push(f.mesh);
+  stickArrow(f.mesh);
   if(sc){
     let pts=sc.pts;
     if(sc.gold){S.combo++; if(S.combo>=2)pts+=S.combo;} else S.combo=0;
-    S.score+=pts; popup(sc.label+(sc.gold&&S.combo>=2?(' +'+S.combo):''),sc.gold);
-    if(sc.gold)flashGold();
-    placeTarget();
-  } else { S.combo=0; popup('MISS'); stagLaugh(); }
-  renderHUD(); maybeEnd();
+    S.score+=pts; S.hits++; popup(sc.label+(sc.gold&&S.combo>=2?(' +'+S.combo):''),sc.gold);
+    if(sc.gold){ flashGold(); spawnCoins(new THREE.Vector3(targetPos.x,1.35,targetPos.z)); AK.bull(S.combo); AK.coins(); buzz([18,30,18]); }
+    else { AK.hit(sc.pts); buzz(22); }
+    renderHUD(); placeTarget();
+  } else { S.combo=0; popup('MISS'); stagLaugh(); AK.miss(); loseLife(); }
+  renderHUD();
 }
-function maybeEnd(){ if(S.arrows<=0 && flying.every(f=>f.done)) setTimeout(()=>{ if(S.mode==='play')endRound(); },700); }
+function loseLife(){
+  buzz(140);
+  S.lives--; renderHUD();
+  if(S.lives<=0){ setTimeout(()=>{ if(S.mode==='play')endRound(); },800); }
+}
 
 /* ============================ LOOP ============================ */
 let last=performance.now();
 function tick(now){
-  const dt=Math.min((now-last)/1000,0.05); last=now;
+  const dt=Math.min((now-last)/1000,0.05); last=now; gameT+=dt;
   if(S.drawing){
     S.power=clamp((now-drawStart)/1150,0,1);
     $('#powerFill').style.height=(S.power*100)+'%';
@@ -607,6 +740,15 @@ function tick(now){
     if(S.power>0.85){bow.position.set((Math.random()-.5)*0.004,(Math.random()-.5)*0.004,0);}
     else bow.position.set(0,0,0);
   }
+  // aim-down zoom: view narrows as you draw, eases back on release
+  const wantFov=S.drawing?(62-S.power*17):62;
+  camFov=lerp(camFov,wantFov,0.16); cam.fov=camFov; cam.updateProjectionMatrix();
+  // recoil kick decays; camera pitch = aim + recoil
+  recoil*=0.80; if(recoil<0.0004)recoil=0;
+  cam.rotation.order='YXZ'; cam.rotation.y=S.aimYaw; cam.rotation.x=BASE_PITCH+S.aimPitch+recoil;
+  if(!S.drawing) bow.position.z=lerp(bow.position.z,0,0.2);
+  if(S.mode==='play') animateTarget(gameT);
+  updateCoins(dt);
   updateTrajectory();
   for(const f of flying){
     if(f.done)continue;
@@ -624,8 +766,8 @@ function tick(now){
       f.mesh.position.z=targetPos.z;
       scoreHit(f); killTrail(f); continue;
     }
-    if(f.mesh.position.y<0.03){ f.mesh.position.y=0.03; f.done=true; stuck.push(f.mesh); S.combo=0; popup('MISS'); stagLaugh(); renderHUD(); killTrail(f); maybeEnd(); continue; }
-    if(f.mesh.position.z<-130||Math.abs(f.mesh.position.x)>95){ f.done=true; scene.remove(f.mesh); killTrail(f); maybeEnd(); }
+    if(f.mesh.position.y<0.03){ f.mesh.position.y=0.03; f.done=true; stickArrow(f.mesh); S.combo=0; popup('MISS'); stagLaugh(); AK.miss(); killTrail(f); loseLife(); continue; }
+    if(f.mesh.position.z<-130||Math.abs(f.mesh.position.x)>95){ f.done=true; scene.remove(f.mesh); killTrail(f); }
   }
   renderer.render(scene,cam);
   requestAnimationFrame(tick);
@@ -633,9 +775,11 @@ function tick(now){
 
 /* ============================ FLOW ============================ */
 function startGame(){ S.mode='play'; $('#start').classList.add('hide'); $('#over').classList.add('hide');
+  AK.init(); AK.resume(); AK.ambient();
   resetRound(); $('#hint').style.opacity=1; setTimeout(()=>{$('#hint').style.opacity=0;},4200); }
 function endRound(){
-  S.mode='over'; $('#finalScore').textContent=S.score;
+  S.mode='over'; $('#finalScore').textContent=S.score; AK.over();
+  nockArrow.visible=true; trajDots.visible=false; aimRing.visible=false;
   const lb=loadLB(); const low=lb.length<10?0:lb[lb.length-1].s;
   const qualifies=S.score>0 && (lb.length<10 || S.score>low);
   $('#nameWrap').style.display=qualifies?'flex':'none';
@@ -665,6 +809,7 @@ function submitScore(name){
 /* ============================ WIRING ============================ */
 $('#startBtn').onclick=startGame;
 $('#againBtn').onclick=startGame;
+$('#mute').onclick=(e)=>{ e.stopPropagation(); AK.init(); AK.toggle(); };
 $('#saveBtn').onclick=()=>submitScore($('#nameIn').value);
 $('#nameIn').addEventListener('keydown',e=>{if(e.key==='Enter')submitScore($('#nameIn').value);});
 addEventListener('resize',()=>{cam.aspect=innerWidth/innerHeight;cam.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
