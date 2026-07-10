@@ -64,6 +64,18 @@ const LINKS = {
   tg: process.env.STAG_TG || "https://t.me/StagWifHood",
   chart: "https://dexscreener.com/robinhood/" + STAG_TOKEN,
 };
+// /raid — post-content generator. Wraps the user's content with random hashtags +
+// a random link so every posted raid looks different (dodges X spam detection).
+const HASHTAG_SETS = (process.env.STAG_HASHTAGS ||
+  "#StagWifHood #RobinhoodChain #memecoin;#STAG #RobinhoodChain #crypto;#StagWifHood #memecoins #100x;#STAG #Robinhood #altcoin #gems")
+  .split(";").map((s) => s.trim()).filter(Boolean);
+const RAID_LINES = [
+  "The hooded stag is coming for the whole timeline. 🏹🦌",
+  "$STAG doesn't miss. Antlers up. 🦌",
+  "Robin Hood of Robinhood Chain. Steal the pump, feed the holders. 🏹",
+  "Early is an understatement. $STAGWIFHOOD 🦌💚",
+  "One bow. One target. The moon. 🏹🌙",
+];
 
 const TG = (m) => `https://api.telegram.org/bot${TOKEN}/${m}`;
 export const config = { maxDuration: 60 };
@@ -361,6 +373,7 @@ export default async function handler(req, res) {
         "🧮 `/convert 1000000` — $STAG ↔ USD\n" +
         "⛽ `/gas` — Robinhood Chain gas\n" +
         "🏆 `/leaderboard` — top creators\n" +
+        "🚨 `/raid <your text>` — ready-to-post raid content\n" +
         "📜 `/ca` · 🔗 `/links`");
       return res.status(200).json({ ok: true });
     }
@@ -432,6 +445,18 @@ export default async function handler(req, res) {
       const medals = ["🥇", "🥈", "🥉"];
       const list = rows.map((r, i) => `${medals[i] || `${i + 1}.`} ${r.uname} — *${r.n}*`).join("\n");
       await say(chatId, replyTo, `🏆 *$STAG top creators*\n\n${list}`);
+      return res.status(200).json({ ok: true });
+    }
+
+    // ---------- RAID: generate ready-to-post content ----------
+    if (cmd === "/raid") {
+      const content = arg.trim().slice(0, 220) || RAID_LINES[Math.floor(Math.random() * RAID_LINES.length)];
+      const tags = HASHTAG_SETS[Math.floor(Math.random() * HASHTAG_SETS.length)];
+      const linkPool = [LINKS.site, LINKS.chart, LINKS.x];
+      const link = Math.random() < 0.7 ? linkPool[Math.floor(Math.random() * linkPool.length)] : ""; // random link, if any
+      const post = `${content}\n\n$STAGWIFHOOD ${tags}${link ? `\n${link}` : ""}`;
+      await say(chatId, replyTo,
+        "🏹 *Raid post ready — copy & drop on X:*\n\n```\n" + post + "\n```\n_Run /raid again for a fresh variation._");
       return res.status(200).json({ ok: true });
     }
 
