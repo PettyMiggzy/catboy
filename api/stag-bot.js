@@ -145,8 +145,12 @@ async function ensure(s) {
   await s`CREATE TABLE IF NOT EXISTS stag_free (tid TEXT PRIMARY KEY, used INT NOT NULL DEFAULT 0)`;
   await s`CREATE TABLE IF NOT EXISTS stag_log (id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY, tid TEXT, kind TEXT, credits INT, created_at TIMESTAMPTZ DEFAULT now())`;
   await s`CREATE TABLE IF NOT EXISTS stag_claims (txhash TEXT PRIMARY KEY, tid TEXT, credits INT, created_at TIMESTAMPTZ DEFAULT now())`;
+  // A purchase is bound to the buyer by a server-assigned EXACT $STAG amount (the odd
+  // whole-token tail is their secret) so nobody can front-run/steal a stranger's tx.
+  await s`CREATE TABLE IF NOT EXISTS stag_buy_req (tid TEXT PRIMARY KEY, expected NUMERIC NOT NULL, credits INT NOT NULL, created_at TIMESTAMPTZ DEFAULT now())`;
   await s`CREATE TABLE IF NOT EXISTS stag_verified (tid TEXT PRIMARY KEY, wallet TEXT, at TIMESTAMPTZ DEFAULT now())`;
   await s`CREATE TABLE IF NOT EXISTS stag_verify_req (tid TEXT PRIMARY KEY, wei TEXT, created_at TIMESTAMPTZ DEFAULT now())`;
+  await s`CREATE TABLE IF NOT EXISTS stag_verify_used (txhash TEXT PRIMARY KEY, tid TEXT, at TIMESTAMPTZ DEFAULT now())`;
   await s`CREATE TABLE IF NOT EXISTS stag_cool (tid TEXT PRIMARY KEY, last_at TIMESTAMPTZ DEFAULT now())`;
   await s`CREATE TABLE IF NOT EXISTS stag_seen (uid BIGINT PRIMARY KEY, at TIMESTAMPTZ DEFAULT now())`;
 }
@@ -184,18 +188,15 @@ function stagForCredits(credits, priceUsd, holder) {
   const usd = credits * CREDIT_USD * MARKUP * (holder ? HOLDER_DISCOUNT : 1);
   return usd / priceUsd;
 }
-// credits granted for `amountWhole` $STAG received (inverse of above).
-function creditsForStag(amountWhole, priceUsd, holder) {
-  const usd = amountWhole * priceUsd;
-  return Math.floor(usd / (CREDIT_USD * MARKUP * (holder ? HOLDER_DISCOUNT : 1)));
-}
 const fmt = (n) => n >= 1000 ? Math.round(n).toLocaleString("en-US") : n.toPrecision(3);
 
 // ── Handler ──────────────────────────────────────────────────────────────────────
 export default async function handler(req, res) {
   if (req.method !== "POST") { res.setHeader("Allow", "POST"); return res.status(405).end(); }
-  if (HOOK_SECRET && req.headers["x-telegram-bot-api-secret-token"] !== HOOK_SECRET) return res.status(401).end();
-  if (!TOKEN || !CONN) return res.status(200).json({ ok: false, error: "not_configured" });
+  // Fail closed: without the shared secret we cannot prove a request is really from
+  // Telegram, so anyone could spoof updates and drain the pool / spend others' credits.
+  if (!TOKEN || !CONN || !HOOK_SECRET) return res.status(200).json({ ok: false, error: "not_configured" });
+  if (req.headers["x-telegram-bot-api-secret-token"] !== HOOK_SECRET) return res.status(401).end();
 
   const update = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
   const msg = update.message || update.edited_message;
@@ -243,57 +244,78 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
 
-    // ---------- buy ----------
+    // ---------- buy (step 1: list; step 2: lock a unique exact amount) ----------
     if (cmd === "/buy" || cmd === "/topup") {
       if (!TREASURY) { await say(chatId, replyTo, "🛠️ Buying opens shortly — hang tight, ranger."); return res.status(200).json({ ok: true }); }
       const px = await stagPriceUsd();
       if (!px) { await say(chatId, replyTo, "⚠️ Price feed hiccup — try /buy again in a sec."); return res.status(200).json({ ok: true }); }
       const holder = await isVerified(s, tid);
-      let lines = BUNDLES_USD.map((usd) => {
-        const credits = Math.round(usd / (CREDIT_USD * MARKUP)); // retail credits for this $ tier
-        const stag = stagForCredits(credits, px, holder);
-        return `• *$${usd}* → *${credits}* credits (~${Math.floor(credits / PFP_COST)} imgs) = *${fmt(stag)} $STAG*`;
-      }).join("\n");
+      const pickUsd = parseFloat((arg.trim().split(/\s+/)[0] || "").replace(/[^0-9.]/g, ""));
+      if (!BUNDLES_USD.includes(pickUsd)) {
+        const lines = BUNDLES_USD.map((usd) => {
+          const credits = Math.round(usd / (CREDIT_USD * MARKUP));
+          return `• \`/buy ${usd}\` → *${credits}* credits (~${Math.floor(credits / PFP_COST)} imgs)`;
+        }).join("\n");
+        await say(chatId, replyTo,
+          `💳 *Buy $STAG credits*${holder ? " _(holder 50% off)_" : ""}\n\n${lines}\n\n` +
+          `Pick one (e.g. \`/buy ${BUNDLES_USD[0]}\`) and I'll give you an *exact* amount to send.` +
+          (holder ? "" : "\n\nHold 1M+ $STAG? /verify for 50% off."));
+        return res.status(200).json({ ok: true });
+      }
+      const credits = Math.round(pickUsd / (CREDIT_USD * MARKUP));
+      const baseStag = stagForCredits(credits, px, holder);
+      // Unique whole-token tail (server-assigned) = the buyer's secret. Cheap (~cents),
+      // human-typable, and binds this payment to THIS user so nobody can claim it.
+      const nonce = 1000 + Math.floor(Math.random() * 9000);
+      const expected = Math.ceil(baseStag) + nonce;
+      await s`INSERT INTO stag_buy_req (tid, expected, credits, created_at) VALUES (${tid}, ${expected}, ${credits}, now())
+              ON CONFLICT (tid) DO UPDATE SET expected=${expected}, credits=${credits}, created_at=now()`;
       await say(chatId, replyTo,
-        `💳 *Buy $STAG credits*${holder ? " _(holder 50% off applied)_" : ""}\n\n${lines}\n\n` +
-        `1️⃣ Send the $STAG amount to:\n\`${TREASURY}\`\n` +
-        `2️⃣ Then run \`/claim <your-tx-hash>\`\n\n` +
-        `_Priced live • any amount works, you're credited for what you send._` +
-        (holder ? "" : "\n\nHold 1M+ $STAG? /verify for 50% off."));
+        `💳 *$${pickUsd} → ${credits} credits*${holder ? " _(holder 50% off)_" : ""}\n\n` +
+        `1️⃣ Send *EXACTLY* \`${expected.toLocaleString("en-US")}\` $STAG to:\n\`${TREASURY}\`\n` +
+        `   _(that exact amount is your secret — send the precise number)_\n` +
+        `2️⃣ Then run \`/claim <your-tx-hash>\`\n\n_Locks for 30 min. Re-run /buy for a new amount._`);
       return res.status(200).json({ ok: true });
     }
 
-    // ---------- claim a $STAG payment ----------
+    // ---------- claim: bound to THIS user's pending exact amount ----------
     if (cmd === "/claim") {
       if (!TREASURY) { await say(chatId, replyTo, "🛠️ Buying isn't live yet."); return res.status(200).json({ ok: true }); }
-      const txh = arg.trim().split(/\s+/)[0];
-      if (!/^0x[0-9a-fA-F]{64}$/.test(txh)) { await say(chatId, replyTo, "Usage: `/claim 0x<txhash>` (the tx where you sent $STAG)."); return res.status(200).json({ ok: true }); }
-      if ((await s`SELECT 1 FROM stag_claims WHERE txhash=${txh.toLowerCase()}`).length) { await say(chatId, replyTo, "That tx was already claimed. ✅"); return res.status(200).json({ ok: true }); }
+      const txh = (arg.trim().split(/\s+/)[0] || "").toLowerCase();
+      if (!/^0x[0-9a-f]{64}$/.test(txh)) { await say(chatId, replyTo, "Usage: `/claim 0x<txhash>` (the tx where you sent $STAG)."); return res.status(200).json({ ok: true }); }
+      if ((await s`SELECT 1 FROM stag_claims WHERE txhash=${txh}`).length) { await say(chatId, replyTo, "That tx was already claimed. ✅"); return res.status(200).json({ ok: true }); }
+      const reqRow = await s`SELECT expected, credits, created_at FROM stag_buy_req WHERE tid=${tid}`;
+      if (!reqRow.length) { await say(chatId, replyTo, "Run `/buy` first to lock your amount, then send + /claim."); return res.status(200).json({ ok: true }); }
+      if (Date.now() - new Date(reqRow[0].created_at).getTime() > 30 * 60 * 1000) { await say(chatId, replyTo, "That buy expired — run `/buy` again."); return res.status(200).json({ ok: true }); }
       const pay = await verifyStagPayment(txh, TREASURY);
       if (!pay.ok) { await say(chatId, replyTo, `⚠️ Couldn't verify that payment (${pay.err}). Make sure it's confirmed and sent $STAG to the treasury.`); return res.status(200).json({ ok: true }); }
-      const px = await stagPriceUsd();
-      if (!px) { await say(chatId, replyTo, "⚠️ Price feed hiccup — try /claim again shortly (your $STAG is safe)."); return res.status(200).json({ ok: true }); }
-      const holder = await isVerified(s, tid);
-      const credits = creditsForStag(pay.amountWhole, px, holder);
-      if (credits <= 0) { await say(chatId, replyTo, "That payment was below the minimum — send a bit more $STAG."); return res.status(200).json({ ok: true }); }
+      const expected = Number(reqRow[0].expected), credits = Number(reqRow[0].credits);
+      // Must match the unique amount we assigned (small tolerance for any transfer tax).
+      // This binds the on-chain tx to this user — a stranger's tx won't match their nonce.
+      if (pay.amountWhole < expected * 0.9) {
+        await say(chatId, replyTo, `⚠️ That tx sent ${fmt(pay.amountWhole)} $STAG but your locked amount is *${expected.toLocaleString("en-US")}*. Send the exact amount, then /claim.`);
+        return res.status(200).json({ ok: true });
+      }
       // Atomic idempotency: only the INSERT winner credits.
-      const ins = await s`INSERT INTO stag_claims (txhash, tid, credits) VALUES (${txh.toLowerCase()}, ${tid}, ${credits}) ON CONFLICT (txhash) DO NOTHING RETURNING txhash`;
+      const ins = await s`INSERT INTO stag_claims (txhash, tid, credits) VALUES (${txh}, ${tid}, ${credits}) ON CONFLICT (txhash) DO NOTHING RETURNING txhash`;
       if (!ins.length) { await say(chatId, replyTo, "That tx was already claimed. ✅"); return res.status(200).json({ ok: true }); }
       await addCredits(s, tid, credits);
-      await say(chatId, replyTo, `✅ Credited *${credits}* credits (${fmt(pay.amountWhole)} $STAG). Balance: *${await balOf(s, tid)}*.\nGo wild: /pfp or /imagine 🏹`);
+      await s`DELETE FROM stag_buy_req WHERE tid=${tid}`;
+      await say(chatId, replyTo, `✅ Credited *${credits}* credits. Balance: *${await balOf(s, tid)}*.\nGo wild: /pfp or /imagine 🏹`);
       return res.status(200).json({ ok: true });
     }
 
     // ---------- holder verify (no-connect micro-deposit) ----------
     if (cmd === "/verify") {
       if (!VERIFY_WALLET) { await say(chatId, replyTo, "🛠️ Verification opens shortly."); return res.status(200).json({ ok: true }); }
-      const txh = arg.trim().split(/\s+/)[0];
+      const txh = (arg.trim().split(/\s+/)[0] || "").toLowerCase();
       if (!txh) {
-        // Step 1: issue a unique tiny amount as the secret.
-        const rnd = 1000 + Math.floor(Math.random() * 9000);
-        const wei = (10n ** 13n + BigInt(rnd) * 10n ** 9n).toString(); // ~0.00001 ETH + unique tail
+        // Step 1: issue a unique tiny amount as the secret (server-assigned, ~cents,
+        // wide range so two pending requests practically never collide).
+        const rnd = 100000 + Math.floor(Math.random() * 900000);
+        const wei = (10n ** 13n + BigInt(rnd) * 10n ** 7n).toString(); // ~0.00001–0.00002 ETH, unique tail
         await s`INSERT INTO stag_verify_req (tid, wei, created_at) VALUES (${tid}, ${wei}, now()) ON CONFLICT (tid) DO UPDATE SET wei=${wei}, created_at=now()`;
-        const eth = (Number(wei) / 1e18).toFixed(8);
+        const eth = (Number(wei) / 1e18).toFixed(9);
         await say(chatId, replyTo,
           "🔐 *Verify you hold 1M+ $STAG — no wallet connect.*\n\n" +
           `1️⃣ From your wallet, send *exactly* \`${eth}\` ETH to:\n\`${VERIFY_WALLET}\`\n` +
@@ -302,12 +324,17 @@ export default async function handler(req, res) {
           "Just a normal send — no connect, no approval. Unlocks *50% off* all credits. 🦌");
         return res.status(200).json({ ok: true });
       }
-      if (!/^0x[0-9a-fA-F]{64}$/.test(txh)) { await say(chatId, replyTo, "Usage: `/verify` first, then `/verify 0x<txhash>`."); return res.status(200).json({ ok: true }); }
+      if (!/^0x[0-9a-f]{64}$/.test(txh)) { await say(chatId, replyTo, "Usage: `/verify` first, then `/verify 0x<txhash>`."); return res.status(200).json({ ok: true }); }
+      // A given deposit tx can verify at most ONE account.
+      if ((await s`SELECT 1 FROM stag_verify_used WHERE txhash=${txh}`).length) { await say(chatId, replyTo, "That tx was already used to verify. Run `/verify` for a fresh amount."); return res.status(200).json({ ok: true }); }
       const reqRow = await s`SELECT wei, created_at FROM stag_verify_req WHERE tid=${tid}`;
       if (!reqRow.length) { await say(chatId, replyTo, "Run `/verify` first to get your unique amount."); return res.status(200).json({ ok: true }); }
       if (Date.now() - new Date(reqRow[0].created_at).getTime() > 30 * 60 * 1000) { await say(chatId, replyTo, "That verify request expired — run `/verify` again."); return res.status(200).json({ ok: true }); }
       const chk = await verifyMicroDeposit(txh, VERIFY_WALLET, reqRow[0].wei);
       if (!chk.ok) { await say(chatId, replyTo, `⚠️ Couldn't match that (${chk.err}). Send the *exact* amount, then paste the confirmed tx hash.`); return res.status(200).json({ ok: true }); }
+      // Claim this tx as used before granting (atomic; loser bails).
+      const usedIns = await s`INSERT INTO stag_verify_used (txhash, tid) VALUES (${txh}, ${tid}) ON CONFLICT (txhash) DO NOTHING RETURNING txhash`;
+      if (!usedIns.length) { await say(chatId, replyTo, "That tx was already used to verify."); return res.status(200).json({ ok: true }); }
       const held = await stagBalanceWhole(chk.from);
       if (held < HOLD_MIN) { await say(chatId, replyTo, `🦌 That wallet holds ${fmt(held)} $STAG — need ${fmt(HOLD_MIN)}+ for the holder perk. Stack more and re-verify.`); return res.status(200).json({ ok: true }); }
       await s`INSERT INTO stag_verified (tid, wallet) VALUES (${tid}, ${chk.from}) ON CONFLICT (tid) DO UPDATE SET wallet=${chk.from}, at=now()`;
@@ -382,6 +409,7 @@ export default async function handler(req, res) {
       // refund whatever funded it
       if (funded === "pool") { await refundPool(s, cost); await s`UPDATE stag_free SET used = GREATEST(0, used - 1) WHERE tid=${tid}`; }
       else { await addCredits(s, tid, cost); }
+      await s`DELETE FROM stag_cool WHERE tid=${tid}`; // failed run shouldn't burn their cooldown
       await say(chatId, replyTo, "⚠️ The forge hiccuped — no credits spent. Try again.");
       return res.status(200).json({ ok: false, error: String((e && e.message) || e) });
     }
