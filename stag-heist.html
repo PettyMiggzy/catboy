@@ -191,6 +191,7 @@ const $=s=>document.querySelector(s);
 const clamp=(v,a,b)=>v<a?a:v>b?b:v;
 const lerp=(a,b,t)=>a+(b-a)*t;
 const LBKEY='stag_archery_lb_v1';
+let ARROW_GLOW=null;   // lazily built in makeArrow(); declared here so it's out of the TDZ when the bow nocks its first arrow
 function showFail(msg){ const f=$('#loadFail'); if(f){f.style.display='block';f.textContent=msg;} const t=$('#load .t'); if(t)t.textContent='Could not start'; }
 
 /* ============================ AUDIO (synthesized, no files) ============================ */
@@ -454,11 +455,99 @@ let bowString,nockArrow,stringMidBase,limbTips;
   bow.rotation.set(0.06,-0.34,0.16);
   bowRig.position.set(-0.30,-0.46,-0.98);
 }
-function makeArrow(){
+
+/* ============================ STAG IDENTITY (you are the stag wif hood) ============================ */
+/* antlers + a green hood brim frame the top of the first-person view */
+const antlerMat=new THREE.MeshStandardMaterial({color:0x8a6038,roughness:.72,metalness:.04});
+const _upv=new THREE.Vector3(0,1,0);
+function segCyl(a,b,r0,r1){                        // tapered cylinder from a→b
+  const d=new THREE.Vector3().subVectors(b,a); const len=d.length()||1e-4;
+  const m=new THREE.Mesh(new THREE.CylinderGeometry(r1,r0,len,6),antlerMat);
+  m.position.copy(a).addScaledVector(d,0.5);
+  m.quaternion.setFromUnitVectors(_upv,d.clone().normalize());
+  return m;
+}
+function makeAntler(side){                         // side: -1 left, +1 right
   const g=new THREE.Group();
-  const shaftM=new THREE.MeshStandardMaterial({color:0xead9b0,roughness:.6});
-  const tipM=new THREE.MeshStandardMaterial({color:0x9aa0a6,roughness:.3,metalness:.8});
-  const featherM=new THREE.MeshStandardMaterial({color:0xb6ff2e,roughness:.8,side:THREE.DoubleSide});
+  const curve=new THREE.CatmullRomCurve3([
+    new THREE.Vector3(0,0,0),new THREE.Vector3(side*0.08,0.20,-0.05),
+    new THREE.Vector3(side*0.21,0.38,-0.11),new THREE.Vector3(side*0.36,0.52,-0.12),
+    new THREE.Vector3(side*0.52,0.60,-0.05)]);
+  // tapered main beam
+  const N=7; let prev=curve.getPoint(0);
+  for(let i=1;i<=N;i++){ const p=curve.getPoint(i/N);
+    g.add(segCyl(prev,p, 0.030*(1-(i-1)/N*0.7), 0.030*(1-i/N*0.7))); prev=p; }
+  // bold tines branching up-and-forward — this is what makes it read as a rack
+  [[0.20,0.26,0.85],[0.40,0.28,0.7],[0.60,0.25,0.55],[0.80,0.20,0.4]].forEach(([t,len,up])=>{
+    const base=curve.getPoint(t);
+    const dir=new THREE.Vector3(side*0.42,up,-0.55).normalize();
+    g.add(segCyl(base, base.clone().addScaledVector(dir,len), 0.017, 0.006));
+  });
+  g.traverse(o=>{if(o.isMesh){o.castShadow=false;o.renderOrder=2;}});
+  return g;
+}
+/* ---- the $STAG himself: a low-poly stag standing in the range ---- */
+function makeStag(hoodCol){
+  const g=new THREE.Group();
+  const furM=new THREE.MeshStandardMaterial({color:0x7a4f2e,roughness:.95});
+  const furL=new THREE.MeshStandardMaterial({color:0xa9825a,roughness:.95});
+  const darkM=new THREE.MeshStandardMaterial({color:0x241610,roughness:.8});
+  // torso
+  const body=new THREE.Mesh(new THREE.CapsuleGeometry(0.42,1.05,5,10),furM);
+  body.rotation.z=Math.PI/2; body.position.set(0,1.35,0); g.add(body);
+  const belly=new THREE.Mesh(new THREE.CapsuleGeometry(0.34,0.9,5,10),furL);
+  belly.rotation.z=Math.PI/2; belly.position.set(0,1.2,0.06); g.add(belly);
+  // neck + head (facing +x)
+  const neck=new THREE.Mesh(new THREE.CylinderGeometry(0.20,0.30,0.85,9),furM);
+  neck.position.set(0.72,1.85,0); neck.rotation.z=-0.7; g.add(neck);
+  const head=new THREE.Mesh(new THREE.BoxGeometry(0.6,0.4,0.4),furM); head.position.set(1.12,2.25,0);
+  head.rotation.z=-0.15; g.add(head);
+  const snout=new THREE.Mesh(new THREE.BoxGeometry(0.42,0.26,0.3),furL); snout.position.set(1.5,2.13,0); g.add(snout);
+  const nose=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.14,0.22),darkM); nose.position.set(1.72,2.1,0); g.add(nose);
+  [[0,0.16],[0,-0.16]].forEach(([_,z])=>{ const e=new THREE.Mesh(new THREE.ConeGeometry(0.11,0.28,5),furL);
+    e.position.set(0.95,2.5,z*1.6); e.rotation.set(0.3*Math.sign(z||1),0,-0.3); g.add(e); });
+  // eyes
+  [[0.16],[-0.16]].forEach(([z])=>{ const ey=new THREE.Mesh(new THREE.SphereGeometry(0.055,8,8),darkM); ey.position.set(1.34,2.3,z); g.add(ey); });
+  // legs
+  [[0.5,0.28],[0.5,-0.28],[-0.5,0.28],[-0.5,-0.28]].forEach(([x,z])=>{
+    const leg=new THREE.Mesh(new THREE.CylinderGeometry(0.085,0.06,1.45,6),furM); leg.position.set(x,0.7,z); g.add(leg);
+    const hoof=new THREE.Mesh(new THREE.CylinderGeometry(0.075,0.09,0.14,6),darkM); hoof.position.set(x,0.07,z); g.add(hoof); });
+  // tail
+  const tail=new THREE.Mesh(new THREE.ConeGeometry(0.12,0.35,6),furL); tail.position.set(-0.75,1.45,0); tail.rotation.z=1.0; g.add(tail);
+  // antlers rising from the head (reuse the rack geometry — reads great at scene distance)
+  const rack=new THREE.Group(); const l=makeAntler(-1), r=makeAntler(1);
+  rack.add(l,r); rack.scale.setScalar(1.5); rack.rotation.set(-0.2,Math.PI/2,0); rack.position.set(1.0,2.5,0); g.add(rack);
+  // "wif hood" — a little Robin-Hood hood over the head/neck
+  if(hoodCol!==null){
+    const hoodM=new THREE.MeshStandardMaterial({color:hoodCol||0x2f7d3a,roughness:.95});
+    const hood=new THREE.Mesh(new THREE.SphereGeometry(0.42,12,10,0,Math.PI*2,0,Math.PI*0.62),hoodM);
+    hood.position.set(0.85,2.15,0); hood.rotation.set(0,0,-1.0); g.add(hood);
+    const point=new THREE.Mesh(new THREE.ConeGeometry(0.12,0.4,7),hoodM); point.position.set(0.5,2.45,0); point.rotation.z=1.4; g.add(point);
+  }
+  g.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}});
+  return g;
+}
+// hero stag standing to the side of the shooting lane, watching
+const heroStag=makeStag(0x2f7d3a);
+heroStag.position.set(-7.5,0,-9); heroStag.rotation.y=1.15; heroStag.scale.setScalar(1.0);
+scene.add(heroStag);
+// a second stag grazing further out for life in the scene
+const stag2=makeStag(null);
+stag2.position.set(12,0,-30); stag2.rotation.y=-1.9; stag2.scale.setScalar(0.9);
+scene.add(stag2);
+function glowTex(){
+  const c=document.createElement('canvas');c.width=c.height=64;const x=c.getContext('2d');
+  const g=x.createRadialGradient(32,32,0,32,32,32);
+  g.addColorStop(0,'rgba(255,255,255,1)');g.addColorStop(.35,'rgba(220,255,150,.85)');g.addColorStop(1,'rgba(180,255,60,0)');
+  x.fillStyle=g;x.beginPath();x.arc(32,32,32,0,7);x.fill();
+  const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;return t;
+}
+function makeArrow(){
+  ARROW_GLOW=ARROW_GLOW||glowTex();
+  const g=new THREE.Group();
+  const shaftM=new THREE.MeshStandardMaterial({color:0xead9b0,roughness:.6,emissive:0x3a5a10,emissiveIntensity:.5});
+  const tipM=new THREE.MeshStandardMaterial({color:0xdfeaa0,roughness:.3,metalness:.6,emissive:0x9fd020,emissiveIntensity:.8});
+  const featherM=new THREE.MeshStandardMaterial({color:0xb6ff2e,roughness:.8,side:THREE.DoubleSide,emissive:0x6be000,emissiveIntensity:.7});
   const shaft=new THREE.Mesh(new THREE.CylinderGeometry(0.012,0.012,0.9,7),shaftM);
   shaft.rotation.x=Math.PI/2;shaft.position.z=-0.45;g.add(shaft);
   const tip=new THREE.Mesh(new THREE.ConeGeometry(0.02,0.07,7),tipM);
@@ -470,7 +559,22 @@ function makeArrow(){
     holder.rotation.z=i*Math.PI*2/3;g.add(holder);
   }
   g.traverse(o=>{if(o.isMesh)o.castShadow=true;});
+  // glow halo (brightens on a streak)
+  const glow=new THREE.Sprite(new THREE.SpriteMaterial({map:ARROW_GLOW,color:0xb6ff2e,transparent:true,
+    opacity:.3,blending:THREE.AdditiveBlending,depthWrite:false,depthTest:false}));
+  glow.scale.set(0.5,0.5,0.5); glow.position.z=-0.5; g.add(glow);
+  g.userData.glow=glow; g.userData.mats=[shaftM,tipM,featherM];
   return g;
+}
+function setArrowGlow(a,combo){
+  const gl=a.userData.glow; if(!gl)return;
+  const streak=combo>=2, gold=combo>=4;
+  const col=gold?0xffcf4a:(streak?0xd6ff5a:0xb6ff2e);
+  gl.material.color.setHex(col);
+  gl.material.opacity=streak?Math.min(0.5+combo*0.07,0.9):0.26;
+  gl.scale.setScalar(streak?(0.55+Math.min(combo,8)*0.05):0.42);
+  const ei=streak?Math.min(1.2+combo*0.25,3):0.6;
+  (a.userData.mats||[]).forEach(m=>{ m.emissiveIntensity=ei; if(gold)m.emissive.setHex(0xffcf4a); });
 }
 function setDraw(pull){ // pull in metres toward camera
   const mid=stringMidBase.clone(); mid.z=0.02+pull;
@@ -485,14 +589,16 @@ const stuck=[];
 function stickArrow(m){ stuck.push(m); setTimeout(()=>{ const i=stuck.indexOf(m); if(i>=0){scene.remove(m);stuck.splice(i,1);} },1100); }
 function fireArrow(dir,power){
   const a=makeArrow(); a.scale.setScalar(1.15);
+  setArrowGlow(a,S.combo);             // the shot carries the current streak's glow
   const start=new THREE.Vector3(); nockArrow.getWorldPosition(start);
   a.position.copy(start); a.quaternion.copy(cam.quaternion);
   const speed=28+power*30;            // slower → the arrow is clearly seen leaving
-  // bright tracer trail so the shot is unmistakable
+  // bright tracer trail so the shot is unmistakable — turns gold on a hot streak
   const MAXT=26;
   const tg=new THREE.BufferGeometry(); tg.setAttribute('position',new THREE.BufferAttribute(new Float32Array(MAXT*3),3));
   tg.setDrawRange(0,0);
-  const trail=new THREE.Line(tg,new THREE.LineBasicMaterial({color:0xd6ff5a,transparent:true,opacity:.85}));
+  const trailCol=S.combo>=4?0xffcf4a:(S.combo>=2?0xd6ff5a:0x9ff23a);
+  const trail=new THREE.Line(tg,new THREE.LineBasicMaterial({color:trailCol,transparent:true,opacity:.9}));
   trail.frustumCulled=false; scene.add(trail);
   flying.push({mesh:a,vel:dir.clone().multiplyScalar(speed),done:false,lastZ:start.z,prevX:start.x,prevY:start.y,
     trail,tpos:[],MAXT});
@@ -653,6 +759,7 @@ function renderHUD(){
   const cb=$('#combo');
   if(S.combo>=2){cb.style.display='';cb.querySelector('b').textContent='x'+S.combo;}else cb.style.display='none';
   const dl=$('#dist'); if(dl)dl.textContent=Math.round(-targetPos.z)+'m';
+  setArrowGlow(nockArrow,S.combo);    // the readied arrow glows brighter as your streak builds
 }
 function popup(text,gold){
   const v=targetPos.clone();v.y=1.35;v.project(cam);
