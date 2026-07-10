@@ -1,4 +1,4 @@
-// Whale-group gate — Telegram side.
+// Whale-group gate - Telegram side.
 //   /whale                 -> DMs the user a personal verify link (opens whale.html)
 //   /setwhale <amount>     -> (admin) set the min $CATBOY threshold  (accepts 10m, 1b, 5000000)
 //   /whalenft on|off       -> (admin) toggle the "or owns a Catboy NFT" gate
@@ -16,7 +16,7 @@ import path from "node:path";
 
 // Load .env from THIS file's directory before reading any env constants below.
 // Must be synchronous and run here: ESM imports evaluate before the importer's
-// body, so if index.js imports us its own loadEnv() hasn't run yet — and when
+// body, so if index.js imports us its own loadEnv() hasn't run yet - and when
 // run standalone (pm2 start whale.js) nobody else loads .env at all. Either way
 // this guarantees WHALE_SECRET / WHALE_CHAT_ID / DATABASE_URL are populated.
 try {
@@ -28,7 +28,7 @@ try {
     if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) v = v.slice(1, -1);
     if (process.env[m[1]] === undefined) process.env[m[1]] = v;
   }
-} catch { /* no .env file — rely on real env vars */ }
+} catch { /* no .env file - rely on real env vars */ }
 
 const CONN = (process.env.DATABASE_URL || process.env.POSTGRES_URL || "").trim();
 const WHALE_CHAT = (process.env.WHALE_CHAT_ID || "").trim();
@@ -38,7 +38,7 @@ const SITE = (process.env.WHALE_SITE || "https://www.catboyonsol.fun").replace(/
 // and still removes sellers within 24h. Override with WHALE_RECHECK_MIN (minutes).
 const RECHECK_MS = Math.max(5, parseInt(process.env.WHALE_RECHECK_MIN || "1440", 10)) * 60000;
 const MINT = (process.env.TOKEN_MINT || "").trim();
-// Collection addresses are public on-chain ids (not secrets) — default to the
+// Collection addresses are public on-chain ids (not secrets) - default to the
 // known Catboy collections so the droplet doesn't need to set them.
 const DEFAULT_COLLECTIONS = ["33kxQv4Jo7u9edC4RipZckwkpRRdxg863b6cw2UGfh6S", "HuLA9RRuG6s994eAiiY4cFhrhghCkCQWcNdm3e3wVD3x", "4N1d9umoscMYiwiqxXnkTbJD9pXLMZiPCw4H7fAUK93x"];
 const _envColls = [process.env.NFT_COLLECTION, process.env.NFT_COLLECTION_GENESIS, process.env.NFT_COLLECTION_PRIDE].map((x) => (x || "").trim()).filter(Boolean);
@@ -59,7 +59,7 @@ function parseAmount(s) {
 export async function whaleConfig() {
   const s = sql(); if (!s) return { minTokens: DEFAULT_MIN, nftGate: true };
   // NOTE: the default MUST be an inline literal, not ${DEFAULT_MIN}. Postgres forbids bind
-  // parameters in DDL — interpolating here sent 1 param for a statement needing 0, which threw
+  // parameters in DDL - interpolating here sent 1 param for a statement needing 0, which threw
   // "bind message supplies 1 parameters, but prepared statement requires 0" and killed every sweep.
   // DEFAULT_MIN is 10_000_000; keep this literal in sync with it.
   await s`CREATE TABLE IF NOT EXISTS whale_config (id INT PRIMARY KEY DEFAULT 1, min_tokens NUMERIC NOT NULL DEFAULT 10000000, nft_gate BOOLEAN NOT NULL DEFAULT true)`;
@@ -98,15 +98,15 @@ export async function whaleCommand(cmd, arg, m, ctx) {
   if (cmd === "/whale" || cmd === "/verify") {
     if (!SECRET || !WHALE_CHAT) return tgSendTo(m.chat.id, "🐋 Whale verification isn't configured yet.");
     const tid = m.from && m.from.id;
-    if (!tid) return tgSendTo(m.chat.id, "Couldn't read your Telegram id — try again.");
+    if (!tid) return tgSendTo(m.chat.id, "Couldn't read your Telegram id - try again.");
     const t = Date.now();
     const link = `${SITE}/whale.html?tid=${tid}&t=${t}&h=${hmac(`${tid}.${t}`)}`;
     const dm = await fetch(`${API}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ chat_id: tid, parse_mode: "HTML",
-        text: "🐋 <b>Whale Verification</b>\nTap below, connect your wallet and sign (free — no transaction). If you qualify, you'll get a one-time invite to the whale group.",
+        text: "🐋 <b>Whale Verification</b>\n<b>No wallet connection.</b> Tap below - you'll just send a tiny unique amount from your wallet (a normal send, no connect, no signing). If you qualify, you'll get a one-time invite to the whale group.",
         reply_markup: { inline_keyboard: [[{ text: "🔓 Verify Wallet", url: link }]] } }) }).then(r => r.json()).catch(() => ({}));
-    if (dm && dm.ok) { if (m.chat.type !== "private") return tgSendTo(m.chat.id, "📩 Sent you a DM — verify there to join the whale group. 🐋"); return; }
-    // couldn't DM (user hasn't started the bot) — point them to open it
+    if (dm && dm.ok) { if (m.chat.type !== "private") return tgSendTo(m.chat.id, "📩 Sent you a DM - verify there to join the whale group. 🐋"); return; }
+    // couldn't DM (user hasn't started the bot) - point them to open it
     const botLink = ctx.botUsername ? `https://t.me/${ctx.botUsername}?start=whale` : link;
     return tgSendTo(m.chat.id, `Start a chat with me first, then send <b>/whale</b> again. 👉 <a href="${botLink}">Open bot</a>`);
   }
@@ -125,7 +125,7 @@ export async function whaleCommand(cmd, arg, m, ctx) {
     if (!on && !off) return tgSendTo(m.chat.id, "Usage: <code>/whalenft on</code> or <code>/whalenft off</code>.");
     const s = sql(); if (!s) return tgSendTo(m.chat.id, "DB not configured.");
     await s`INSERT INTO whale_config (id, nft_gate) VALUES (1, ${on}) ON CONFLICT (id) DO UPDATE SET nft_gate=${on}`;
-    return tgSendTo(m.chat.id, `✅ NFT gate <b>${on ? "ON" : "OFF"}</b> — holders ${on ? "can" : "cannot"} qualify by owning a Catboy NFT.`);
+    return tgSendTo(m.chat.id, `✅ NFT gate <b>${on ? "ON" : "OFF"}</b> - holders ${on ? "can" : "cannot"} qualify by owning a Catboy NFT.`);
   }
   if (cmd === "/whalestatus") {
     const cfg = await whaleConfig();
@@ -134,7 +134,7 @@ export async function whaleCommand(cmd, arg, m, ctx) {
     const wcnt = s ? (await s`SELECT count(*)::int AS n FROM whale_wallets`)[0].n : 0;
     return tgSendTo(m.chat.id,
       `🐋 <b>Whale gate</b>\nThreshold: <b>${fmtN(cfg.minTokens)} $CATBOY</b> (summed across a member's wallets)\nNFT gate: <b>${cfg.nftGate ? "on" : "off"}</b>\n` +
-      `Members: <b>${cnt}</b> · linked wallets: <b>${wcnt}</b>\nGroup set: <b>${WHALE_CHAT ? "yes" : "NO — set WHALE_CHAT_ID"}</b>\n` +
+      `Members: <b>${cnt}</b> · linked wallets: <b>${wcnt}</b>\nGroup set: <b>${WHALE_CHAT ? "yes" : "NO - set WHALE_CHAT_ID"}</b>\n` +
       `Re-check every <b>${RECHECK_MS / 60000}m</b>\n\n<code>/setwhale 10m</code> · <code>/whalenft on|off</code>`);
   }
   return false;
@@ -170,5 +170,5 @@ export function startWhaleEnforcement(ctx) {
   }
   setInterval(sweep, RECHECK_MS);
   setTimeout(sweep, 60000); // first sweep a minute after boot
-  log && log(`whale enforcement ON — re-check every ${RECHECK_MS / 60000}m, group ${WHALE_CHAT}`);
+  log && log(`whale enforcement ON - re-check every ${RECHECK_MS / 60000}m, group ${WHALE_CHAT}`);
 }
