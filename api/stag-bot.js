@@ -195,6 +195,7 @@ async function ensure(s) {
   // whole-token tail is their secret) so nobody can front-run/steal a stranger's tx.
   await s`CREATE TABLE IF NOT EXISTS stag_buy_req (tid TEXT PRIMARY KEY, expected NUMERIC NOT NULL, credits INT NOT NULL, created_at TIMESTAMPTZ DEFAULT now())`;
   await s`CREATE TABLE IF NOT EXISTS stag_verified (tid TEXT PRIMARY KEY, wallet TEXT, at TIMESTAMPTZ DEFAULT now())`;
+  await s`CREATE UNIQUE INDEX IF NOT EXISTS stag_verified_wallet ON stag_verified(wallet)`; // one wallet -> one account (atomic)
   await s`CREATE TABLE IF NOT EXISTS stag_verify_req (tid TEXT PRIMARY KEY, wei TEXT, created_at TIMESTAMPTZ DEFAULT now())`;
   await s`CREATE TABLE IF NOT EXISTS stag_verify_used (txhash TEXT PRIMARY KEY, tid TEXT, at TIMESTAMPTZ DEFAULT now())`;
   await s`CREATE TABLE IF NOT EXISTS stag_cool (tid TEXT PRIMARY KEY, last_at TIMESTAMPTZ DEFAULT now())`;
@@ -646,10 +647,17 @@ export default async function handler(req, res) {
       if (!usedIns.length) { await say(chatId, replyTo, "That tx was already used to verify."); return res.status(200).json({ ok: true }); }
       const held = await stagBalanceWhole(chk.from);
       if (held < HOLD_MIN) { await say(chatId, replyTo, `🦌 That wallet holds ${fmt(held)} $STAG - need ${fmt(HOLD_MIN)}+ for the holder perk. Stack more and re-verify.`); return res.status(200).json({ ok: true }); }
-      // One wallet unlocks the discount for ONE account (no Sybil discount farming).
+      // One wallet unlocks the discount for ONE account. The unique index on wallet makes
+      // this atomic (a concurrent second account's INSERT throws and is caught below); the
+      // pre-check just gives a friendlier message in the common non-racing case.
       const otherOwner = await s`SELECT tid FROM stag_verified WHERE wallet=${chk.from} AND tid<>${tid}`;
       if (otherOwner.length) { await say(chatId, replyTo, "🦌 That wallet is already linked to another account. Use a different holder wallet."); return res.status(200).json({ ok: true }); }
-      await s`INSERT INTO stag_verified (tid, wallet) VALUES (${tid}, ${chk.from}) ON CONFLICT (tid) DO UPDATE SET wallet=${chk.from}, at=now()`;
+      try {
+        await s`INSERT INTO stag_verified (tid, wallet) VALUES (${tid}, ${chk.from}) ON CONFLICT (tid) DO UPDATE SET wallet=${chk.from}, at=now()`;
+      } catch {
+        await say(chatId, replyTo, "🦌 That wallet is already linked to another account. Use a different holder wallet.");
+        return res.status(200).json({ ok: true });
+      }
       await s`DELETE FROM stag_verify_req WHERE tid=${tid}`;
       await say(chatId, replyTo, `✅ *Verified holder!* ${fmt(held)} $STAG. You now get *50% off* all credits. 🏹💚\n/buy to stock up cheap.`);
       return res.status(200).json({ ok: true });
