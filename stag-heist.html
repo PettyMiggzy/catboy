@@ -460,9 +460,9 @@ let bowString,nockArrow,stringMidBase,limbTips;
 /* antlers + a green hood brim frame the top of the first-person view */
 const antlerMat=new THREE.MeshStandardMaterial({color:0x8a6038,roughness:.72,metalness:.04});
 const _upv=new THREE.Vector3(0,1,0);
-function segCyl(a,b,r0,r1){                        // tapered cylinder from a→b
+function segCyl(a,b,r0,r1,mat,seg){                // tapered cylinder from a→b
   const d=new THREE.Vector3().subVectors(b,a); const len=d.length()||1e-4;
-  const m=new THREE.Mesh(new THREE.CylinderGeometry(r1,r0,len,6),antlerMat);
+  const m=new THREE.Mesh(new THREE.CylinderGeometry(r1,r0,len,seg||6),mat||antlerMat);
   m.position.copy(a).addScaledVector(d,0.5);
   m.quaternion.setFromUnitVectors(_upv,d.clone().normalize());
   return m;
@@ -486,50 +486,77 @@ function makeAntler(side){                         // side: -1 left, +1 right
   g.traverse(o=>{if(o.isMesh){o.castShadow=false;o.renderOrder=2;}});
   return g;
 }
-/* ---- the $STAG himself: a low-poly stag standing in the range ---- */
+/* ---- the $STAG himself: a detailed low-poly stag standing in the range ---- */
 function makeStag(hoodCol){
   const g=new THREE.Group();
-  const furM=new THREE.MeshStandardMaterial({color:0x7a4f2e,roughness:.95});
-  const furL=new THREE.MeshStandardMaterial({color:0xa9825a,roughness:.95});
-  const darkM=new THREE.MeshStandardMaterial({color:0x241610,roughness:.8});
-  // torso
-  const body=new THREE.Mesh(new THREE.CapsuleGeometry(0.42,1.05,5,10),furM);
-  body.rotation.z=Math.PI/2; body.position.set(0,1.35,0); g.add(body);
-  const belly=new THREE.Mesh(new THREE.CapsuleGeometry(0.34,0.9,5,10),furL);
-  belly.rotation.z=Math.PI/2; belly.position.set(0,1.2,0.06); g.add(belly);
-  // neck + head (facing +x)
-  const neck=new THREE.Mesh(new THREE.CylinderGeometry(0.20,0.30,0.85,9),furM);
-  neck.position.set(0.72,1.85,0); neck.rotation.z=-0.7; g.add(neck);
-  const head=new THREE.Mesh(new THREE.BoxGeometry(0.6,0.4,0.4),furM); head.position.set(1.12,2.25,0);
-  head.rotation.z=-0.15; g.add(head);
-  const snout=new THREE.Mesh(new THREE.BoxGeometry(0.42,0.26,0.3),furL); snout.position.set(1.5,2.13,0); g.add(snout);
-  const nose=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.14,0.22),darkM); nose.position.set(1.72,2.1,0); g.add(nose);
-  [[0,0.16],[0,-0.16]].forEach(([_,z])=>{ const e=new THREE.Mesh(new THREE.ConeGeometry(0.11,0.28,5),furL);
-    e.position.set(0.95,2.5,z*1.6); e.rotation.set(0.3*Math.sign(z||1),0,-0.3); g.add(e); });
+  const fur =new THREE.MeshStandardMaterial({color:0x6f4a2b,roughness:.95,flatShading:true});
+  const furD=new THREE.MeshStandardMaterial({color:0x54371f,roughness:.95,flatShading:true});
+  const furL=new THREE.MeshStandardMaterial({color:0xcaa079,roughness:.95,flatShading:true});
+  const darkM=new THREE.MeshStandardMaterial({color:0x1b110a,roughness:.7});
+  const eyeM =new THREE.MeshStandardMaterial({color:0x0a0a0a,roughness:.35,metalness:.2});
+
+  // ---- torso: barrel + shoulder & haunch masses (deer silhouette) ----
+  const torso=new THREE.Mesh(new THREE.SphereGeometry(0.6,16,12),fur);
+  torso.scale.set(1.75,0.82,0.72); torso.position.set(0,1.55,0); g.add(torso);
+  const shoulder=new THREE.Mesh(new THREE.SphereGeometry(0.5,14,12),fur);
+  shoulder.scale.set(1.02,1.05,0.98); shoulder.position.set(0.62,1.62,0); g.add(shoulder);
+  const haunch=new THREE.Mesh(new THREE.SphereGeometry(0.54,14,12),fur);
+  haunch.scale.set(1.0,1.12,1.0); haunch.position.set(-0.66,1.6,0); g.add(haunch);
+  const belly=new THREE.Mesh(new THREE.SphereGeometry(0.5,12,10),furL);
+  belly.scale.set(1.55,0.5,0.62); belly.position.set(0,1.28,0); g.add(belly);
+  const rump=new THREE.Mesh(new THREE.SphereGeometry(0.3,10,8),furL);
+  rump.scale.set(0.55,0.9,0.85); rump.position.set(-1.06,1.68,0); g.add(rump);
+
+  // ---- neck + head (faces +x) ----
+  g.add(segCyl(new THREE.Vector3(0.6,1.75,0),new THREE.Vector3(1.18,2.35,0),0.32,0.2,fur,10));
+  const skull=new THREE.Mesh(new THREE.SphereGeometry(0.24,14,12),fur);
+  skull.scale.set(1.15,1.05,0.9); skull.position.set(1.32,2.46,0); g.add(skull);
+  g.add(segCyl(new THREE.Vector3(1.32,2.4,0),new THREE.Vector3(1.86,2.18,0),0.17,0.1,furD,8)); // muzzle
+  const nose=new THREE.Mesh(new THREE.SphereGeometry(0.1,10,8),darkM); nose.scale.set(1,0.8,1); nose.position.set(1.9,2.15,0); g.add(nose);
+  // ears
+  [1,-1].forEach(s=>{
+    const ear=new THREE.Mesh(new THREE.ConeGeometry(0.12,0.36,7),fur);
+    ear.position.set(1.16,2.66,0.2*s); ear.rotation.set(0.55*s,0,-0.5); g.add(ear);
+    const inner=new THREE.Mesh(new THREE.ConeGeometry(0.06,0.24,6),furL);
+    inner.position.set(1.19,2.64,0.22*s); inner.rotation.set(0.55*s,0,-0.5); g.add(inner);
+  });
   // eyes
-  [[0.16],[-0.16]].forEach(([z])=>{ const ey=new THREE.Mesh(new THREE.SphereGeometry(0.055,8,8),darkM); ey.position.set(1.34,2.3,z); g.add(ey); });
-  // legs
-  [[0.5,0.28],[0.5,-0.28],[-0.5,0.28],[-0.5,-0.28]].forEach(([x,z])=>{
-    const leg=new THREE.Mesh(new THREE.CylinderGeometry(0.085,0.06,1.45,6),furM); leg.position.set(x,0.7,z); g.add(leg);
-    const hoof=new THREE.Mesh(new THREE.CylinderGeometry(0.075,0.09,0.14,6),darkM); hoof.position.set(x,0.07,z); g.add(hoof); });
+  [1,-1].forEach(s=>{ const e=new THREE.Mesh(new THREE.SphereGeometry(0.052,10,8),eyeM); e.position.set(1.46,2.48,0.18*s); g.add(e); });
+
+  // ---- jointed legs: hip → knee → hoof (this is what kills the "blob" look) ----
+  function leg(hx,hz,knee,ankle){
+    // hip, knee, ankle are [x,y]; hoof sits at ankle
+    const hip=new THREE.Vector3(hx,1.42,hz), kn=new THREE.Vector3(knee[0],knee[1],hz), an=new THREE.Vector3(ankle[0],ankle[1],hz);
+    g.add(segCyl(hip,kn,0.12,0.07,fur,7));        // upper (thigh)
+    g.add(segCyl(kn,an,0.07,0.045,fur,7));         // lower (shank)
+    const hoof=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.07,0.16,7),darkM);
+    hoof.position.set(an.x,0.08,hz); g.add(hoof);
+  }
+  // front legs: fairly straight; back legs: bent hock
+  leg( 0.6, 0.30,[0.66,0.82],[0.62,0.12]);
+  leg( 0.6,-0.30,[0.66,0.82],[0.62,0.12]);
+  leg(-0.66,0.30,[-0.5,0.9],[-0.72,0.12]);
+  leg(-0.66,-0.30,[-0.5,0.9],[-0.72,0.12]);
   // tail
-  const tail=new THREE.Mesh(new THREE.ConeGeometry(0.12,0.35,6),furL); tail.position.set(-0.75,1.45,0); tail.rotation.z=1.0; g.add(tail);
-  // antlers rising from the head (reuse the rack geometry — reads great at scene distance)
-  const rack=new THREE.Group(); const l=makeAntler(-1), r=makeAntler(1);
-  rack.add(l,r); rack.scale.setScalar(1.5); rack.rotation.set(-0.2,Math.PI/2,0); rack.position.set(1.0,2.5,0); g.add(rack);
-  // "wif hood" — a little Robin-Hood hood over the head/neck
+  const tail=new THREE.Mesh(new THREE.ConeGeometry(0.11,0.36,7),fur); tail.position.set(-1.12,1.5,0); tail.rotation.z=0.9; g.add(tail);
+
+  // ---- antler rack rising from the skull, spread sideways ----
+  [1,-1].forEach(s=>{ const a=makeAntler(s); a.scale.setScalar(1.35);
+    a.position.set(1.24,2.62,0.06*s); a.rotation.set(-0.25,Math.PI/2,0); g.add(a); });
+
+  // ---- "wif hood": a green Robin-Hood hood + point ----
   if(hoodCol!==null){
-    const hoodM=new THREE.MeshStandardMaterial({color:hoodCol||0x2f7d3a,roughness:.95});
-    const hood=new THREE.Mesh(new THREE.SphereGeometry(0.42,12,10,0,Math.PI*2,0,Math.PI*0.62),hoodM);
-    hood.position.set(0.85,2.15,0); hood.rotation.set(0,0,-1.0); g.add(hood);
-    const point=new THREE.Mesh(new THREE.ConeGeometry(0.12,0.4,7),hoodM); point.position.set(0.5,2.45,0); point.rotation.z=1.4; g.add(point);
+    const hoodM=new THREE.MeshStandardMaterial({color:hoodCol||0x2f7d3a,roughness:.95,flatShading:true});
+    const hood=new THREE.Mesh(new THREE.SphereGeometry(0.34,14,12,0,Math.PI*2,0,Math.PI*0.62),hoodM);
+    hood.scale.set(1,1.05,1.1); hood.position.set(0.72,2.12,0); hood.rotation.z=-0.9; g.add(hood);
+    const point=new THREE.Mesh(new THREE.ConeGeometry(0.11,0.42,8),hoodM); point.position.set(0.42,2.32,0); point.rotation.z=1.5; g.add(point);
   }
   g.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}});
   return g;
 }
-// hero stag standing to the side of the shooting lane, watching
+// hero stag standing to the side of the shooting lane, watching (3/4 profile shows the rack)
 const heroStag=makeStag(0x2f7d3a);
-heroStag.position.set(-7.5,0,-9); heroStag.rotation.y=1.15; heroStag.scale.setScalar(1.0);
+heroStag.position.set(-8.5,0,-12); heroStag.rotation.y=0.95; heroStag.scale.setScalar(1.08);
 scene.add(heroStag);
 // a second stag grazing further out for life in the scene
 const stag2=makeStag(null);
