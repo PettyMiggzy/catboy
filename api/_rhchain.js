@@ -20,7 +20,6 @@ export async function rpc(method, params = []) {
   return j.result;
 }
 
-const pad = (addr) => "0x" + "0".repeat(24) + addr.toLowerCase().replace(/^0x/, "");
 const topicAddr = (topic) => "0x" + (topic || "").slice(-40).toLowerCase();
 
 // On-chain $STAG balance (raw bigint of smallest unit).

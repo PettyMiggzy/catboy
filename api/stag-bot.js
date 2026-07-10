@@ -290,10 +290,12 @@ export default async function handler(req, res) {
       const pay = await verifyStagPayment(txh, TREASURY);
       if (!pay.ok) { await say(chatId, replyTo, `⚠️ Couldn't verify that payment (${pay.err}). Make sure it's confirmed and sent $STAG to the treasury.`); return res.status(200).json({ ok: true }); }
       const expected = Number(reqRow[0].expected), credits = Number(reqRow[0].credits);
-      // Must match the unique amount we assigned (small tolerance for any transfer tax).
-      // This binds the on-chain tx to this user — a stranger's tx won't match their nonce.
-      if (pay.amountWhole < expected * 0.9) {
-        await say(chatId, replyTo, `⚠️ That tx sent ${fmt(pay.amountWhole)} $STAG but your locked amount is *${expected.toLocaleString("en-US")}*. Send the exact amount, then /claim.`);
+      // Must match the assigned amount EXACTLY (±1 token for truncation). The unique
+      // odd tail is the whole security mechanism — a loose band would let a same-bundle
+      // buyer claim a stranger's tx, so we do not tolerate a range here. (Assumes $STAG
+      // has no transfer tax; if it does, this binding needs a different design.)
+      if (Math.abs(Math.round(pay.amountWhole) - expected) > 1) {
+        await say(chatId, replyTo, `⚠️ That tx sent ${fmt(pay.amountWhole)} $STAG but your locked amount is *${expected.toLocaleString("en-US")}*. Send the *exact* amount, then /claim.`);
         return res.status(200).json({ ok: true });
       }
       // Atomic idempotency: only the INSERT winner credits.
