@@ -1,4 +1,4 @@
-// $STAGWIFHOOD Telegram bot — AI IMAGE GENERATOR (Vercel webhook).
+// $STAGWIFHOOD Telegram bot - AI IMAGE GENERATOR (Vercel webhook).
 //
 // A real paid image generator for the $STAG community, all in-chat:
 //   /pfp [style]     -> on-character $STAG profile pic (Venice image/edit off the
@@ -17,7 +17,7 @@
 // generation cost (so the 4000-credit free pool ≈ $5). A PFP/image costs 144 credits.
 // Buying credits costs 2× that (markup = profit); verified 1M holders pay half.
 //
-// Required Vercel env (PUBLIC repo — only NAMES here, never values):
+// Required Vercel env (PUBLIC repo - only NAMES here, never values):
 //   STAG_BOT_TOKEN   Telegram token for @STAGZBOT
 //   STAG_VENICE_KEY  Venice *inference* key (NOT the admin key)     [or VENICE_KEY]
 //   DATABASE_URL     Neon Postgres
@@ -42,7 +42,7 @@ const HOOK_SECRET = (process.env.STAG_BOT_SECRET || "").trim();
 const TREASURY = (process.env.STAG_TREASURY || "").trim();
 const VERIFY_WALLET = (process.env.STAG_VERIFY_WALLET || TREASURY).trim();
 
-// Fast edit model (~14s) — pro-edit (~39s) blows Vercel's 60s function limit and
+// Fast edit model (~14s) - pro-edit (~39s) blows Vercel's 60s function limit and
 // never delivers the image. nano-banana-2 still holds identity + the style lock.
 const PFP_MODEL = (process.env.STAG_PFP_MODEL || "nano-banana-2-edit").trim();
 const GEN_MODEL = (process.env.STAG_GEN_MODEL || "nano-banana-2").trim();
@@ -53,7 +53,7 @@ const OWNER_NAME = (process.env.STAG_OWNER_NAME || "King Petty").trim();
 const BOT_USERNAME = (process.env.STAG_BOT_USERNAME || "STAGZBOT").replace(/^@/, "").trim();
 const BUDGET = parseInt(process.env.STAG_PFP_BUDGET || "4000", 10);  // free pool (credits)
 const COOLDOWN = parseInt(process.env.STAG_PFP_COOLDOWN || "45", 10) * 1000;
-const REQ_TTL = 7 * 24 * 3600 * 1000; // buy/verify request validity — long is safe now that
+const REQ_TTL = 7 * 24 * 3600 * 1000; // buy/verify request validity - long is safe now that
                                       // the payment must also be newer than the request (below)
 
 const CREDIT_USD = parseFloat(process.env.STAG_CREDIT_USD || "0.00125"); // cost basis / credit
@@ -67,7 +67,7 @@ const LINKS = {
   tg: process.env.STAG_TG || "https://t.me/StagWifHood",
   chart: "https://dexscreener.com/robinhood/" + STAG_TOKEN,
 };
-// /raid — post-content generator. Wraps the user's content with random hashtags +
+// /raid - post-content generator. Wraps the user's content with random hashtags +
 // a random link so every posted raid looks different (dodges X spam detection).
 const HASHTAG_SETS = (process.env.STAG_HASHTAGS ||
   "#StagWifHood #RobinhoodChain #memecoin;#STAG #RobinhoodChain #crypto;#StagWifHood #memecoins #100x;#STAG #Robinhood #altcoin #gems")
@@ -115,7 +115,7 @@ const POSES = [
   "back-to-back silhouette turn, glancing over the shoulder",
 ];
 const STYLE_LOCK =
-  " CRITICAL: match the reference art style EXACTLY — dark cinematic digital painting," +
+  " CRITICAL: match the reference art style EXACTLY - dark cinematic digital painting," +
   " gritty realistic dark-fantasy, dramatic moody lighting, intense neon-green glow," +
   " cyber-forest vibe, ultra detailed, epic and premium. NOT flat cartoon, NOT clean" +
   " vector. Keep his identity: large antlers, green Robin-Hood hood, glowing green eyes," +
@@ -127,7 +127,7 @@ const SPINUP = [
   "⚡ Spinning the $STAG agent up…",
   "🏹 Nocking the arrow… rendering incoming",
   "🌲 Summoning the stag from the cyber-forest…",
-  "⚙️ Booting the forge — antlers loading…",
+  "⚙️ Booting the forge - antlers loading…",
   "🟢 Agent online. Painting your $STAG…",
   "🔮 Channeling emerald energy…",
   "🦌 Waking the hooded one…",
@@ -153,7 +153,7 @@ async function sendPhoto(chatId, pngBuf, caption, replyTo, parseMode) {
   try { const r = await fetch(TG("sendPhoto"), { method: "POST", body: fd }); return await r.json().catch(() => ({})); }
   catch { return {}; }
 }
-// Decoded once — the embedded $STAG character, reused as the welcome image.
+// Decoded once - the embedded $STAG character, reused as the welcome image.
 let _welcomeBuf = null;
 const welcomeImg = () => (_welcomeBuf ||= Buffer.from(STAG_WELCOME_B64, "base64"));
 
@@ -181,7 +181,7 @@ async function genImage(prompt) {
 }
 
 // ── DB ───────────────────────────────────────────────────────────────────────────
-let _ensured = false; // schema is idempotent — only run the DDL once per warm instance
+let _ensured = false; // schema is idempotent - only run the DDL once per warm instance
 async function ensure(s) {
   if (_ensured) return;
   await s`CREATE TABLE IF NOT EXISTS stag_pool (id INT PRIMARY KEY, used INT NOT NULL DEFAULT 0)`;
@@ -278,7 +278,7 @@ export default async function handler(req, res) {
   const update = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
   const msg = update.message || update.edited_message;
   const text = (msg && msg.text) || "";
-  if (!msg) return res.status(200).json({ ok: true });
+  if (!msg || !msg.from || !msg.from.id || !msg.chat) return res.status(200).json({ ok: true });
   if (!text.trim().startsWith("/")) {
     // Never reveal the underlying AI/model. Answer identity questions (in DMs, or when
     // the bot is @-mentioned) with the on-brand line; else stay silent (no group spam).
@@ -307,19 +307,19 @@ export default async function handler(req, res) {
       if (!seen.length) return res.status(200).json({ ok: true, dup: true });
     }
 
-    // ---------- menu / help (image + commands — pinnable community card) ----------
+    // ---------- menu / help (image + commands - pinnable community card) ----------
     if (cmd === "/start" || cmd === "/help" || cmd === "/menu" || cmd === "/commands") {
       const menu =
-        "🏹 *$STAGWIFHOOD — AI IMAGE GENERATOR*\n" +
+        "🏹 *$STAGWIFHOOD - AI IMAGE GENERATOR*\n" +
         "_Make $STAG art right here in chat._\n\n" +
-        "🦌 `/pfp` — your $STAG profile pic *(1 FREE!)*\n" +
-        "🎨 `/pfp cyber samurai` — add any theme\n" +
-        "🖼️ `/imagine <anything>` — generate *any* image\n\n" +
+        "🦌 `/pfp` - your $STAG profile pic *(1 FREE!)*\n" +
+        "🎨 `/pfp cyber samurai` - add any theme\n" +
+        "🖼️ `/imagine <anything>` - generate *any* image\n\n" +
         "💰 *Want more?* Grab credits:\n" +
-        "💳 `/buy` — pay in $STAG  ·  `/credits` — your balance\n" +
-        "🔐 `/verify` — hold *1M+ $STAG* → *50% OFF*\n\n" +
-        "🆓 *Free tools:* `/price` `/burn` `/holders` `/ca` `/links` — full list: `/tools`\n\n" +
-        "🔓 *No wallet connection — ever.* Just send $STAG, no connect, no signing.\n" +
+        "💳 `/buy` - pay in $STAG  ·  `/credits` - your balance\n" +
+        "🔐 `/verify` - hold *1M+ $STAG* → *50% OFF*\n\n" +
+        "🆓 *Free tools:* `/price` `/burn` `/holders` `/ca` `/links` - full list: `/tools`\n\n" +
+        "🔓 *No wallet connection - ever.* Just send $STAG, no connect, no signing.\n" +
         "_Use me in the group or DM me privately. Antlers up. 💚🦌_";
       // Standalone (no reply) so it's a clean card the community can pin.
       const r = await sendPhoto(chatId, welcomeImg(), menu, null, "Markdown");
@@ -327,16 +327,16 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
 
-    // ---------- about (identity — never reveals the model) ----------
+    // ---------- about (identity - never reveals the model) ----------
     if (cmd === "/about" || cmd === "/whoami") {
-      await say(chatId, replyTo, `🦌 The *$STAGWIFHOOD* generator — built and trained by *${OWNER_NAME}*. 👑\nThat's all you need to know. 🏹`);
+      await say(chatId, replyTo, `🦌 The *$STAGWIFHOOD* generator - built and trained by *${OWNER_NAME}*. 👑\nThat's all you need to know. 🏹`);
       return res.status(200).json({ ok: true });
     }
 
     // ---------- FREE TOOLS: price / market cap ----------
     if (cmd === "/price" || cmd === "/mc" || cmd === "/chart" || cmd === "/stats" || cmd === "/marketcap") {
       const d = await stagStats();
-      if (!d) { await say(chatId, replyTo, "⚠️ Couldn't load $STAG stats right now — try again in a sec."); return res.status(200).json({ ok: true }); }
+      if (!d) { await say(chatId, replyTo, "⚠️ Couldn't load $STAG stats right now - try again in a sec."); return res.status(200).json({ ok: true }); }
       const up = d.change24 >= 0;
       await say(chatId, replyTo,
         `📊 *$STAGWIFHOOD*\n\n` +
@@ -351,12 +351,12 @@ export default async function handler(req, res) {
 
     // ---------- FREE TOOLS: contract + links ----------
     if (cmd === "/ca" || cmd === "/contract") {
-      await say(chatId, replyTo, `📜 *$STAG contract* — Robinhood Chain\n\`${STAG_TOKEN}\`\n\n⚠️ Only ever trust *this* address. Verify before you buy.`);
+      await say(chatId, replyTo, `📜 *$STAG contract* - Robinhood Chain\n\`${STAG_TOKEN}\`\n\n⚠️ Only ever trust *this* address. Verify before you buy.`);
       return res.status(200).json({ ok: true });
     }
     if (cmd === "/links" || cmd === "/socials" || cmd === "/official") {
       await say(chatId, replyTo,
-        `🔗 *$STAGWIFHOOD — official links*\n\n` +
+        `🔗 *$STAGWIFHOOD - official links*\n\n` +
         `🌐 [Website](${LINKS.site})\n🐦 [X / Twitter](${LINKS.x})\n💬 [Telegram](${LINKS.tg})\n📈 [Chart](${LINKS.chart})\n\n📜 CA: \`${STAG_TOKEN}\``);
       return res.status(200).json({ ok: true });
     }
@@ -367,7 +367,7 @@ export default async function handler(req, res) {
         const [burned, supply] = await Promise.all([stagBalanceWhole(DEAD), stagTotalSupplyWhole()]);
         const pct = supply > 0 ? (burned / supply * 100) : 0;
         await say(chatId, replyTo, `🔥 *$STAG BURNED*\n\nTotal burned: *${fmt(burned)}* $STAG\n🔥 *${pct.toFixed(2)}%* of supply gone forever`);
-      } catch { await say(chatId, replyTo, "⚠️ Couldn't read burn data right now — try again."); }
+      } catch { await say(chatId, replyTo, "⚠️ Couldn't read burn data right now - try again."); }
       return res.status(200).json({ ok: true });
     }
 
@@ -375,16 +375,16 @@ export default async function handler(req, res) {
     if (cmd === "/tools" || cmd === "/free") {
       await say(chatId, replyTo,
         "🆓 *$STAG free tools*\n\n" +
-        "📊 `/price` `/mc` — price & market cap\n" +
-        "🔥 `/burn` — total burned\n" +
-        "📈 `/buys` — 24h buys vs sells\n" +
-        "👥 `/holders` — holder count\n" +
-        "🪙 `/supply` — supply & circulating\n" +
-        "👛 `/wallet <addr>` — any wallet's $STAG\n" +
-        "🧮 `/convert 1000000` — $STAG ↔ USD\n" +
-        "⛽ `/gas` — Robinhood Chain gas\n" +
-        "🏆 `/leaderboard` — top creators\n" +
-        "🚨 `/raid <your text>` — ready-to-post raid content\n" +
+        "📊 `/price` `/mc` - price & market cap\n" +
+        "🔥 `/burn` - total burned\n" +
+        "📈 `/buys` - 24h buys vs sells\n" +
+        "👥 `/holders` - holder count\n" +
+        "🪙 `/supply` - supply & circulating\n" +
+        "👛 `/wallet <addr>` - any wallet's $STAG\n" +
+        "🧮 `/convert 1000000` - $STAG ↔ USD\n" +
+        "⛽ `/gas` - Robinhood Chain gas\n" +
+        "🏆 `/leaderboard` - top creators\n" +
+        "🚨 `/raid <your text>` - ready-to-post raid content\n" +
         "📜 `/ca` · 🔗 `/links`");
       return res.status(200).json({ ok: true });
     }
@@ -392,17 +392,17 @@ export default async function handler(req, res) {
     // ---------- FREE TOOLS: 24h buys vs sells ----------
     if (cmd === "/buys" || cmd === "/txns" || cmd === "/volume" || cmd === "/vol") {
       const d = await stagStats();
-      if (!d) { await say(chatId, replyTo, "⚠️ Couldn't load that right now — try again."); return res.status(200).json({ ok: true }); }
+      if (!d) { await say(chatId, replyTo, "⚠️ Couldn't load that right now - try again."); return res.status(200).json({ ok: true }); }
       const tot = d.buys24 + d.sells24;
       const bp = tot ? Math.round(d.buys24 / tot * 100) : 0;
-      await say(chatId, replyTo, `📈 *$STAG — last 24h*\n\n🟢 Buys: *${d.buys24}*\n🔴 Sells: *${d.sells24}*\n📊 ${bp}% buy pressure\n💵 Volume: ${money(d.vol24)}`);
+      await say(chatId, replyTo, `📈 *$STAG - last 24h*\n\n🟢 Buys: *${d.buys24}*\n🔴 Sells: *${d.sells24}*\n📊 ${bp}% buy pressure\n💵 Volume: ${money(d.vol24)}`);
       return res.status(200).json({ ok: true });
     }
 
     // ---------- FREE TOOLS: holders ----------
     if (cmd === "/holders") {
       const n = await holdersCount();
-      await say(chatId, replyTo, n ? `👥 *$STAGWIFHOOD holders*\n\n*${n.toLocaleString("en-US")}* holders and growing 🦌` : "⚠️ Couldn't read holder count right now — try again.");
+      await say(chatId, replyTo, n ? `👥 *$STAGWIFHOOD holders*\n\n*${n.toLocaleString("en-US")}* holders and growing 🦌` : "⚠️ Couldn't read holder count right now - try again.");
       return res.status(200).json({ ok: true });
     }
 
@@ -412,7 +412,7 @@ export default async function handler(req, res) {
         const [supply, burned] = await Promise.all([stagTotalSupplyWhole(), stagBalanceWhole(DEAD)]);
         const circ = Math.max(0, supply - burned);
         await say(chatId, replyTo, `🪙 *$STAG supply*\n\nTotal: *${fmt(supply)}*\n🔥 Burned: ${fmt(burned)}\n🟢 Circulating: *${fmt(circ)}*`);
-      } catch { await say(chatId, replyTo, "⚠️ Couldn't read supply right now — try again."); }
+      } catch { await say(chatId, replyTo, "⚠️ Couldn't read supply right now - try again."); }
       return res.status(200).json({ ok: true });
     }
 
@@ -424,7 +424,7 @@ export default async function handler(req, res) {
         const [bal, d] = await Promise.all([stagBalanceWhole(w), stagStats()]);
         const usd = d ? bal * d.priceUsd : 0;
         await say(chatId, replyTo, `👛 \`${shortAddr(w)}\`\nholds *${fmt(bal)}* $STAG${d ? ` ≈ *$${usd.toFixed(2)}*` : ""}`);
-      } catch { await say(chatId, replyTo, "⚠️ Couldn't read that wallet — check the address."); }
+      } catch { await say(chatId, replyTo, "⚠️ Couldn't read that wallet - check the address."); }
       return res.status(200).json({ ok: true });
     }
 
@@ -434,7 +434,7 @@ export default async function handler(req, res) {
       const num = parseFloat(raw.replace(/[^0-9.]/g, ""));
       if (!Number.isFinite(num) || num <= 0) { await say(chatId, replyTo, "Usage: `/convert 1000000` (→ USD) or `/convert $50` (→ $STAG)."); return res.status(200).json({ ok: true }); }
       const d = await stagStats();
-      if (!d) { await say(chatId, replyTo, "⚠️ Price feed hiccup — try again."); return res.status(200).json({ ok: true }); }
+      if (!d) { await say(chatId, replyTo, "⚠️ Price feed hiccup - try again."); return res.status(200).json({ ok: true }); }
       if (raw.includes("$")) await say(chatId, replyTo, `🧮 *$${fmt(num)}* = *${fmt(num / d.priceUsd)}* $STAG`);
       else await say(chatId, replyTo, `🧮 *${fmt(num)}* $STAG = *$${(num * d.priceUsd).toFixed(2)}*`);
       return res.status(200).json({ ok: true });
@@ -452,17 +452,17 @@ export default async function handler(req, res) {
           `⛽ *Robinhood Chain gas*\n\n` +
           (usdStr ? `A transaction costs about *${usdStr}*.\n` : `Fractions of a cent per transaction.\n`) +
           `Basically free. 🟢`);
-      } catch { await say(chatId, replyTo, "⚠️ Couldn't read gas right now — try again."); }
+      } catch { await say(chatId, replyTo, "⚠️ Couldn't read gas right now - try again."); }
       return res.status(200).json({ ok: true });
     }
 
     // ---------- FREE TOOLS: creator leaderboard ----------
     if (cmd === "/leaderboard" || cmd === "/lb" || cmd === "/top") {
       const rows = await s`SELECT uname, COUNT(*)::int AS n FROM stag_log WHERE uname IS NOT NULL GROUP BY uname ORDER BY n DESC LIMIT 10`;
-      if (!rows.length) { await say(chatId, replyTo, "🏆 No art made yet — be the first with /pfp!"); return res.status(200).json({ ok: true }); }
+      if (!rows.length) { await say(chatId, replyTo, "🏆 No art made yet - be the first with /pfp!"); return res.status(200).json({ ok: true }); }
       const medals = ["🥇", "🥈", "🥉"];
       // Plain text (no Markdown): usernames can contain _ * ` [ which would break a Markdown parse.
-      const list = rows.map((r, i) => `${medals[i] || `${i + 1}.`} ${r.uname} — ${r.n}`).join("\n");
+      const list = rows.map((r, i) => `${medals[i] || `${i + 1}.`} ${r.uname} - ${r.n}`).join("\n");
       await tg("sendMessage", { chat_id: chatId, reply_to_message_id: replyTo, disable_web_page_preview: true, text: `🏆 $STAG top creators\n\n${list}` });
       return res.status(200).json({ ok: true });
     }
@@ -475,7 +475,7 @@ export default async function handler(req, res) {
       const link = Math.random() < 0.7 ? linkPool[Math.floor(Math.random() * linkPool.length)] : ""; // random link, if any
       const post = `${content}\n\n$STAGWIFHOOD ${tags}${link ? `\n${link}` : ""}`;
       await say(chatId, replyTo,
-        "🏹 *Raid post ready — copy & drop on X:*\n\n```\n" + post + "\n```\n_Run /raid again for a fresh variation._");
+        "🏹 *Raid post ready - copy & drop on X:*\n\n```\n" + post + "\n```\n_Run /raid again for a fresh variation._");
       return res.status(200).json({ ok: true });
     }
 
@@ -486,7 +486,7 @@ export default async function handler(req, res) {
       await s`UPDATE stag_pool SET used = 0 WHERE id = 1`; // zero the free-pool counter
       if (scope === "all") {
         await s`TRUNCATE stag_free, stag_log, stag_cool`;   // fresh launch: everyone gets their free again
-        await say(chatId, replyTo, "🧹 *Full reset* — free pool zeroed, everyone's free PFP + cooldowns cleared. Clean launch. 🦌");
+        await say(chatId, replyTo, "🧹 *Full reset* - free pool zeroed, everyone's free PFP + cooldowns cleared. Clean launch. 🦌");
       } else {
         await say(chatId, replyTo, `🧹 Free pool reset to *0 / ${BUDGET}*. (Use \`/reset all\` to also clear per-user free grants + cooldowns.)`);
       }
@@ -499,7 +499,7 @@ export default async function handler(req, res) {
       const freeLeft = Math.max(0, BUDGET - used);
       await say(chatId, replyTo,
         `🎯 *Your $STAG credits:* ${bal} (~${Math.floor(bal / PFP_COST)} images)\n` +
-        `${verified ? "✅ *Verified holder* — 50% off\n" : ""}` +
+        `${verified ? "✅ *Verified holder* - 50% off\n" : ""}` +
         `Free launch pool: ${used}/${BUDGET} used (~${Math.floor(freeLeft / PFP_COST)} free PFPs left)\n\n` +
         `Top up: /buy  •  Holder discount: /verify`);
       return res.status(200).json({ ok: true });
@@ -514,9 +514,9 @@ export default async function handler(req, res) {
 
     // ---------- buy (step 1: list; step 2: lock a unique exact amount) ----------
     if (cmd === "/buy" || cmd === "/topup") {
-      if (!TREASURY) { await say(chatId, replyTo, "🛠️ Buying opens shortly — hang tight, ranger."); return res.status(200).json({ ok: true }); }
+      if (!TREASURY) { await say(chatId, replyTo, "🛠️ Buying opens shortly - hang tight, ranger."); return res.status(200).json({ ok: true }); }
       const px = await stagPriceUsd();
-      if (!px) { await say(chatId, replyTo, "⚠️ Price feed hiccup — try /buy again in a sec."); return res.status(200).json({ ok: true }); }
+      if (!px) { await say(chatId, replyTo, "⚠️ Price feed hiccup - try /buy again in a sec."); return res.status(200).json({ ok: true }); }
       const holder = await isVerified(s, tid);
       const pickUsd = parseFloat((arg.trim().split(/\s+/)[0] || "").replace(/[^0-9.]/g, ""));
       if (!BUNDLES_USD.includes(pickUsd)) {
@@ -535,18 +535,19 @@ export default async function handler(req, res) {
       // Server-assigned unique whole-token amount = the buyer's binding. It MUST be unique
       // among all active pending buys, otherwise an attacker could re-roll /buy until their
       // amount matches a victim's and then claim the victim's tx. Reroll on any clash.
-      let expected = Math.ceil(baseStag) + 1000 + Math.floor(Math.random() * 9000);
-      for (let tries = 0; tries < 15; tries++) {
-        const clash = await s`SELECT 1 FROM stag_buy_req WHERE expected=${expected} AND tid<>${tid} AND created_at > now() - interval '7 days'`;
-        if (!clash.length) break;
-        expected = Math.ceil(baseStag) + 1000 + Math.floor(Math.random() * 9000);
+      let expected = null;
+      for (let tries = 0; tries < 20; tries++) {
+        const cand = Math.ceil(baseStag) + 1000 + Math.floor(Math.random() * 9000);
+        const clash = await s`SELECT 1 FROM stag_buy_req WHERE expected=${cand} AND tid<>${tid} AND created_at > now() - interval '7 days'`;
+        if (!clash.length) { expected = cand; break; }
       }
+      if (expected == null) { await say(chatId, replyTo, "🛠️ Too many active buys right now - try `/buy` again in a minute."); return res.status(200).json({ ok: true }); }
       await s`INSERT INTO stag_buy_req (tid, expected, credits, created_at) VALUES (${tid}, ${expected}, ${credits}, now())
               ON CONFLICT (tid) DO UPDATE SET expected=${expected}, credits=${credits}, created_at=now()`;
       await say(chatId, replyTo,
         `💳 *$${pickUsd} → ${credits} credits*${holder ? " _(holder 50% off)_" : ""}\n\n` +
         `1️⃣ Send *EXACTLY* \`${expected.toLocaleString("en-US")}\` $STAG to:\n\`${TREASURY}\`\n` +
-        `   _(that exact amount is your secret — send the precise number)_\n` +
+        `   _(that exact amount is your secret - send the precise number)_\n` +
         `2️⃣ Then run \`/claim <your-tx-hash>\`\n\n_Locks for 30 min. Re-run /buy for a new amount._`);
       return res.status(200).json({ ok: true });
     }
@@ -559,24 +560,28 @@ export default async function handler(req, res) {
       if ((await s`SELECT 1 FROM stag_claims WHERE txhash=${txh}`).length) { await say(chatId, replyTo, "That tx was already claimed. ✅"); return res.status(200).json({ ok: true }); }
       const reqRow = await s`SELECT expected, credits, created_at FROM stag_buy_req WHERE tid=${tid}`;
       if (!reqRow.length) { await say(chatId, replyTo, "Run `/buy` first to lock your amount, then send + /claim."); return res.status(200).json({ ok: true }); }
-      if (Date.now() - new Date(reqRow[0].created_at).getTime() > REQ_TTL) { await say(chatId, replyTo, "That buy expired — run `/buy` again."); return res.status(200).json({ ok: true }); }
+      if (Date.now() - new Date(reqRow[0].created_at).getTime() > REQ_TTL) { await say(chatId, replyTo, "That buy expired - run `/buy` again."); return res.status(200).json({ ok: true }); }
       let pay;
       try { pay = await verifyStagPayment(txh, TREASURY); }
-      catch { await say(chatId, replyTo, "⚠️ Network hiccup reading the chain — your $STAG is safe, run /claim again in a moment."); return res.status(200).json({ ok: true }); }
+      catch { await say(chatId, replyTo, "⚠️ Network hiccup reading the chain - your $STAG is safe, run /claim again in a moment."); return res.status(200).json({ ok: true }); }
       if (!pay.ok) { await say(chatId, replyTo, `⚠️ Couldn't verify that payment (${pay.err}). Make sure it's confirmed and sent $STAG to the treasury.`); return res.status(200).json({ ok: true }); }
       const expected = Number(reqRow[0].expected), credits = Number(reqRow[0].credits);
-      // Must match the assigned amount EXACTLY (±1 token for truncation). The unique
-      // odd tail is the whole security mechanism — a loose band would let a same-bundle
-      // buyer claim a stranger's tx, so we do not tolerate a range here. (Assumes $STAG
-      // has no transfer tax; if it does, this binding needs a different design.)
-      if (Math.abs(Math.round(pay.amountWhole) - expected) > 1) {
+      // Must match the assigned amount EXACTLY. The unique amount is the whole binding;
+      // a tolerance band would let an attacker park at expected±1 (which doesn't clash)
+      // and claim a stranger's tx. $STAG is a Uniswap-V3 token with no transfer tax, so a
+      // whole-token send always arrives exact - no tolerance needed.
+      if (Math.round(pay.amountWhole) !== expected) {
         await say(chatId, replyTo, `⚠️ That tx sent ${fmt(pay.amountWhole)} $STAG but your locked amount is *${expected.toLocaleString("en-US")}*. Send the *exact* amount, then /claim.`);
         return res.status(200).json({ ok: true });
       }
-      // The payment must be NEWER than the locked amount. A legit buyer always sends after
-      // /buy; this blocks claiming an old/stale tx that some other user paid earlier.
+      // The payment must be confirmed and NEWER than the locked amount. Fail CLOSED if we
+      // can't read the block time (retryable) - never credit without proving freshness.
       const reqTime = new Date(reqRow[0].created_at).getTime();
-      if (pay.blockTime && pay.blockTime * 1000 < reqTime - 120000) {
+      if (!pay.blockTime) {
+        await say(chatId, replyTo, "⚠️ Couldn't confirm that tx's block yet - if you just sent it, wait a few seconds and `/claim` again.");
+        return res.status(200).json({ ok: true });
+      }
+      if (pay.blockTime * 1000 < reqTime - 120000) {
         await say(chatId, replyTo, "⚠️ That payment predates your locked amount. Run `/buy` for a fresh amount, send it, then `/claim`.");
         return res.status(200).json({ ok: true });
       }
@@ -598,21 +603,22 @@ export default async function handler(req, res) {
         // wide range so two pending requests practically never collide).
         // Amount MUST be unique among active pending verifies, else an attacker could
         // re-roll to match a whale's pending deposit and hijack it. Reroll on any clash.
-        let wei;
-        for (let tries = 0; tries < 15; tries++) {
+        let wei = null;
+        for (let tries = 0; tries < 20; tries++) {
           const rnd = 100000 + Math.floor(Math.random() * 900000);
-          wei = (10n ** 13n + BigInt(rnd) * 10n ** 7n).toString(); // ~0.00001–0.00002 ETH, unique tail
-          const clash = await s`SELECT 1 FROM stag_verify_req WHERE wei=${wei} AND tid<>${tid} AND created_at > now() - interval '7 days'`;
-          if (!clash.length) break;
+          const cand = (10n ** 13n + BigInt(rnd) * 10n ** 7n).toString(); // ~0.00001-0.00002 ETH, unique tail
+          const clash = await s`SELECT 1 FROM stag_verify_req WHERE wei=${cand} AND tid<>${tid} AND created_at > now() - interval '7 days'`;
+          if (!clash.length) { wei = cand; break; }
         }
+        if (wei == null) { await say(chatId, replyTo, "🛠️ Busy right now - try `/verify` again in a minute."); return res.status(200).json({ ok: true }); }
         await s`INSERT INTO stag_verify_req (tid, wei, created_at) VALUES (${tid}, ${wei}, now()) ON CONFLICT (tid) DO UPDATE SET wei=${wei}, created_at=now()`;
         const eth = (Number(wei) / 1e18).toFixed(9);
         await say(chatId, replyTo,
-          "🔐 *Verify you hold 1M+ $STAG — no wallet connect.*\n\n" +
+          "🔐 *Verify you hold 1M+ $STAG - no wallet connect.*\n\n" +
           `1️⃣ From your wallet, send *exactly* \`${eth}\` ETH to:\n\`${VERIFY_WALLET}\`\n` +
           "   _(that exact odd amount is your one-time secret)_\n" +
           "2️⃣ Then run \`/verify <your-tx-hash>\`\n\n" +
-          "Just a normal send — no connect, no approval. Unlocks *50% off* all credits. 🦌");
+          "Just a normal send - no connect, no approval. Unlocks *50% off* all credits. 🦌");
         return res.status(200).json({ ok: true });
       }
       if (!/^0x[0-9a-f]{64}$/.test(txh)) { await say(chatId, replyTo, "Usage: `/verify` first, then `/verify 0x<txhash>`."); return res.status(200).json({ ok: true }); }
@@ -620,13 +626,18 @@ export default async function handler(req, res) {
       if ((await s`SELECT 1 FROM stag_verify_used WHERE txhash=${txh}`).length) { await say(chatId, replyTo, "That tx was already used to verify. Run `/verify` for a fresh amount."); return res.status(200).json({ ok: true }); }
       const reqRow = await s`SELECT wei, created_at FROM stag_verify_req WHERE tid=${tid}`;
       if (!reqRow.length) { await say(chatId, replyTo, "Run `/verify` first to get your unique amount."); return res.status(200).json({ ok: true }); }
-      if (Date.now() - new Date(reqRow[0].created_at).getTime() > REQ_TTL) { await say(chatId, replyTo, "That verify request expired — run `/verify` again."); return res.status(200).json({ ok: true }); }
+      if (Date.now() - new Date(reqRow[0].created_at).getTime() > REQ_TTL) { await say(chatId, replyTo, "That verify request expired - run `/verify` again."); return res.status(200).json({ ok: true }); }
       let chk;
       try { chk = await verifyMicroDeposit(txh, VERIFY_WALLET, reqRow[0].wei); }
-      catch { await say(chatId, replyTo, "⚠️ Network hiccup reading the chain — try /verify <txhash> again in a moment."); return res.status(200).json({ ok: true }); }
+      catch { await say(chatId, replyTo, "⚠️ Network hiccup reading the chain - try /verify <txhash> again in a moment."); return res.status(200).json({ ok: true }); }
       if (!chk.ok) { await say(chatId, replyTo, `⚠️ Couldn't match that (${chk.err}). Send the *exact* amount, then paste the confirmed tx hash.`); return res.status(200).json({ ok: true }); }
-      // Deposit must be NEWER than the verify request — blocks hijacking an old/stale deposit.
-      if (chk.blockTime && chk.blockTime * 1000 < new Date(reqRow[0].created_at).getTime() - 120000) {
+      // Deposit must be confirmed and NEWER than the verify request. Fail CLOSED if the
+      // block time can't be read (retryable) - never verify without proving freshness.
+      if (!chk.blockTime) {
+        await say(chatId, replyTo, "⚠️ Couldn't confirm that deposit's block yet - if you just sent it, wait a few seconds and paste the hash again.");
+        return res.status(200).json({ ok: true });
+      }
+      if (chk.blockTime * 1000 < new Date(reqRow[0].created_at).getTime() - 120000) {
         await say(chatId, replyTo, "⚠️ That deposit predates your verify request. Run `/verify` for a fresh amount, send it, then paste the hash.");
         return res.status(200).json({ ok: true });
       }
@@ -634,7 +645,10 @@ export default async function handler(req, res) {
       const usedIns = await s`INSERT INTO stag_verify_used (txhash, tid) VALUES (${txh}, ${tid}) ON CONFLICT (txhash) DO NOTHING RETURNING txhash`;
       if (!usedIns.length) { await say(chatId, replyTo, "That tx was already used to verify."); return res.status(200).json({ ok: true }); }
       const held = await stagBalanceWhole(chk.from);
-      if (held < HOLD_MIN) { await say(chatId, replyTo, `🦌 That wallet holds ${fmt(held)} $STAG — need ${fmt(HOLD_MIN)}+ for the holder perk. Stack more and re-verify.`); return res.status(200).json({ ok: true }); }
+      if (held < HOLD_MIN) { await say(chatId, replyTo, `🦌 That wallet holds ${fmt(held)} $STAG - need ${fmt(HOLD_MIN)}+ for the holder perk. Stack more and re-verify.`); return res.status(200).json({ ok: true }); }
+      // One wallet unlocks the discount for ONE account (no Sybil discount farming).
+      const otherOwner = await s`SELECT tid FROM stag_verified WHERE wallet=${chk.from} AND tid<>${tid}`;
+      if (otherOwner.length) { await say(chatId, replyTo, "🦌 That wallet is already linked to another account. Use a different holder wallet."); return res.status(200).json({ ok: true }); }
       await s`INSERT INTO stag_verified (tid, wallet) VALUES (${tid}, ${chk.from}) ON CONFLICT (tid) DO UPDATE SET wallet=${chk.from}, at=now()`;
       await s`DELETE FROM stag_verify_req WHERE tid=${tid}`;
       await say(chatId, replyTo, `✅ *Verified holder!* ${fmt(held)} $STAG. You now get *50% off* all credits. 🏹💚\n/buy to stock up cheap.`);
@@ -653,12 +667,12 @@ export default async function handler(req, res) {
 
     const isOwner = tid === OWNER; // owner: unlimited, no cooldown, no credit cost
 
-    // cooldown (anti-spam pacing) — owner exempt
+    // cooldown (anti-spam pacing) - owner exempt
     if (COOLDOWN > 0 && !isOwner) {
       const cr = await s`SELECT last_at FROM stag_cool WHERE tid=${tid}`;
       if (cr.length) {
         const wait = COOLDOWN - (Date.now() - new Date(cr[0].last_at).getTime());
-        if (wait > 0) { await say(chatId, replyTo, `⏳ Easy — ${Math.ceil(wait / 1000)}s til your next one.`); return res.status(200).json({ ok: true }); }
+        if (wait > 0) { await say(chatId, replyTo, `⏳ Easy - ${Math.ceil(wait / 1000)}s til your next one.`); return res.status(200).json({ ok: true }); }
       }
     }
 
@@ -704,17 +718,17 @@ export default async function handler(req, res) {
         png = await genImage(prompt);
         caption = `🎨 ${uname} asked → delivered 🏹\n"${genPrompt.slice(0, 120)}"`;
       }
-      const tag = funded === "owner" ? "👑" : funded === "pool" ? "🎁 that was your free one" : `–${cost} credits`;
+      const tag = funded === "owner" ? "👑" : funded === "pool" ? "🎁 that was your free one" : `-${cost} credits`;
       await sendPhoto(chatId, png, caption + `\n\n${tag}  •  another? /pfp /imagine  •  /credits`, replyTo);
       await s`INSERT INTO stag_log (tid, uname, kind, credits) VALUES (${tid}, ${uname}, ${isPfp ? "pfp" : "gen"}, ${funded === "owner" ? 0 : cost})`;
       return res.status(200).json({ ok: true });
     } catch (e) {
       // refund whatever funded it (owner paid nothing). Pool refund releases the free
-      // slot entirely (DELETE) so the user can re-claim it — the grant is now claim-once.
+      // slot entirely (DELETE) so the user can re-claim it - the grant is now claim-once.
       if (funded === "pool") { await refundPool(s, cost); await s`DELETE FROM stag_free WHERE tid=${tid}`; }
       else if (funded === "balance") { await addCredits(s, tid, cost); }
       if (!isOwner) await s`DELETE FROM stag_cool WHERE tid=${tid}`; // failed run shouldn't burn their cooldown
-      await say(chatId, replyTo, "⚠️ The forge hiccuped — no credits spent. Try again.");
+      await say(chatId, replyTo, "⚠️ The forge hiccuped - no credits spent. Try again.");
       return res.status(200).json({ ok: false, error: String((e && e.message) || e) });
     }
   } catch (e) {

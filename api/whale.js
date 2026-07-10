@@ -235,8 +235,10 @@ export default async function handler(req, res) {
       if (Date.now() - new Date(reqRow[0].created_at).getTime() > LINK_TTL) return res.status(200).json({ ok: false, error: "challenge_expired" });
       const vr = await verifyDeposit(txSig, Number(reqRow[0].lamports));
       if (!vr.ok) return res.status(200).json({ ok: false, error: vr.error });
-      // Deposit must be NEWER than the challenge — blocks hijacking an old/stale deposit.
-      if (vr.blockTime && vr.blockTime * 1000 < new Date(reqRow[0].created_at).getTime() - 120000) {
+      // Deposit must be confirmed and NEWER than the challenge. Fail CLOSED if the block
+      // time can't be read — never verify without proving freshness.
+      if (!vr.blockTime) return res.status(200).json({ ok: false, error: "unconfirmed_wait_and_retry" });
+      if (vr.blockTime * 1000 < new Date(reqRow[0].created_at).getTime() - 120000) {
         return res.status(200).json({ ok: false, error: "deposit_predates_request" });
       }
       // A deposit tx verifies at most one account (atomic claim before granting).
