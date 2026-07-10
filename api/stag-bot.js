@@ -589,7 +589,10 @@ export default async function handler(req, res) {
       // Atomic idempotency: only the INSERT winner credits.
       const ins = await s`INSERT INTO stag_claims (txhash, tid, credits) VALUES (${txh}, ${tid}, ${credits}) ON CONFLICT (txhash) DO NOTHING RETURNING txhash`;
       if (!ins.length) { await say(chatId, replyTo, "That tx was already claimed. ✅"); return res.status(200).json({ ok: true }); }
-      await addCredits(s, tid, credits);
+      // If crediting fails after the claim is recorded, roll the claim back so the payer
+      // can retry (never leave a paid tx marked-claimed-but-uncredited).
+      try { await addCredits(s, tid, credits); }
+      catch { await s`DELETE FROM stag_claims WHERE txhash=${txh}`; await say(chatId, replyTo, "⚠️ Network hiccup crediting - your payment is safe, run `/claim` again in a moment."); return res.status(200).json({ ok: true }); }
       await s`DELETE FROM stag_buy_req WHERE tid=${tid}`;
       await say(chatId, replyTo, `✅ Credited *${credits}* credits. Balance: *${await balOf(s, tid)}*.\nGo wild: /pfp or /imagine 🏹`);
       return res.status(200).json({ ok: true });
