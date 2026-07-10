@@ -41,10 +41,14 @@ const HOOK_SECRET = (process.env.STAG_BOT_SECRET || "").trim();
 const TREASURY = (process.env.STAG_TREASURY || "").trim();
 const VERIFY_WALLET = (process.env.STAG_VERIFY_WALLET || TREASURY).trim();
 
-const PFP_MODEL = (process.env.STAG_PFP_MODEL || "nano-banana-pro-edit").trim();
-const GEN_MODEL = (process.env.STAG_GEN_MODEL || "nano-banana-pro").trim();
-const PFP_COST = parseInt(process.env.STAG_PFP_COST || "144", 10);   // credits / PFP
-const GEN_COST = parseInt(process.env.STAG_GEN_COST || "144", 10);   // credits / image
+// Fast edit model (~14s) — pro-edit (~39s) blows Vercel's 60s function limit and
+// never delivers the image. nano-banana-2 still holds identity + the style lock.
+const PFP_MODEL = (process.env.STAG_PFP_MODEL || "nano-banana-2-edit").trim();
+const GEN_MODEL = (process.env.STAG_GEN_MODEL || "nano-banana-2").trim();
+const PFP_COST = parseInt(process.env.STAG_PFP_COST || "80", 10);    // credits / PFP ($0.10)
+const GEN_COST = parseInt(process.env.STAG_GEN_COST || "80", 10);    // credits / image
+const OWNER = (process.env.STAG_OWNER || "6820752140").trim();       // unlimited, no limits, free
+const OWNER_NAME = (process.env.STAG_OWNER_NAME || "King Petty").trim();
 const BUDGET = parseInt(process.env.STAG_PFP_BUDGET || "4000", 10);  // free pool (credits)
 const COOLDOWN = parseInt(process.env.STAG_PFP_COOLDOWN || "45", 10) * 1000;
 
@@ -201,7 +205,16 @@ export default async function handler(req, res) {
   const update = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
   const msg = update.message || update.edited_message;
   const text = (msg && msg.text) || "";
-  if (!msg || !text.startsWith("/")) return res.status(200).json({ ok: true });
+  if (!msg) return res.status(200).json({ ok: true });
+  if (!text.startsWith("/")) {
+    // Never reveal the underlying AI/model. Answer identity questions (in DMs, or when
+    // the bot is @-mentioned) with the on-brand line; else stay silent (no group spam).
+    const addressed = msg.chat.type === "private" || /@stagzbot\b/i.test(text);
+    if (addressed && /\b(what|which|who|are you|u using|you using).{0,30}(a\.?i|model|bot|made|built|train|power|run|gpt|chatgpt|claude|openai|anthropic|llm|venice|grok|gemini|language\s*model)\b/i.test(text)) {
+      await tg("sendMessage", { chat_id: msg.chat.id, reply_to_message_id: msg.message_id, text: `Built and trained by ${OWNER_NAME}. 🦌👑` });
+    }
+    return res.status(200).json({ ok: true });
+  }
 
   const sp = text.trim().indexOf(" ");
   let cmd = (sp === -1 ? text.trim() : text.slice(0, sp)).toLowerCase().split("@")[0];
@@ -229,6 +242,12 @@ export default async function handler(req, res) {
         "• `/buy` — top up with $STAG\n" +
         "• `/verify` — prove *1M+ $STAG* → *50% off everything* 🦌\n\n" +
         "On-character, fresh every time. Antlers up. 💚");
+      return res.status(200).json({ ok: true });
+    }
+
+    // ---------- about (identity — never reveals the model) ----------
+    if (cmd === "/about" || cmd === "/whoami") {
+      await say(chatId, replyTo, `🦌 The *$STAGWIFHOOD* generator — built and trained by *${OWNER_NAME}*. 👑\nThat's all you need to know. 🏹`);
       return res.status(200).json({ ok: true });
     }
 
@@ -355,8 +374,10 @@ export default async function handler(req, res) {
     if (isGen && !genPrompt) { await say(chatId, replyTo, "Give me something to draw: `/imagine a hooded stag archer on a neon rooftop`"); return res.status(200).json({ ok: true }); }
     if (BANNED.test(style + " " + genPrompt)) { await say(chatId, replyTo, "🚫 Keep it clean, ranger."); return res.status(200).json({ ok: true }); }
 
-    // cooldown (anti-spam pacing)
-    if (COOLDOWN > 0) {
+    const isOwner = tid === OWNER; // owner: unlimited, no cooldown, no credit cost
+
+    // cooldown (anti-spam pacing) — owner exempt
+    if (COOLDOWN > 0 && !isOwner) {
       const cr = await s`SELECT last_at FROM stag_cool WHERE tid=${tid}`;
       if (cr.length) {
         const wait = COOLDOWN - (Date.now() - new Date(cr[0].last_at).getTime());
@@ -365,9 +386,10 @@ export default async function handler(req, res) {
     }
 
     const cost = isPfp ? PFP_COST : GEN_COST;
-    // Funding: PFP can use the one free-pool grant; otherwise spend paid credits.
-    let funded = null; // 'pool' | 'balance'
-    if (isPfp) {
+    // Funding: owner is always free/unlimited; else PFP can use the one free-pool grant;
+    // otherwise spend paid credits.
+    let funded = isOwner ? "owner" : null; // 'owner' | 'pool' | 'balance'
+    if (!funded && isPfp) {
       const freeRow = await s`SELECT used FROM stag_free WHERE tid=${tid}`;
       const freeUsed = freeRow.length ? Number(freeRow[0].used) : 0;
       if (freeUsed < 1 && (await reservePool(s, cost)) != null) {
@@ -385,7 +407,7 @@ export default async function handler(req, res) {
       }
       funded = "balance";
     }
-    await s`INSERT INTO stag_cool (tid, last_at) VALUES (${tid}, now()) ON CONFLICT (tid) DO UPDATE SET last_at=now()`;
+    if (!isOwner) await s`INSERT INTO stag_cool (tid, last_at) VALUES (${tid}, now()) ON CONFLICT (tid) DO UPDATE SET last_at=now()`;
 
     await tg("sendChatAction", { chat_id: chatId, action: "upload_photo" });
     await say(chatId, replyTo, isPfp ? "🎨 Conjuring your $STAG… 🏹" : "🎨 Painting it… give me a few seconds. 🏹");
@@ -404,14 +426,15 @@ export default async function handler(req, res) {
         png = await genImage(prompt);
         caption = `🎨 ${uname} — /imagine "${genPrompt.slice(0, 80)}"`;
       }
-      await sendPhoto(chatId, png, caption + `\n${funded === "pool" ? "That was your free one 🎁" : `-${cost} credits`} • /credits`, replyTo);
-      await s`INSERT INTO stag_log (tid, kind, credits) VALUES (${tid}, ${isPfp ? "pfp" : "gen"}, ${cost})`;
+      const tag = funded === "owner" ? "👑" : funded === "pool" ? "That was your free one 🎁" : `-${cost} credits`;
+      await sendPhoto(chatId, png, caption + `\n${tag} • /credits`, replyTo);
+      await s`INSERT INTO stag_log (tid, kind, credits) VALUES (${tid}, ${isPfp ? "pfp" : "gen"}, ${funded === "owner" ? 0 : cost})`;
       return res.status(200).json({ ok: true });
     } catch (e) {
-      // refund whatever funded it
+      // refund whatever funded it (owner paid nothing)
       if (funded === "pool") { await refundPool(s, cost); await s`UPDATE stag_free SET used = GREATEST(0, used - 1) WHERE tid=${tid}`; }
-      else { await addCredits(s, tid, cost); }
-      await s`DELETE FROM stag_cool WHERE tid=${tid}`; // failed run shouldn't burn their cooldown
+      else if (funded === "balance") { await addCredits(s, tid, cost); }
+      if (!isOwner) await s`DELETE FROM stag_cool WHERE tid=${tid}`; // failed run shouldn't burn their cooldown
       await say(chatId, replyTo, "⚠️ The forge hiccuped — no credits spent. Try again.");
       return res.status(200).json({ ok: false, error: String((e && e.message) || e) });
     }
