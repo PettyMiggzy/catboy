@@ -34,14 +34,6 @@ export async function stagBalanceWhole(wallet) {
   return Number(raw / 10n ** BigInt(Math.max(0, STAG_DECIMALS - 6))) / 1e6;
 }
 
-// Standard burn address + total supply, for the /burn tool.
-export const DEAD = "0x000000000000000000000000000000000000dEaD";
-export async function stagTotalSupplyWhole() {
-  const res = await rpc("eth_call", [{ to: STAG_TOKEN, data: "0x18160ddd" }, "latest"]); // totalSupply()
-  const raw = BigInt(res || "0x0");
-  return Number(raw / 10n ** BigInt(Math.max(0, STAG_DECIMALS - 6))) / 1e6;
-}
-
 // Verify an ERC-20 $STAG payment: tx confirmed, transfers >= minWhole $STAG INTO `treasury`.
 // Returns { ok, from, amountWhole } or { ok:false, err }.
 export async function verifyStagPayment(txHash, treasury) {
