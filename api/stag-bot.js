@@ -53,6 +53,8 @@ const OWNER_NAME = (process.env.STAG_OWNER_NAME || "King Petty").trim();
 const BOT_USERNAME = (process.env.STAG_BOT_USERNAME || "STAGZBOT").replace(/^@/, "").trim();
 const BUDGET = parseInt(process.env.STAG_PFP_BUDGET || "4000", 10);  // free pool (credits)
 const COOLDOWN = parseInt(process.env.STAG_PFP_COOLDOWN || "45", 10) * 1000;
+const REQ_TTL = 7 * 24 * 3600 * 1000; // buy/verify request validity — long is safe now that
+                                      // the payment must also be newer than the request (below)
 
 const CREDIT_USD = parseFloat(process.env.STAG_CREDIT_USD || "0.00125"); // cost basis / credit
 const MARKUP = parseFloat(process.env.STAG_MARKUP || "2");               // retail = 2× cost
@@ -277,7 +279,7 @@ export default async function handler(req, res) {
   const msg = update.message || update.edited_message;
   const text = (msg && msg.text) || "";
   if (!msg) return res.status(200).json({ ok: true });
-  if (!text.startsWith("/")) {
+  if (!text.trim().startsWith("/")) {
     // Never reveal the underlying AI/model. Answer identity questions (in DMs, or when
     // the bot is @-mentioned) with the on-brand line; else stay silent (no group spam).
     const addressed = msg.chat.type === "private" || /@stagzbot\b/i.test(text);
@@ -535,7 +537,7 @@ export default async function handler(req, res) {
       // amount matches a victim's and then claim the victim's tx. Reroll on any clash.
       let expected = Math.ceil(baseStag) + 1000 + Math.floor(Math.random() * 9000);
       for (let tries = 0; tries < 15; tries++) {
-        const clash = await s`SELECT 1 FROM stag_buy_req WHERE expected=${expected} AND tid<>${tid} AND created_at > now() - interval '30 minutes'`;
+        const clash = await s`SELECT 1 FROM stag_buy_req WHERE expected=${expected} AND tid<>${tid} AND created_at > now() - interval '7 days'`;
         if (!clash.length) break;
         expected = Math.ceil(baseStag) + 1000 + Math.floor(Math.random() * 9000);
       }
@@ -557,7 +559,7 @@ export default async function handler(req, res) {
       if ((await s`SELECT 1 FROM stag_claims WHERE txhash=${txh}`).length) { await say(chatId, replyTo, "That tx was already claimed. ✅"); return res.status(200).json({ ok: true }); }
       const reqRow = await s`SELECT expected, credits, created_at FROM stag_buy_req WHERE tid=${tid}`;
       if (!reqRow.length) { await say(chatId, replyTo, "Run `/buy` first to lock your amount, then send + /claim."); return res.status(200).json({ ok: true }); }
-      if (Date.now() - new Date(reqRow[0].created_at).getTime() > 30 * 60 * 1000) { await say(chatId, replyTo, "That buy expired — run `/buy` again."); return res.status(200).json({ ok: true }); }
+      if (Date.now() - new Date(reqRow[0].created_at).getTime() > REQ_TTL) { await say(chatId, replyTo, "That buy expired — run `/buy` again."); return res.status(200).json({ ok: true }); }
       let pay;
       try { pay = await verifyStagPayment(txh, TREASURY); }
       catch { await say(chatId, replyTo, "⚠️ Network hiccup reading the chain — your $STAG is safe, run /claim again in a moment."); return res.status(200).json({ ok: true }); }
@@ -569,6 +571,13 @@ export default async function handler(req, res) {
       // has no transfer tax; if it does, this binding needs a different design.)
       if (Math.abs(Math.round(pay.amountWhole) - expected) > 1) {
         await say(chatId, replyTo, `⚠️ That tx sent ${fmt(pay.amountWhole)} $STAG but your locked amount is *${expected.toLocaleString("en-US")}*. Send the *exact* amount, then /claim.`);
+        return res.status(200).json({ ok: true });
+      }
+      // The payment must be NEWER than the locked amount. A legit buyer always sends after
+      // /buy; this blocks claiming an old/stale tx that some other user paid earlier.
+      const reqTime = new Date(reqRow[0].created_at).getTime();
+      if (pay.blockTime && pay.blockTime * 1000 < reqTime - 120000) {
+        await say(chatId, replyTo, "⚠️ That payment predates your locked amount. Run `/buy` for a fresh amount, send it, then `/claim`.");
         return res.status(200).json({ ok: true });
       }
       // Atomic idempotency: only the INSERT winner credits.
@@ -593,7 +602,7 @@ export default async function handler(req, res) {
         for (let tries = 0; tries < 15; tries++) {
           const rnd = 100000 + Math.floor(Math.random() * 900000);
           wei = (10n ** 13n + BigInt(rnd) * 10n ** 7n).toString(); // ~0.00001–0.00002 ETH, unique tail
-          const clash = await s`SELECT 1 FROM stag_verify_req WHERE wei=${wei} AND tid<>${tid} AND created_at > now() - interval '30 minutes'`;
+          const clash = await s`SELECT 1 FROM stag_verify_req WHERE wei=${wei} AND tid<>${tid} AND created_at > now() - interval '7 days'`;
           if (!clash.length) break;
         }
         await s`INSERT INTO stag_verify_req (tid, wei, created_at) VALUES (${tid}, ${wei}, now()) ON CONFLICT (tid) DO UPDATE SET wei=${wei}, created_at=now()`;
@@ -611,11 +620,16 @@ export default async function handler(req, res) {
       if ((await s`SELECT 1 FROM stag_verify_used WHERE txhash=${txh}`).length) { await say(chatId, replyTo, "That tx was already used to verify. Run `/verify` for a fresh amount."); return res.status(200).json({ ok: true }); }
       const reqRow = await s`SELECT wei, created_at FROM stag_verify_req WHERE tid=${tid}`;
       if (!reqRow.length) { await say(chatId, replyTo, "Run `/verify` first to get your unique amount."); return res.status(200).json({ ok: true }); }
-      if (Date.now() - new Date(reqRow[0].created_at).getTime() > 30 * 60 * 1000) { await say(chatId, replyTo, "That verify request expired — run `/verify` again."); return res.status(200).json({ ok: true }); }
+      if (Date.now() - new Date(reqRow[0].created_at).getTime() > REQ_TTL) { await say(chatId, replyTo, "That verify request expired — run `/verify` again."); return res.status(200).json({ ok: true }); }
       let chk;
       try { chk = await verifyMicroDeposit(txh, VERIFY_WALLET, reqRow[0].wei); }
       catch { await say(chatId, replyTo, "⚠️ Network hiccup reading the chain — try /verify <txhash> again in a moment."); return res.status(200).json({ ok: true }); }
       if (!chk.ok) { await say(chatId, replyTo, `⚠️ Couldn't match that (${chk.err}). Send the *exact* amount, then paste the confirmed tx hash.`); return res.status(200).json({ ok: true }); }
+      // Deposit must be NEWER than the verify request — blocks hijacking an old/stale deposit.
+      if (chk.blockTime && chk.blockTime * 1000 < new Date(reqRow[0].created_at).getTime() - 120000) {
+        await say(chatId, replyTo, "⚠️ That deposit predates your verify request. Run `/verify` for a fresh amount, send it, then paste the hash.");
+        return res.status(200).json({ ok: true });
+      }
       // Claim this tx as used before granting (atomic; loser bails).
       const usedIns = await s`INSERT INTO stag_verify_used (txhash, tid) VALUES (${txh}, ${tid}) ON CONFLICT (txhash) DO NOTHING RETURNING txhash`;
       if (!usedIns.length) { await say(chatId, replyTo, "That tx was already used to verify."); return res.status(200).json({ ok: true }); }

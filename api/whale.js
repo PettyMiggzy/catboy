@@ -153,7 +153,7 @@ async function verifyDeposit(txSig, expectedLamports) {
     if (isSystem && ix.parsed && ix.parsed.type === "transfer") {
       const info = ix.parsed.info || {};
       if (info.destination === VERIFY_WALLET && Number(info.lamports) === expectedLamports) {
-        return { ok: true, wallet: info.source };
+        return { ok: true, wallet: info.source, blockTime: tx.blockTime || 0 };
       }
     }
   }
@@ -235,6 +235,10 @@ export default async function handler(req, res) {
       if (Date.now() - new Date(reqRow[0].created_at).getTime() > LINK_TTL) return res.status(200).json({ ok: false, error: "challenge_expired" });
       const vr = await verifyDeposit(txSig, Number(reqRow[0].lamports));
       if (!vr.ok) return res.status(200).json({ ok: false, error: vr.error });
+      // Deposit must be NEWER than the challenge — blocks hijacking an old/stale deposit.
+      if (vr.blockTime && vr.blockTime * 1000 < new Date(reqRow[0].created_at).getTime() - 120000) {
+        return res.status(200).json({ ok: false, error: "deposit_predates_request" });
+      }
       // A deposit tx verifies at most one account (atomic claim before granting).
       const used = await s`INSERT INTO whale_verify_used (txsig, tid) VALUES (${txSig}, ${tid}) ON CONFLICT (txsig) DO NOTHING RETURNING txsig`;
       if (!used.length) return res.status(200).json({ ok: false, error: "tx_already_used" });
