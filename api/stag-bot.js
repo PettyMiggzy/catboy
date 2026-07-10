@@ -108,15 +108,19 @@ async function tg(method, payload) {
   } catch { return {}; }
 }
 const say = (chatId, replyTo, text) => tg("sendMessage", { chat_id: chatId, reply_to_message_id: replyTo, parse_mode: "Markdown", disable_web_page_preview: true, text });
-async function sendPhoto(chatId, pngBuf, caption, replyTo) {
+async function sendPhoto(chatId, pngBuf, caption, replyTo, parseMode) {
   const fd = new FormData();
   fd.append("chat_id", String(chatId));
   if (caption) fd.append("caption", caption);
+  if (parseMode) fd.append("parse_mode", parseMode);
   if (replyTo) fd.append("reply_to_message_id", String(replyTo));
   fd.append("photo", new Blob([pngBuf], { type: "image/png" }), "stag.png");
   try { const r = await fetch(TG("sendPhoto"), { method: "POST", body: fd }); return await r.json().catch(() => ({})); }
   catch { return {}; }
 }
+// Decoded once — the embedded $STAG character, reused as the welcome image.
+let _welcomeBuf = null;
+const welcomeImg = () => (_welcomeBuf ||= Buffer.from(STAG_REF_B64, "base64"));
 
 // ── Venice generation ────────────────────────────────────────────────────────────
 async function editPfp(prompt) {
@@ -231,9 +235,9 @@ export default async function handler(req, res) {
       if (!seen.length) return res.status(200).json({ ok: true, dup: true });
     }
 
-    // ---------- help ----------
+    // ---------- help (image + menu) ----------
     if (cmd === "/start" || cmd === "/help") {
-      await say(chatId, replyTo,
+      const menu =
         "🏹 *$STAGWIFHOOD AI image generator*\n\n" +
         "• `/pfp` — your $STAG profile pic (1 *free*, then credits)\n" +
         "• `/pfp cyber samurai` — add a theme\n" +
@@ -241,7 +245,9 @@ export default async function handler(req, res) {
         "• `/credits` — your balance\n" +
         "• `/buy` — top up with $STAG\n" +
         "• `/verify` — prove *1M+ $STAG* → *50% off everything* 🦌\n\n" +
-        "On-character, fresh every time. Antlers up. 💚");
+        "On-character, fresh every time. Antlers up. 💚";
+      const r = await sendPhoto(chatId, welcomeImg(), menu, replyTo, "Markdown");
+      if (!r || r.ok === false) await say(chatId, replyTo, menu); // text fallback
       return res.status(200).json({ ok: true });
     }
 
