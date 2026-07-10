@@ -34,7 +34,7 @@
 import { neon } from "@neondatabase/serverless";
 import { STAG_REF_B64 } from "./_stagref.js";
 import { STAG_WELCOME_B64 } from "./_stagwelcome.js";
-import { verifyStagPayment, verifyMicroDeposit, stagBalanceWhole, stagTotalSupplyWhole, STAG_TOKEN, DEAD } from "./_rhchain.js";
+import { verifyStagPayment, verifyMicroDeposit, stagBalanceWhole, stagTotalSupplyWhole, rpc, STAG_TOKEN, DEAD } from "./_rhchain.js";
 
 const CONN = (process.env.DATABASE_URL || process.env.POSTGRES_URL || "").trim();
 const TOKEN = (process.env.STAG_BOT_TOKEN || "").trim();
@@ -171,7 +171,8 @@ async function ensure(s) {
   await s`INSERT INTO stag_pool (id, used) VALUES (1, 0) ON CONFLICT (id) DO NOTHING`;
   await s`CREATE TABLE IF NOT EXISTS stag_bal (tid TEXT PRIMARY KEY, credits INT NOT NULL DEFAULT 0, updated_at TIMESTAMPTZ DEFAULT now())`;
   await s`CREATE TABLE IF NOT EXISTS stag_free (tid TEXT PRIMARY KEY, used INT NOT NULL DEFAULT 0)`;
-  await s`CREATE TABLE IF NOT EXISTS stag_log (id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY, tid TEXT, kind TEXT, credits INT, created_at TIMESTAMPTZ DEFAULT now())`;
+  await s`CREATE TABLE IF NOT EXISTS stag_log (id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY, tid TEXT, uname TEXT, kind TEXT, credits INT, created_at TIMESTAMPTZ DEFAULT now())`;
+  await s`ALTER TABLE stag_log ADD COLUMN IF NOT EXISTS uname TEXT`; // for the /leaderboard tool
   await s`CREATE TABLE IF NOT EXISTS stag_claims (txhash TEXT PRIMARY KEY, tid TEXT, credits INT, created_at TIMESTAMPTZ DEFAULT now())`;
   // A purchase is bound to the buyer by a server-assigned EXACT $STAG amount (the odd
   // whole-token tail is their secret) so nobody can front-run/steal a stranger's tx.
@@ -231,9 +232,20 @@ async function stagStats() {
       priceUsd: Number(p.priceUsd), mcap: Number(p.marketCap || p.fdv || 0),
       change24: Number(p.priceChange?.h24 || 0), liq: Number(p.liquidity?.usd || 0),
       vol24: Number(p.volume?.h24 || 0), url: p.url || ("https://dexscreener.com/robinhood/" + STAG_TOKEN),
+      buys24: Number(p.txns?.h24?.buys || 0), sells24: Number(p.txns?.h24?.sells || 0),
     };
   } catch { return null; }
 }
+// Holder count via the Robinhood Chain block explorer (Blockscout).
+async function holdersCount() {
+  try {
+    const r = await fetch("https://robinhoodchain.blockscout.com/api/v2/tokens/" + STAG_TOKEN);
+    const j = await r.json();
+    const n = Number(j.holders || j.holders_count || 0);
+    return n > 0 ? n : null;
+  } catch { return null; }
+}
+const shortAddr = (a) => a.slice(0, 6) + "…" + a.slice(-4);
 
 // ── Handler ──────────────────────────────────────────────────────────────────────
 export default async function handler(req, res) {
@@ -283,7 +295,7 @@ export default async function handler(req, res) {
         "💰 *Want more?* Grab credits:\n" +
         "💳 `/buy` — pay in $STAG  ·  `/credits` — your balance\n" +
         "🔐 `/verify` — hold *1M+ $STAG* → *50% OFF*\n\n" +
-        "🆓 *Free tools:* `/price` `/burn` `/ca` `/links`\n\n" +
+        "🆓 *Free tools:* `/price` `/burn` `/holders` `/ca` `/links` — full list: `/tools`\n\n" +
         "🔓 *No wallet connection — ever.* Just send $STAG, no connect, no signing.\n" +
         "_Use me in the group or DM me privately. Antlers up. 💚🦌_";
       // Standalone (no reply) so it's a clean card the community can pin.
@@ -333,6 +345,93 @@ export default async function handler(req, res) {
         const pct = supply > 0 ? (burned / supply * 100) : 0;
         await say(chatId, replyTo, `🔥 *$STAG BURNED*\n\nTotal burned: *${fmt(burned)}* $STAG\n🔥 *${pct.toFixed(2)}%* of supply gone forever`);
       } catch { await say(chatId, replyTo, "⚠️ Couldn't read burn data right now — try again."); }
+      return res.status(200).json({ ok: true });
+    }
+
+    // ---------- FREE TOOLS: all-tools list ----------
+    if (cmd === "/tools" || cmd === "/free") {
+      await say(chatId, replyTo,
+        "🆓 *$STAG free tools*\n\n" +
+        "📊 `/price` `/mc` — price & market cap\n" +
+        "🔥 `/burn` — total burned\n" +
+        "📈 `/buys` — 24h buys vs sells\n" +
+        "👥 `/holders` — holder count\n" +
+        "🪙 `/supply` — supply & circulating\n" +
+        "👛 `/wallet <addr>` — any wallet's $STAG\n" +
+        "🧮 `/convert 1000000` — $STAG ↔ USD\n" +
+        "⛽ `/gas` — Robinhood Chain gas\n" +
+        "🏆 `/leaderboard` — top creators\n" +
+        "📜 `/ca` · 🔗 `/links`");
+      return res.status(200).json({ ok: true });
+    }
+
+    // ---------- FREE TOOLS: 24h buys vs sells ----------
+    if (cmd === "/buys" || cmd === "/txns" || cmd === "/volume" || cmd === "/vol") {
+      const d = await stagStats();
+      if (!d) { await say(chatId, replyTo, "⚠️ Couldn't load that right now — try again."); return res.status(200).json({ ok: true }); }
+      const tot = d.buys24 + d.sells24;
+      const bp = tot ? Math.round(d.buys24 / tot * 100) : 0;
+      await say(chatId, replyTo, `📈 *$STAG — last 24h*\n\n🟢 Buys: *${d.buys24}*\n🔴 Sells: *${d.sells24}*\n📊 ${bp}% buy pressure\n💵 Volume: ${money(d.vol24)}`);
+      return res.status(200).json({ ok: true });
+    }
+
+    // ---------- FREE TOOLS: holders ----------
+    if (cmd === "/holders") {
+      const n = await holdersCount();
+      await say(chatId, replyTo, n ? `👥 *$STAGWIFHOOD holders*\n\n*${n.toLocaleString("en-US")}* holders and growing 🦌` : "⚠️ Couldn't read holder count right now — try again.");
+      return res.status(200).json({ ok: true });
+    }
+
+    // ---------- FREE TOOLS: supply ----------
+    if (cmd === "/supply") {
+      try {
+        const [supply, burned] = await Promise.all([stagTotalSupplyWhole(), stagBalanceWhole(DEAD)]);
+        const circ = Math.max(0, supply - burned);
+        await say(chatId, replyTo, `🪙 *$STAG supply*\n\nTotal: *${fmt(supply)}*\n🔥 Burned: ${fmt(burned)}\n🟢 Circulating: *${fmt(circ)}*`);
+      } catch { await say(chatId, replyTo, "⚠️ Couldn't read supply right now — try again."); }
+      return res.status(200).json({ ok: true });
+    }
+
+    // ---------- FREE TOOLS: wallet balance lookup ----------
+    if (cmd === "/wallet" || cmd === "/bal" || cmd === "/holdings") {
+      const w = (arg.trim().split(/\s+/)[0] || "");
+      if (!/^0x[0-9a-fA-F]{40}$/.test(w)) { await say(chatId, replyTo, "Usage: `/wallet 0x…` (any Robinhood Chain address)."); return res.status(200).json({ ok: true }); }
+      try {
+        const [bal, d] = await Promise.all([stagBalanceWhole(w), stagStats()]);
+        const usd = d ? bal * d.priceUsd : 0;
+        await say(chatId, replyTo, `👛 \`${shortAddr(w)}\`\nholds *${fmt(bal)}* $STAG${d ? ` ≈ *$${usd.toFixed(2)}*` : ""}`);
+      } catch { await say(chatId, replyTo, "⚠️ Couldn't read that wallet — check the address."); }
+      return res.status(200).json({ ok: true });
+    }
+
+    // ---------- FREE TOOLS: convert $STAG <-> USD ----------
+    if (cmd === "/convert" || cmd === "/calc") {
+      const raw = arg.trim();
+      const num = parseFloat(raw.replace(/[^0-9.]/g, ""));
+      if (!Number.isFinite(num) || num <= 0) { await say(chatId, replyTo, "Usage: `/convert 1000000` (→ USD) or `/convert $50` (→ $STAG)."); return res.status(200).json({ ok: true }); }
+      const d = await stagStats();
+      if (!d) { await say(chatId, replyTo, "⚠️ Price feed hiccup — try again."); return res.status(200).json({ ok: true }); }
+      if (raw.includes("$")) await say(chatId, replyTo, `🧮 *$${fmt(num)}* = *${fmt(num / d.priceUsd)}* $STAG`);
+      else await say(chatId, replyTo, `🧮 *${fmt(num)}* $STAG = *$${(num * d.priceUsd).toFixed(2)}*`);
+      return res.status(200).json({ ok: true });
+    }
+
+    // ---------- FREE TOOLS: gas ----------
+    if (cmd === "/gas") {
+      try {
+        const gwei = Number(BigInt(await rpc("eth_gasPrice"))) / 1e9;
+        await say(chatId, replyTo, `⛽ *Robinhood Chain gas*\n\n*${gwei.toFixed(4)}* gwei — basically free. 🟢`);
+      } catch { await say(chatId, replyTo, "⚠️ Couldn't read gas right now — try again."); }
+      return res.status(200).json({ ok: true });
+    }
+
+    // ---------- FREE TOOLS: creator leaderboard ----------
+    if (cmd === "/leaderboard" || cmd === "/lb" || cmd === "/top") {
+      const rows = await s`SELECT uname, COUNT(*)::int AS n FROM stag_log WHERE uname IS NOT NULL GROUP BY uname ORDER BY n DESC LIMIT 10`;
+      if (!rows.length) { await say(chatId, replyTo, "🏆 No art made yet — be the first with /pfp!"); return res.status(200).json({ ok: true }); }
+      const medals = ["🥇", "🥈", "🥉"];
+      const list = rows.map((r, i) => `${medals[i] || `${i + 1}.`} ${r.uname} — *${r.n}*`).join("\n");
+      await say(chatId, replyTo, `🏆 *$STAG top creators*\n\n${list}`);
       return res.status(200).json({ ok: true });
     }
 
@@ -527,7 +626,7 @@ export default async function handler(req, res) {
       }
       const tag = funded === "owner" ? "👑" : funded === "pool" ? "🎁 that was your free one" : `–${cost} credits`;
       await sendPhoto(chatId, png, caption + `\n\n${tag}  •  another? /pfp /imagine  •  /credits`, replyTo);
-      await s`INSERT INTO stag_log (tid, kind, credits) VALUES (${tid}, ${isPfp ? "pfp" : "gen"}, ${funded === "owner" ? 0 : cost})`;
+      await s`INSERT INTO stag_log (tid, uname, kind, credits) VALUES (${tid}, ${uname}, ${isPfp ? "pfp" : "gen"}, ${funded === "owner" ? 0 : cost})`;
       return res.status(200).json({ ok: true });
     } catch (e) {
       // refund whatever funded it (owner paid nothing)
