@@ -60,7 +60,17 @@ export async function verifyStagPayment(txHash, treasury) {
   }
   if (raw <= 0n || !from) return { ok: false, err: "no_stag_to_treasury" };
   const amountWhole = Number(raw / 10n ** BigInt(Math.max(0, STAG_DECIMALS - 6))) / 1e6;
-  return { ok: true, from, amountWhole };
+  return { ok: true, from, amountWhole, blockTime: await blockTimestamp(rec.blockNumber) };
+}
+
+// Unix seconds of a block (0 if unavailable) — used to require a payment be newer than
+// the request that assigned its amount, so an old/stale tx can't be claimed by someone else.
+async function blockTimestamp(blockNumber) {
+  try {
+    if (!blockNumber) return 0;
+    const blk = await rpc("eth_getBlockByNumber", [blockNumber, false]);
+    return blk && blk.timestamp ? Number(BigInt(blk.timestamp)) : 0;
+  } catch { return 0; }
 }
 
 // Verify a native-ETH micro-deposit of EXACTLY valueWei into `verifyWallet` (holder verify).
@@ -73,5 +83,5 @@ export async function verifyMicroDeposit(txHash, verifyWallet, valueWei) {
   if (BigInt(tx.value || "0x0") !== BigInt(valueWei)) return { ok: false, err: "wrong_amount" };
   const rec = await rpc("eth_getTransactionReceipt", [txHash]);
   if (!rec || (rec.status && rec.status !== "0x1")) return { ok: false, err: "not_confirmed" };
-  return { ok: true, from: (tx.from || "").toLowerCase() };
+  return { ok: true, from: (tx.from || "").toLowerCase(), blockTime: await blockTimestamp(tx.blockNumber || rec.blockNumber) };
 }
