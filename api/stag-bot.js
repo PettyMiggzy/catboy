@@ -251,6 +251,20 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
 
+    // ---------- reset (OWNER ONLY) ----------
+    if (cmd === "/reset") {
+      if (tid !== OWNER) return res.status(200).json({ ok: true }); // silently ignore for everyone else
+      const scope = arg.trim().toLowerCase();
+      await s`UPDATE stag_pool SET used = 0 WHERE id = 1`; // zero the free-pool counter
+      if (scope === "all") {
+        await s`TRUNCATE stag_free, stag_log, stag_cool`;   // fresh launch: everyone gets their free again
+        await say(chatId, replyTo, "🧹 *Full reset* — free pool zeroed, everyone's free PFP + cooldowns cleared. Clean launch. 🦌");
+      } else {
+        await say(chatId, replyTo, `🧹 Free pool reset to *0 / ${BUDGET}*. (Use \`/reset all\` to also clear per-user free grants + cooldowns.)`);
+      }
+      return res.status(200).json({ ok: true });
+    }
+
     // ---------- credits / pool ----------
     if (cmd === "/credits" || cmd === "/balance" || cmd === "/pfpcredits") {
       const [bal, used, verified] = [await balOf(s, tid), await poolUsed(s), await isVerified(s, tid)];
