@@ -100,6 +100,19 @@ const STYLE_LOCK =
   " muscular build. Head-and-shoulders square profile picture, centered, no text, no watermark.";
 const BANNED = /\b(nude|naked|nsfw|sex|sexual|porn|explicit|hentai|nipple|genital|underage|child|loli|shota|rape|gore|beastiality|cp)\b/i;
 
+// Cool "working on it" lines shown while an image renders (picked at random).
+const SPINUP = [
+  "⚡ Spinning the $STAG agent up…",
+  "🏹 Nocking the arrow… rendering incoming",
+  "🌲 Summoning the stag from the cyber-forest…",
+  "⚙️ Booting the forge — antlers loading…",
+  "🟢 Agent online. Painting your $STAG…",
+  "🔮 Channeling emerald energy…",
+  "🦌 Waking the hooded one…",
+  "💚 Charging the neon core… hold tight",
+];
+const spinLine = () => SPINUP[Math.floor(Math.random() * SPINUP.length)];
+
 // ── Telegram helpers ─────────────────────────────────────────────────────────────
 async function tg(method, payload) {
   try {
@@ -235,19 +248,21 @@ export default async function handler(req, res) {
       if (!seen.length) return res.status(200).json({ ok: true, dup: true });
     }
 
-    // ---------- help (image + menu) ----------
-    if (cmd === "/start" || cmd === "/help") {
+    // ---------- menu / help (image + commands — pinnable community card) ----------
+    if (cmd === "/start" || cmd === "/help" || cmd === "/menu" || cmd === "/commands") {
       const menu =
-        "🏹 *$STAGWIFHOOD AI image generator*\n\n" +
-        "• `/pfp` — your $STAG profile pic (1 *free*, then credits)\n" +
-        "• `/pfp cyber samurai` — add a theme\n" +
-        "• `/imagine a stag on mars, neon` — generate *any* image (credits)\n" +
-        "• `/credits` — your balance\n" +
-        "• `/buy` — top up with $STAG\n" +
-        "• `/verify` — prove *1M+ $STAG* → *50% off everything* 🦌\n\n" +
-        "On-character, fresh every time. Antlers up. 💚";
-      const r = await sendPhoto(chatId, welcomeImg(), menu, replyTo, "Markdown");
-      if (!r || r.ok === false) await say(chatId, replyTo, menu); // text fallback
+        "🏹 *$STAGWIFHOOD — AI IMAGE GENERATOR*\n" +
+        "_Make $STAG art right here in chat._\n\n" +
+        "🦌 `/pfp` — your $STAG profile pic *(1 free!)*\n" +
+        "🎨 `/pfp cyber samurai` — add any theme\n" +
+        "🖼️ `/imagine <anything>` — generate *any* image\n" +
+        "🎯 `/credits` — check your balance\n" +
+        "💳 `/buy` — top up with $STAG\n" +
+        "🔐 `/verify` — hold *1M+ $STAG* → *50% OFF* everything\n\n" +
+        "On-character, fresh every time. Antlers up. 💚🦌";
+      // Standalone (no reply) so it's a clean card the community can pin.
+      const r = await sendPhoto(chatId, welcomeImg(), menu, null, "Markdown");
+      if (!r || r.ok === false) await say(chatId, null, menu); // text fallback
       return res.status(200).json({ ok: true });
     }
 
@@ -430,7 +445,7 @@ export default async function handler(req, res) {
     if (!isOwner) await s`INSERT INTO stag_cool (tid, last_at) VALUES (${tid}, now()) ON CONFLICT (tid) DO UPDATE SET last_at=now()`;
 
     await tg("sendChatAction", { chat_id: chatId, action: "upload_photo" });
-    await say(chatId, replyTo, isPfp ? "🎨 Conjuring your $STAG… 🏹" : "🎨 Painting it… give me a few seconds. 🏹");
+    await say(chatId, replyTo, spinLine());
 
     try {
       let png, caption;
@@ -440,14 +455,14 @@ export default async function handler(req, res) {
         const prompt = `Head-and-shoulders profile-picture portrait of THIS exact character. New pose/scene: ${pose}.` +
           (style ? ` Also work in this theme: ${style}.` : "") + STYLE_LOCK;
         png = await editPfp(prompt);
-        caption = `🦌 ${uname}, your $STAGWIFHOOD is minted. 🏹💚`;
+        caption = `🦌 ${uname}, your $STAGWIFHOOD is ready. 🏹💚` + (style ? `\n🎨 "${style}"` : "");
       } else {
         const prompt = genPrompt + ". High quality, detailed, dramatic lighting, no text, no watermark.";
         png = await genImage(prompt);
-        caption = `🎨 ${uname} — /imagine "${genPrompt.slice(0, 80)}"`;
+        caption = `🎨 ${uname} asked → delivered 🏹\n"${genPrompt.slice(0, 120)}"`;
       }
-      const tag = funded === "owner" ? "👑" : funded === "pool" ? "That was your free one 🎁" : `-${cost} credits`;
-      await sendPhoto(chatId, png, caption + `\n${tag} • /credits`, replyTo);
+      const tag = funded === "owner" ? "👑" : funded === "pool" ? "🎁 that was your free one" : `–${cost} credits`;
+      await sendPhoto(chatId, png, caption + `\n\n${tag}  •  another? /pfp /imagine  •  /credits`, replyTo);
       await s`INSERT INTO stag_log (tid, kind, credits) VALUES (${tid}, ${isPfp ? "pfp" : "gen"}, ${funded === "owner" ? 0 : cost})`;
       return res.status(200).json({ ok: true });
     } catch (e) {
