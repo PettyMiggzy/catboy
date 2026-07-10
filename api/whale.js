@@ -207,9 +207,15 @@ export default async function handler(req, res) {
     await ensureTables(s);
 
     if (req.method === "GET") {
-      // Issue a unique deposit amount (the user's secret) — no wallet connect needed.
-      const rnd = 1 + Math.floor(Math.random() * 99999);         // unique lamport tail (100k values)
-      const lamports = DEPOSIT_BASE + rnd;                        // ~0.0001–0.0002 SOL (a few cents)
+      // Issue a deposit amount (the user's secret) — no wallet connect needed. It MUST be
+      // unique among active pending verifies, else an attacker could re-roll GET until their
+      // amount matches a pending whale's deposit and hijack it. Reroll on any clash.
+      let lamports = DEPOSIT_BASE + 1 + Math.floor(Math.random() * 99999);
+      for (let tries = 0; tries < 15; tries++) {
+        const clash = await s`SELECT 1 FROM whale_verify_req WHERE lamports=${lamports} AND tid<>${tid} AND created_at > now() - interval '30 minutes'`;
+        if (!clash.length) break;
+        lamports = DEPOSIT_BASE + 1 + Math.floor(Math.random() * 99999);
+      }
       await s`INSERT INTO whale_verify_req (tid, lamports, created_at) VALUES (${tid}, ${lamports}, now())
               ON CONFLICT (tid) DO UPDATE SET lamports=${lamports}, created_at=now()`;
       return res.status(200).json({
