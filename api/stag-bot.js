@@ -34,7 +34,7 @@
 import { neon } from "@neondatabase/serverless";
 import { STAG_REF_B64 } from "./_stagref.js";
 import { STAG_WELCOME_B64 } from "./_stagwelcome.js";
-import { verifyStagPayment, verifyMicroDeposit, stagBalanceWhole, STAG_TOKEN } from "./_rhchain.js";
+import { verifyStagPayment, verifyMicroDeposit, stagBalanceWhole, stagTotalSupplyWhole, STAG_TOKEN, DEAD } from "./_rhchain.js";
 
 const CONN = (process.env.DATABASE_URL || process.env.POSTGRES_URL || "").trim();
 const TOKEN = (process.env.STAG_BOT_TOKEN || "").trim();
@@ -58,6 +58,12 @@ const MARKUP = parseFloat(process.env.STAG_MARKUP || "2");               // reta
 const HOLDER_DISCOUNT = parseFloat(process.env.STAG_HOLDER_DISCOUNT || "0.5"); // holders pay ½
 const HOLD_MIN = parseFloat(process.env.STAG_HOLD_MIN || "1000000");     // $STAG for holder perk
 const BUNDLES_USD = (process.env.STAG_BUNDLES || "3,10,25").split(",").map((x) => parseFloat(x));
+const LINKS = {
+  site: process.env.STAG_SITE || "https://www.stagwifhood.fun",
+  x: process.env.STAG_X || "https://x.com/StagWifHood",
+  tg: process.env.STAG_TG || "https://t.me/StagWifHood",
+  chart: "https://dexscreener.com/robinhood/" + STAG_TOKEN,
+};
 
 const TG = (m) => `https://api.telegram.org/bot${TOKEN}/${m}`;
 export const config = { maxDuration: 60 };
@@ -211,6 +217,23 @@ function stagForCredits(credits, priceUsd, holder) {
   return usd / priceUsd;
 }
 const fmt = (n) => n >= 1000 ? Math.round(n).toLocaleString("en-US") : n.toPrecision(3);
+const money = (n) => "$" + (n >= 1e9 ? (n / 1e9).toFixed(2) + "B" : n >= 1e6 ? (n / 1e6).toFixed(2) + "M" : n >= 1e3 ? (n / 1e3).toFixed(1) + "K" : Number(n).toFixed(2));
+
+// Live $STAG stats (DexScreener, Robinhood Chain) for the free /price + /mc tools.
+async function stagStats() {
+  try {
+    const r = await fetch("https://api.dexscreener.com/latest/dex/tokens/" + STAG_TOKEN);
+    const j = await r.json();
+    const pairs = (j.pairs || []).filter((p) => p.priceUsd);
+    pairs.sort((a, b) => (Number(b.liquidity?.usd) || 0) - (Number(a.liquidity?.usd) || 0));
+    const p = pairs[0]; if (!p) return null;
+    return {
+      priceUsd: Number(p.priceUsd), mcap: Number(p.marketCap || p.fdv || 0),
+      change24: Number(p.priceChange?.h24 || 0), liq: Number(p.liquidity?.usd || 0),
+      vol24: Number(p.volume?.h24 || 0), url: p.url || ("https://dexscreener.com/robinhood/" + STAG_TOKEN),
+    };
+  } catch { return null; }
+}
 
 // ── Handler ──────────────────────────────────────────────────────────────────────
 export default async function handler(req, res) {
@@ -254,13 +277,14 @@ export default async function handler(req, res) {
       const menu =
         "🏹 *$STAGWIFHOOD — AI IMAGE GENERATOR*\n" +
         "_Make $STAG art right here in chat._\n\n" +
-        "🦌 `/pfp` — your $STAG profile pic *(1 free!)*\n" +
+        "🦌 `/pfp` — your $STAG profile pic *(1 FREE!)*\n" +
         "🎨 `/pfp cyber samurai` — add any theme\n" +
-        "🖼️ `/imagine <anything>` — generate *any* image\n" +
-        "🎯 `/credits` — check your balance\n" +
-        "💳 `/buy` — top up with $STAG\n" +
-        "🔐 `/verify` — hold *1M+ $STAG* → *50% OFF* everything\n\n" +
-        "On-character, fresh every time. Antlers up. 💚🦌";
+        "🖼️ `/imagine <anything>` — generate *any* image\n\n" +
+        "💰 *Want more?* Grab credits:\n" +
+        "💳 `/buy` — pay in $STAG  ·  `/credits` — your balance\n" +
+        "🔐 `/verify` — hold *1M+ $STAG* → *50% OFF*\n\n" +
+        "🆓 *Free tools:* `/price` `/burn` `/ca` `/links`\n\n" +
+        "_Use me in the group or DM me privately. Antlers up. 💚🦌_";
       // Standalone (no reply) so it's a clean card the community can pin.
       const r = await sendPhoto(chatId, welcomeImg(), menu, null, "Markdown");
       if (!r || r.ok === false) await say(chatId, null, menu); // text fallback
@@ -270,6 +294,44 @@ export default async function handler(req, res) {
     // ---------- about (identity — never reveals the model) ----------
     if (cmd === "/about" || cmd === "/whoami") {
       await say(chatId, replyTo, `🦌 The *$STAGWIFHOOD* generator — built and trained by *${OWNER_NAME}*. 👑\nThat's all you need to know. 🏹`);
+      return res.status(200).json({ ok: true });
+    }
+
+    // ---------- FREE TOOLS: price / market cap ----------
+    if (cmd === "/price" || cmd === "/mc" || cmd === "/chart" || cmd === "/stats" || cmd === "/marketcap") {
+      const d = await stagStats();
+      if (!d) { await say(chatId, replyTo, "⚠️ Couldn't load $STAG stats right now — try again in a sec."); return res.status(200).json({ ok: true }); }
+      const up = d.change24 >= 0;
+      await say(chatId, replyTo,
+        `📊 *$STAGWIFHOOD*\n\n` +
+        `💵 Price: *$${d.priceUsd.toPrecision(3)}*\n` +
+        `🏦 Market cap: *${money(d.mcap)}*\n` +
+        `${up ? "🟢" : "🔴"} 24h: *${up ? "+" : ""}${d.change24.toFixed(1)}%*\n` +
+        `💧 Liquidity: ${money(d.liq)}\n` +
+        `📈 24h volume: ${money(d.vol24)}\n\n` +
+        `[View chart 📈](${d.url})`);
+      return res.status(200).json({ ok: true });
+    }
+
+    // ---------- FREE TOOLS: contract + links ----------
+    if (cmd === "/ca" || cmd === "/contract") {
+      await say(chatId, replyTo, `📜 *$STAG contract* — Robinhood Chain\n\`${STAG_TOKEN}\`\n\n⚠️ Only ever trust *this* address. Verify before you buy.`);
+      return res.status(200).json({ ok: true });
+    }
+    if (cmd === "/links" || cmd === "/socials" || cmd === "/official") {
+      await say(chatId, replyTo,
+        `🔗 *$STAGWIFHOOD — official links*\n\n` +
+        `🌐 [Website](${LINKS.site})\n🐦 [X / Twitter](${LINKS.x})\n💬 [Telegram](${LINKS.tg})\n📈 [Chart](${LINKS.chart})\n\n📜 CA: \`${STAG_TOKEN}\``);
+      return res.status(200).json({ ok: true });
+    }
+
+    // ---------- FREE TOOLS: total burned ----------
+    if (cmd === "/burn" || cmd === "/burns" || cmd === "/burned") {
+      try {
+        const [burned, supply] = await Promise.all([stagBalanceWhole(DEAD), stagTotalSupplyWhole()]);
+        const pct = supply > 0 ? (burned / supply * 100) : 0;
+        await say(chatId, replyTo, `🔥 *$STAG BURNED*\n\nTotal burned: *${fmt(burned)}* $STAG\n🔥 *${pct.toFixed(2)}%* of supply gone forever`);
+      } catch { await say(chatId, replyTo, "⚠️ Couldn't read burn data right now — try again."); }
       return res.status(200).json({ ok: true });
     }
 
