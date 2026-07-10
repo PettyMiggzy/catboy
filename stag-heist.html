@@ -174,7 +174,6 @@
   <h1>STAG <span>ARCHERY</span></h1>
   <p>Draw the bow, read the wind, sink the bullseye. Every hit pushes the target back — 3 misses and your run is over. Chase the golden 10 and stack streaks.</p>
   <button class="btn" id="startBtn">Shoot</button>
-  <a class="tglink" href="https://t.me/kingpetty317" target="_blank" rel="noopener">✈ Join Telegram · @kingpetty317</a>
   <div class="lb" id="lbStart"><h3>Top Archers</h3><div id="lbStartRows"></div></div>
 </div>
 
@@ -665,12 +664,14 @@ function makeBillboard(w){
   const grp=new THREE.Group(); const h=w*9/16; const cy=3.4;
   const frameM=new THREE.MeshStandardMaterial({color:0x24170b,roughness:.8,metalness:.15});
   const goldM =new THREE.MeshStandardMaterial({color:0xcaa23a,roughness:.35,metalness:.85,emissive:0x2a1e00,emissiveIntensity:.4});
+  // clear depth separation front→back so nothing z-fights as the camera pans
   const panel=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({map:promoTex,color:0xffffff,side:THREE.DoubleSide,toneMapped:false}));
-  panel.position.set(0,cy,0.02); billboardPanel=panel;
-  const gilt=new THREE.Mesh(new THREE.BoxGeometry(w+0.18,h+0.18,0.14),goldM); gilt.position.set(0,cy,-0.05);
-  const frame=new THREE.Mesh(new THREE.BoxGeometry(w+0.42,h+0.42,0.12),frameM); frame.position.set(0,cy,-0.08);
-  for(const s of [-1,1]){ const post=new THREE.Mesh(new THREE.CylinderGeometry(0.11,0.14,cy+h/2,9),frameM);
-    post.position.set(s*(w/2+0.1),(cy-h/2)/1.0*0.6,-0.12); post.position.y=(cy)/2; post.scale.y=1; grp.add(post); }
+  panel.position.set(0,cy,0.20); billboardPanel=panel;
+  const gilt=new THREE.Mesh(new THREE.BoxGeometry(w+0.18,h+0.18,0.10),goldM); gilt.position.set(0,cy,0.05);
+  const frame=new THREE.Mesh(new THREE.BoxGeometry(w+0.42,h+0.42,0.12),frameM); frame.position.set(0,cy,-0.10);
+  const topH=cy+h/2;
+  for(const s of [-1,1]){ const post=new THREE.Mesh(new THREE.CylinderGeometry(0.11,0.14,topH,9),frameM);
+    post.position.set(s*(w/2+0.14),topH/2,-0.14); grp.add(post); }
   grp.add(frame,gilt,panel);
   grp.traverse(o=>{if(o.isMesh){o.castShadow=true;}});
   return grp;
