@@ -1044,15 +1044,16 @@ function endRound(){
   S.mode='over'; $('#finalScore').textContent=S.score; AK.over();
   $('#hud').style.opacity='0';
   nockArrow.visible=true; trajDots.visible=false; aimRing.visible=false;
-  const lb=loadLB(); const low=lb.length<10?0:lb[lb.length-1].s;
-  const qualifies=S.score>0 && (lb.length<10 || S.score>low);
+  const qualifies=S.score>0;   // global board — anyone who scored can put their initials up
   $('#nameWrap').style.display=qualifies?'flex':'none';
   if(qualifies){$('#nameIn').value='';setTimeout(()=>$('#nameIn').focus(),200);}
-  renderLB('#lbOverRows',qualifies?null:S.score);
+  renderLB('#lbOverRows',qualifies?null:S.score,8);
   $('#over').classList.remove('hide');
+  fetchGlobalLB();   // make sure the over-screen board is current
 }
 
-/* ============================ LEADERBOARD ============================ */
+/* ============================ LEADERBOARD (global, Neon-backed) ============================ */
+const LB_API='https://www.catboyonsol.fun/api/stag-lb';   // global board; localStorage is the offline fallback
 function loadLB(){try{return JSON.parse(localStorage.getItem(LBKEY))||[];}catch(_){return[];}}
 function saveLB(l){try{localStorage.setItem(LBKEY,JSON.stringify(l));}catch(_){}}
 function seedLB(){let l=loadLB();
@@ -1064,11 +1065,21 @@ function renderLB(sel,hl,limit){
     return `<div class="row${me?' me':''}"><span class="r">${i+1}</span><span class="n">${e.n}</span><span class="s">${e.s}</span></div>`;
   }).join('')||'<div class="row"><span class="n" style="color:var(--muted)">Be the first.</span></div>';
 }
+function renderAllLB(){ renderLB('#lbStartRows',null,5); if(!$('#over').classList.contains('hide'))renderLB('#lbOverRows',S.score,8); try{refreshLB();}catch(e){} }
+async function fetchGlobalLB(){                            // pull the live board, cache it locally
+  try{ const r=await fetch(LB_API,{cache:'no-store'}); const d=await r.json();
+    if(d&&d.ok&&Array.isArray(d.top)&&d.top.length){ saveLB(d.top); renderAllLB(); return d.top; } }catch(e){}
+  return null;
+}
+async function postScore(n,s){
+  try{ await fetch(LB_API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({n,s})}); }catch(e){}
+}
 function submitScore(name){
   name=(name||'YOU').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,3)||'YOU';
-  const l=loadLB();l.push({n:name,s:S.score});l.sort((a,b)=>b.s-a.s);saveLB(l.slice(0,10));
+  const l=loadLB();l.push({n:name,s:S.score});l.sort((a,b)=>b.s-a.s);saveLB(l.slice(0,25));   // optimistic local
   $('#nameWrap').style.display='none';renderLB('#lbOverRows',S.score,8);renderLB('#lbStartRows',null,5);
-  try{ refreshLB(); }catch(e){}   // update the in-world leaderboard slide too
+  try{ refreshLB(); }catch(e){}
+  postScore(name,S.score).then(()=>fetchGlobalLB());       // push to the global board, then re-sync
 }
 
 /* ============================ WIRING ============================ */
@@ -1084,6 +1095,7 @@ $('#hud').style.transition='opacity .3s'; $('#hud').style.opacity='0';   // HUD 
 $('#stagDeer').style.backgroundImage='url("'+STAG_MASCOT+'")';   // corner mascot = the real character
 $('#heroImg').src=STAG_HERO;                                     // start-screen hero
 seedLB();renderLB('#lbStartRows',null,5);placeTarget();rollWind();renderHUD();
+fetchGlobalLB();   // replace the seed with the live global board
 requestAnimationFrame(tick);
 setTimeout(()=>{ $('#load').style.display='none'; $('#start').classList.remove('hide'); S.mode='menu'; },500);
 </script>
