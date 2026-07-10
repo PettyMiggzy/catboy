@@ -64,11 +64,6 @@ const LINKS = {
   tg: process.env.STAG_TG || "https://t.me/StagWifHood",
   chart: "https://dexscreener.com/robinhood/" + STAG_TOKEN,
 };
-// Rotating hashtag sets for /raid (env-overridable, ; between sets).
-const HASHTAG_SETS = (process.env.STAG_HASHTAGS ||
-  "#StagWifHood #RobinhoodChain #memecoin;#STAG #RobinhoodChain #crypto;#StagWifHood #memecoins #100x")
-  .split(";").map((s) => s.trim()).filter(Boolean);
-const RAID_COOLDOWN = parseInt(process.env.STAG_RAID_COOLDOWN || "120", 10) * 1000;
 
 const TG = (m) => `https://api.telegram.org/bot${TOKEN}/${m}`;
 export const config = { maxDuration: 60 };
@@ -186,7 +181,6 @@ async function ensure(s) {
   await s`CREATE TABLE IF NOT EXISTS stag_verify_req (tid TEXT PRIMARY KEY, wei TEXT, created_at TIMESTAMPTZ DEFAULT now())`;
   await s`CREATE TABLE IF NOT EXISTS stag_verify_used (txhash TEXT PRIMARY KEY, tid TEXT, at TIMESTAMPTZ DEFAULT now())`;
   await s`CREATE TABLE IF NOT EXISTS stag_cool (tid TEXT PRIMARY KEY, last_at TIMESTAMPTZ DEFAULT now())`;
-  await s`CREATE TABLE IF NOT EXISTS stag_raidcool (tid TEXT PRIMARY KEY, last_at TIMESTAMPTZ DEFAULT now())`;
   await s`CREATE TABLE IF NOT EXISTS stag_seen (uid BIGINT PRIMARY KEY, at TIMESTAMPTZ DEFAULT now())`;
 }
 const balOf = async (s, tid) => { const r = await s`SELECT credits FROM stag_bal WHERE tid=${tid}`; return r.length ? Number(r[0].credits) : 0; };
@@ -367,7 +361,6 @@ export default async function handler(req, res) {
         "🧮 `/convert 1000000` — $STAG ↔ USD\n" +
         "⛽ `/gas` — Robinhood Chain gas\n" +
         "🏆 `/leaderboard` — top creators\n" +
-        "🚨 `/raid <x-link>` — rally a raid\n" +
         "📜 `/ca` · 🔗 `/links`");
       return res.status(200).json({ ok: true });
     }
@@ -439,27 +432,6 @@ export default async function handler(req, res) {
       const medals = ["🥇", "🥈", "🥉"];
       const list = rows.map((r, i) => `${medals[i] || `${i + 1}.`} ${r.uname} — *${r.n}*`).join("\n");
       await say(chatId, replyTo, `🏆 *$STAG top creators*\n\n${list}`);
-      return res.status(200).json({ ok: true });
-    }
-
-    // ---------- RAID: broadcast a community raid call ----------
-    if (cmd === "/raid") {
-      const link = (arg.trim().split(/\s+/)[0] || "");
-      if (!/^https?:\/\/(x\.com|twitter\.com|mobile\.twitter\.com)\/\S+/i.test(link)) {
-        await say(chatId, replyTo, "Usage: `/raid <x.com link>` — paste the post you want the fam to raid. 🏹");
-        return res.status(200).json({ ok: true });
-      }
-      if (tid !== OWNER && RAID_COOLDOWN > 0) {
-        const cr = await s`SELECT last_at FROM stag_raidcool WHERE tid=${tid}`;
-        if (cr.length) {
-          const wait = RAID_COOLDOWN - (Date.now() - new Date(cr[0].last_at).getTime());
-          if (wait > 0) { await say(chatId, replyTo, `⏳ Let the last raid breathe — ${Math.ceil(wait / 1000)}s.`); return res.status(200).json({ ok: true }); }
-        }
-        await s`INSERT INTO stag_raidcool (tid, last_at) VALUES (${tid}, now()) ON CONFLICT (tid) DO UPDATE SET last_at=now()`;
-      }
-      let seed = Date.now(); const tags = HASHTAG_SETS[seed % HASHTAG_SETS.length];
-      await tg("sendMessage", { chat_id: chatId, parse_mode: "Markdown", disable_web_page_preview: false,
-        text: `🚨🚨 *$STAG RAID* 🚨🚨\n\n👉 ${link}\n\n✅ Like   🔁 Retweet   💬 Reply\nDrop: *$STAGWIFHOOD* ${tags}\n\nAntlers up — run it up the timeline! 🦌🏹` });
       return res.status(200).json({ ok: true });
     }
 
