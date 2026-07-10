@@ -33,6 +33,7 @@
 
 import { neon } from "@neondatabase/serverless";
 import { STAG_REF_B64 } from "./_stagref.js";
+import { STAG_WELCOME_B64 } from "./_stagwelcome.js";
 import { verifyStagPayment, verifyMicroDeposit, stagBalanceWhole, STAG_TOKEN } from "./_rhchain.js";
 
 const CONN = (process.env.DATABASE_URL || process.env.POSTGRES_URL || "").trim();
@@ -133,7 +134,7 @@ async function sendPhoto(chatId, pngBuf, caption, replyTo, parseMode) {
 }
 // Decoded once — the embedded $STAG character, reused as the welcome image.
 let _welcomeBuf = null;
-const welcomeImg = () => (_welcomeBuf ||= Buffer.from(STAG_REF_B64, "base64"));
+const welcomeImg = () => (_welcomeBuf ||= Buffer.from(STAG_WELCOME_B64, "base64"));
 
 // ── Venice generation ────────────────────────────────────────────────────────────
 async function editPfp(prompt) {
