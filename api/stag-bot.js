@@ -100,19 +100,6 @@ const STYLE_LOCK =
   " muscular build. Head-and-shoulders square profile picture, centered, no text, no watermark.";
 const BANNED = /\b(nude|naked|nsfw|sex|sexual|porn|explicit|hentai|nipple|genital|underage|child|loli|shota|rape|gore|beastiality|cp)\b/i;
 
-// Cool "working on it" lines shown while an image renders (picked at random).
-const SPINUP = [
-  "⚡ Spinning the $STAG agent up…",
-  "🏹 Nocking the arrow… rendering incoming",
-  "🌲 Summoning the stag from the cyber-forest…",
-  "⚙️ Booting the forge — antlers loading…",
-  "🟢 Agent online. Painting your $STAG…",
-  "🔮 Channeling emerald energy…",
-  "🦌 Waking the hooded one…",
-  "💚 Charging the neon core… hold tight",
-];
-const spinLine = () => SPINUP[Math.floor(Math.random() * SPINUP.length)];
-
 // ── Telegram helpers ─────────────────────────────────────────────────────────────
 async function tg(method, payload) {
   try {
@@ -443,7 +430,7 @@ export default async function handler(req, res) {
     if (!isOwner) await s`INSERT INTO stag_cool (tid, last_at) VALUES (${tid}, now()) ON CONFLICT (tid) DO UPDATE SET last_at=now()`;
 
     await tg("sendChatAction", { chat_id: chatId, action: "upload_photo" });
-    await say(chatId, replyTo, spinLine());
+    await say(chatId, replyTo, isPfp ? "🎨 Conjuring your $STAG… 🏹" : "🎨 Painting it… give me a few seconds. 🏹");
 
     try {
       let png, caption;
