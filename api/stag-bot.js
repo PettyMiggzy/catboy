@@ -139,13 +139,13 @@ async function tg(method, payload) {
     return await r.json().catch(() => ({}));
   } catch { return {}; }
 }
-const say = (chatId, replyTo, text) => tg("sendMessage", { chat_id: chatId, reply_to_message_id: replyTo, parse_mode: "Markdown", disable_web_page_preview: true, text });
+const say = (chatId, replyTo, text) => tg("sendMessage", { chat_id: chatId, reply_to_message_id: replyTo, allow_sending_without_reply: true, parse_mode: "Markdown", disable_web_page_preview: true, text });
 async function sendPhoto(chatId, pngBuf, caption, replyTo, parseMode) {
   const fd = new FormData();
   fd.append("chat_id", String(chatId));
   if (caption) fd.append("caption", caption);
   if (parseMode) fd.append("parse_mode", parseMode);
-  if (replyTo) fd.append("reply_to_message_id", String(replyTo));
+  if (replyTo) { fd.append("reply_to_message_id", String(replyTo)); fd.append("allow_sending_without_reply", "true"); }
   fd.append("photo", new Blob([pngBuf], { type: "image/png" }), "stag.png");
   try { const r = await fetch(TG("sendPhoto"), { method: "POST", body: fd }); return await r.json().catch(() => ({})); }
   catch { return {}; }
@@ -286,9 +286,11 @@ export default async function handler(req, res) {
     return res.status(200).json({ ok: true });
   }
 
-  const sp = text.trim().indexOf(" ");
-  let cmd = (sp === -1 ? text.trim() : text.slice(0, sp)).toLowerCase().split("@")[0];
-  const arg = sp === -1 ? "" : text.slice(sp + 1).trim();
+  // Split on the first run of whitespace (space/tab/newline), tolerant of leading space.
+  const tt = text.trim();
+  const mm = tt.match(/^(\S+)\s+([\s\S]*)$/);
+  let cmd = (mm ? mm[1] : tt).toLowerCase().split("@")[0];
+  const arg = mm ? mm[2].trim() : "";
   const chatId = msg.chat.id, replyTo = msg.message_id;
   const tid = String((msg.from && msg.from.id) || "");
   const uname = (msg.from && (msg.from.username ? "@" + msg.from.username : msg.from.first_name)) || "stag";
@@ -519,10 +521,15 @@ export default async function handler(req, res) {
       }
       const credits = Math.round(pickUsd / (CREDIT_USD * MARKUP));
       const baseStag = stagForCredits(credits, px, holder);
-      // Unique whole-token tail (server-assigned) = the buyer's secret. Cheap (~cents),
-      // human-typable, and binds this payment to THIS user so nobody can claim it.
-      const nonce = 1000 + Math.floor(Math.random() * 9000);
-      const expected = Math.ceil(baseStag) + nonce;
+      // Server-assigned unique whole-token amount = the buyer's binding. It MUST be unique
+      // among all active pending buys, otherwise an attacker could re-roll /buy until their
+      // amount matches a victim's and then claim the victim's tx. Reroll on any clash.
+      let expected = Math.ceil(baseStag) + 1000 + Math.floor(Math.random() * 9000);
+      for (let tries = 0; tries < 15; tries++) {
+        const clash = await s`SELECT 1 FROM stag_buy_req WHERE expected=${expected} AND tid<>${tid} AND created_at > now() - interval '30 minutes'`;
+        if (!clash.length) break;
+        expected = Math.ceil(baseStag) + 1000 + Math.floor(Math.random() * 9000);
+      }
       await s`INSERT INTO stag_buy_req (tid, expected, credits, created_at) VALUES (${tid}, ${expected}, ${credits}, now())
               ON CONFLICT (tid) DO UPDATE SET expected=${expected}, credits=${credits}, created_at=now()`;
       await say(chatId, replyTo,
@@ -542,7 +549,9 @@ export default async function handler(req, res) {
       const reqRow = await s`SELECT expected, credits, created_at FROM stag_buy_req WHERE tid=${tid}`;
       if (!reqRow.length) { await say(chatId, replyTo, "Run `/buy` first to lock your amount, then send + /claim."); return res.status(200).json({ ok: true }); }
       if (Date.now() - new Date(reqRow[0].created_at).getTime() > 30 * 60 * 1000) { await say(chatId, replyTo, "That buy expired — run `/buy` again."); return res.status(200).json({ ok: true }); }
-      const pay = await verifyStagPayment(txh, TREASURY);
+      let pay;
+      try { pay = await verifyStagPayment(txh, TREASURY); }
+      catch { await say(chatId, replyTo, "⚠️ Network hiccup reading the chain — your $STAG is safe, run /claim again in a moment."); return res.status(200).json({ ok: true }); }
       if (!pay.ok) { await say(chatId, replyTo, `⚠️ Couldn't verify that payment (${pay.err}). Make sure it's confirmed and sent $STAG to the treasury.`); return res.status(200).json({ ok: true }); }
       const expected = Number(reqRow[0].expected), credits = Number(reqRow[0].credits);
       // Must match the assigned amount EXACTLY (±1 token for truncation). The unique
@@ -569,8 +578,15 @@ export default async function handler(req, res) {
       if (!txh) {
         // Step 1: issue a unique tiny amount as the secret (server-assigned, ~cents,
         // wide range so two pending requests practically never collide).
-        const rnd = 100000 + Math.floor(Math.random() * 900000);
-        const wei = (10n ** 13n + BigInt(rnd) * 10n ** 7n).toString(); // ~0.00001–0.00002 ETH, unique tail
+        // Amount MUST be unique among active pending verifies, else an attacker could
+        // re-roll to match a whale's pending deposit and hijack it. Reroll on any clash.
+        let wei;
+        for (let tries = 0; tries < 15; tries++) {
+          const rnd = 100000 + Math.floor(Math.random() * 900000);
+          wei = (10n ** 13n + BigInt(rnd) * 10n ** 7n).toString(); // ~0.00001–0.00002 ETH, unique tail
+          const clash = await s`SELECT 1 FROM stag_verify_req WHERE wei=${wei} AND tid<>${tid} AND created_at > now() - interval '30 minutes'`;
+          if (!clash.length) break;
+        }
         await s`INSERT INTO stag_verify_req (tid, wei, created_at) VALUES (${tid}, ${wei}, now()) ON CONFLICT (tid) DO UPDATE SET wei=${wei}, created_at=now()`;
         const eth = (Number(wei) / 1e18).toFixed(9);
         await say(chatId, replyTo,
@@ -587,7 +603,9 @@ export default async function handler(req, res) {
       const reqRow = await s`SELECT wei, created_at FROM stag_verify_req WHERE tid=${tid}`;
       if (!reqRow.length) { await say(chatId, replyTo, "Run `/verify` first to get your unique amount."); return res.status(200).json({ ok: true }); }
       if (Date.now() - new Date(reqRow[0].created_at).getTime() > 30 * 60 * 1000) { await say(chatId, replyTo, "That verify request expired — run `/verify` again."); return res.status(200).json({ ok: true }); }
-      const chk = await verifyMicroDeposit(txh, VERIFY_WALLET, reqRow[0].wei);
+      let chk;
+      try { chk = await verifyMicroDeposit(txh, VERIFY_WALLET, reqRow[0].wei); }
+      catch { await say(chatId, replyTo, "⚠️ Network hiccup reading the chain — try /verify <txhash> again in a moment."); return res.status(200).json({ ok: true }); }
       if (!chk.ok) { await say(chatId, replyTo, `⚠️ Couldn't match that (${chk.err}). Send the *exact* amount, then paste the confirmed tx hash.`); return res.status(200).json({ ok: true }); }
       // Claim this tx as used before granting (atomic; loser bails).
       const usedIns = await s`INSERT INTO stag_verify_used (txhash, tid) VALUES (${txh}, ${tid}) ON CONFLICT (txhash) DO NOTHING RETURNING txhash`;
@@ -626,11 +644,12 @@ export default async function handler(req, res) {
     // otherwise spend paid credits.
     let funded = isOwner ? "owner" : null; // 'owner' | 'pool' | 'balance'
     if (!funded && isPfp) {
-      const freeRow = await s`SELECT used FROM stag_free WHERE tid=${tid}`;
-      const freeUsed = freeRow.length ? Number(freeRow[0].used) : 0;
-      if (freeUsed < 1 && (await reservePool(s, cost)) != null) {
-        await s`INSERT INTO stag_free (tid, used) VALUES (${tid}, 1) ON CONFLICT (tid) DO UPDATE SET used = stag_free.used + 1`;
-        funded = "pool";
+      // Atomically claim the one free slot: only the FIRST concurrent request for this
+      // tid gets a row back (ON CONFLICT DO NOTHING), so a burst can't pull multiple frees.
+      const gotFree = (await s`INSERT INTO stag_free (tid, used) VALUES (${tid}, 1) ON CONFLICT (tid) DO NOTHING RETURNING tid`).length > 0;
+      if (gotFree) {
+        if ((await reservePool(s, cost)) != null) funded = "pool";
+        else await s`DELETE FROM stag_free WHERE tid=${tid}`; // pool empty → release the slot for later
       }
     }
     if (!funded) {
@@ -667,8 +686,9 @@ export default async function handler(req, res) {
       await s`INSERT INTO stag_log (tid, uname, kind, credits) VALUES (${tid}, ${uname}, ${isPfp ? "pfp" : "gen"}, ${funded === "owner" ? 0 : cost})`;
       return res.status(200).json({ ok: true });
     } catch (e) {
-      // refund whatever funded it (owner paid nothing)
-      if (funded === "pool") { await refundPool(s, cost); await s`UPDATE stag_free SET used = GREATEST(0, used - 1) WHERE tid=${tid}`; }
+      // refund whatever funded it (owner paid nothing). Pool refund releases the free
+      // slot entirely (DELETE) so the user can re-claim it — the grant is now claim-once.
+      if (funded === "pool") { await refundPool(s, cost); await s`DELETE FROM stag_free WHERE tid=${tid}`; }
       else if (funded === "balance") { await addCredits(s, tid, cost); }
       if (!isOwner) await s`DELETE FROM stag_cool WHERE tid=${tid}`; // failed run shouldn't burn their cooldown
       await say(chatId, replyTo, "⚠️ The forge hiccuped — no credits spent. Try again.");
