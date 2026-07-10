@@ -50,6 +50,7 @@ const PFP_COST = parseInt(process.env.STAG_PFP_COST || "80", 10);    // credits 
 const GEN_COST = parseInt(process.env.STAG_GEN_COST || "80", 10);    // credits / image
 const OWNER = (process.env.STAG_OWNER || "6820752140").trim();       // unlimited, no limits, free
 const OWNER_NAME = (process.env.STAG_OWNER_NAME || "King Petty").trim();
+const BOT_USERNAME = (process.env.STAG_BOT_USERNAME || "STAGZBOT").replace(/^@/, "").trim();
 const BUDGET = parseInt(process.env.STAG_PFP_BUDGET || "4000", 10);  // free pool (credits)
 const COOLDOWN = parseInt(process.env.STAG_PFP_COOLDOWN || "45", 10) * 1000;
 
@@ -292,6 +293,7 @@ export default async function handler(req, res) {
   let cmd = (mm ? mm[1] : tt).toLowerCase().split("@")[0];
   const arg = mm ? mm[2].trim() : "";
   const chatId = msg.chat.id, replyTo = msg.message_id;
+  const isPrivate = msg.chat.type === "private";
   const tid = String((msg.from && msg.from.id) || "");
   const uname = (msg.from && (msg.from.username ? "@" + msg.from.username : msg.from.first_name)) || "stag";
 
@@ -498,6 +500,13 @@ export default async function handler(req, res) {
         `${verified ? "✅ *Verified holder* — 50% off\n" : ""}` +
         `Free launch pool: ${used}/${BUDGET} used (~${Math.floor(freeLeft / PFP_COST)} free PFPs left)\n\n` +
         `Top up: /buy  •  Holder discount: /verify`);
+      return res.status(200).json({ ok: true });
+    }
+
+    // Payment + verification MUST happen in DM: the unique amount is a per-user secret,
+    // and showing it in a group would let anyone see (and try to claim) it.
+    if (["/buy", "/topup", "/claim", "/verify"].includes(cmd) && !isPrivate) {
+      await say(chatId, replyTo, `🔒 For your security, do that in a private chat.\n👉 [Tap here to DM me](https://t.me/${BOT_USERNAME}?start=${cmd.slice(1)}) and run \`${cmd}\` there.`);
       return res.status(200).json({ ok: true });
     }
 
