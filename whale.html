@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Whale Verification — CATBOY</title>
-  <meta name="description" content="Verify your wallet to join the Catboy whale group." />
+  <meta name="description" content="Verify your wallet to join the Catboy whale group — no wallet connection needed." />
   <link rel="icon" type="image/png" href="assets/solana.png" />
   <link rel="stylesheet" href="styles.css" />
 </head>
@@ -20,18 +20,43 @@
     <div class="page-hero-inner">
       <span class="eyebrow" style="display:block;margin-top:1rem;">🐋 Whale Access</span>
       <h1>Whale <span class="grad">Verification</span></h1>
-      <p id="reqLine">Connect your wallet and sign to prove ownership — no transaction, no fee. Hold enough $CATBOY (or a Catboy NFT) and you're in. Got multiple wallets? Verify each one — the balances add up.</p>
+      <p id="reqLine"><b>No wallet connection.</b> Just send a tiny, unique amount of SOL from your wallet — that proves it's yours. Hold enough $CATBOY (or a Catboy NFT) and you're in. Got multiple wallets? Verify each — the balances add up.</p>
     </div>
   </section>
 
   <section class="section" style="padding-top:1rem;max-width:560px;margin:0 auto;">
     <div class="pfp-controls" style="text-align:center;">
       <div id="reqBox" class="muted-note" style="margin-bottom:1rem;font-size:1rem;">Loading requirements…</div>
-      <button class="btn btn-primary" id="go" type="button" style="min-width:240px;">Connect &amp; Verify</button>
-      <a class="btn btn-primary" id="phantom" type="button" href="#" style="min-width:240px;display:none;">Open in Phantom</a>
+
+      <div id="steps" style="display:none;text-align:left;">
+        <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.12);border-radius:14px;padding:1rem 1.1rem;margin-bottom:1rem;">
+          <div style="font-weight:700;margin-bottom:0.5rem;">1 · Send this exact amount</div>
+          <div style="font-size:0.9rem;color:var(--muted);margin-bottom:0.25rem;">Amount (must be exact — it's your secret)</div>
+          <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.75rem;">
+            <code id="amt" style="flex:1;font-size:1.05rem;word-break:break-all;">…</code>
+            <button class="btn" id="copyAmt" type="button" style="padding:0.35rem 0.7rem;">Copy</button>
+          </div>
+          <div style="font-size:0.9rem;color:var(--muted);margin-bottom:0.25rem;">To this address</div>
+          <div style="display:flex;gap:0.5rem;align-items:center;">
+            <code id="addr" style="flex:1;font-size:0.8rem;word-break:break-all;">…</code>
+            <button class="btn" id="copyAddr" type="button" style="padding:0.35rem 0.7rem;">Copy</button>
+          </div>
+          <a class="btn btn-primary" id="payLink" href="#" style="display:none;margin-top:0.85rem;width:100%;">Open in wallet 📲</a>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.12);border-radius:14px;padding:1rem 1.1rem;margin-bottom:1rem;">
+          <div style="font-weight:700;margin-bottom:0.5rem;">2 · Paste your transaction signature</div>
+          <div style="font-size:0.85rem;color:var(--muted);margin-bottom:0.5rem;">After sending, copy the transaction ID / signature from your wallet or Solscan and paste it here.</div>
+          <input id="txSig" type="text" placeholder="Transaction signature…" autocomplete="off" spellcheck="false"
+            style="width:100%;padding:0.7rem 0.8rem;border-radius:10px;border:1px solid rgba(255,255,255,0.18);background:rgba(0,0,0,0.25);color:#fff;font-size:0.9rem;" />
+        </div>
+
+        <button class="btn btn-primary" id="go" type="button" style="width:100%;">✅ Verify my wallet</button>
+      </div>
+
       <p class="form-status" id="status" role="status" aria-live="polite" style="margin-top:1rem;"></p>
       <a class="btn btn-primary" id="join" href="#" style="display:none;margin-top:0.5rem;min-width:240px;">🐋 Join the Whale Group</a>
-      <p class="muted-note" style="margin-top:1rem;">Signing a message is free and safe — it only proves you own the wallet. We never move your funds.</p>
+      <p class="muted-note" style="margin-top:1rem;">This is a normal send from your own wallet — <b>no connect, no approval, no signing</b>. The tiny amount just proves the wallet is yours.</p>
     </div>
   </section>
 
@@ -42,50 +67,38 @@
     const tid = P.get("tid"), t = P.get("t"), h = P.get("h");
     const st = (m, err) => { const s = $("status"); s.textContent = m; s.style.color = err ? "var(--magenta)" : "var(--muted)"; };
     const fmt = (n) => Number(n || 0).toLocaleString("en-US", { maximumFractionDigits: 0 });
-    let MSG = null;
+    let ADDR = null, SOL = null;
 
-    if (!tid || !t || !h) { st("This link is invalid. Open the Verify button from the Catboy bot in Telegram.", true); $("go").disabled = true; }
+    if (!tid || !t || !h) { st("This link is invalid. Open the Verify button from the Catboy bot in Telegram.", true); return; }
 
-    const provider = () => (window.solana && window.solana.isPhantom) ? window.solana
-      : (window.solflare || window.backpack || (window.phantom && window.phantom.solana) || null);
-
-    // Load the requirements + the exact message to sign.
     fetch(`/api/whale?tid=${encodeURIComponent(tid)}&t=${encodeURIComponent(t)}&h=${encodeURIComponent(h)}`)
       .then(r => r.json()).then(d => {
-        if (!d.ok) { st(d.error === "bad_or_expired_link" ? "This link expired — get a fresh one from the bot (/whale)." : ("Error: " + d.error), true); $("go").disabled = true; return; }
-        MSG = d.message;
-        const parts = [];
-        parts.push(`<b>${fmt(d.minTokens)} $CATBOY</b>`);
+        if (!d.ok) { st(d.error === "bad_or_expired_link" ? "This link expired — get a fresh one from the bot (/whale)." : ("Error: " + d.error), true); return; }
+        const parts = [`<b>${fmt(d.minTokens)} $CATBOY</b>`];
         if (d.nftGate) parts.push("or any <b>Catboy NFT</b>");
         $("reqBox").innerHTML = "To qualify, hold " + parts.join(" ") + ".";
+        ADDR = d.verifyWallet; SOL = (d.depositLamports / 1e9).toFixed(9); // exact, no float artifacts
+        $("amt").textContent = SOL + " SOL";
+        $("addr").textContent = ADDR;
+        // Solana Pay deep link (opens in a wallet app on mobile). Exact amount preserved.
+        const pay = `solana:${ADDR}?amount=${SOL}&label=${encodeURIComponent("Catboy Whale Verify")}&message=${encodeURIComponent("Catboy whale verification")}`;
+        const pl = $("payLink");
+        if (/Android|iPhone|iPad/i.test(navigator.userAgent)) { pl.href = pay; pl.style.display = "block"; }
+        $("steps").style.display = "block";
       }).catch(() => st("Couldn't load requirements — refresh.", true));
 
-    // On mobile Telegram there's no injected wallet — offer to open this page inside Phantom.
-    if (!provider() && /Android|iPhone|iPad/i.test(navigator.userAgent)) {
-      $("go").style.display = "none";
-      const ph = $("phantom");
-      ph.style.display = "inline-block";
-      const url = location.href;
-      ph.href = `https://phantom.app/ul/browse/${encodeURIComponent(url)}?ref=${encodeURIComponent(location.origin)}`;
-    }
+    const copy = (text, btn) => { navigator.clipboard.writeText(text).then(() => { const o = btn.textContent; btn.textContent = "Copied ✓"; setTimeout(() => btn.textContent = o, 1200); }); };
+    $("copyAmt").addEventListener("click", () => copy(String(SOL), $("copyAmt")));
+    $("copyAddr").addEventListener("click", () => copy(String(ADDR), $("copyAddr")));
 
     async function verify() {
-      const p = provider();
-      if (!p) { st("No wallet found. Tap “Open in Phantom”, or use a desktop with the Phantom extension.", true); return; }
-      if (!MSG) { st("Still loading — try again in a second.", true); return; }
+      const txSig = ($("txSig").value || "").trim();
+      if (!txSig) { st("Paste your transaction signature first (Step 2).", true); return; }
       $("go").disabled = true;
       try {
-        st("Connecting wallet…");
-        const c = await p.connect();
-        const wallet = (c && c.publicKey ? c.publicKey : p.publicKey).toString();
-        st("Approve the signature in your wallet (free, no transaction)…");
-        const enc = new TextEncoder().encode(MSG);
-        const signed = await p.signMessage(enc, "utf8");
-        const sigBytes = signed.signature ? signed.signature : signed;
-        const sig = btoa(String.fromCharCode.apply(null, Array.from(sigBytes)));
-        st("Checking your holdings on-chain…");
+        st("Checking your deposit on-chain… (a few seconds)");
         const r = await fetch("/api/whale", { method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ tid, t, h, wallet, sig }) });
+          body: JSON.stringify({ tid, t, h, txSig }) });
         const d = await r.json();
         if (d.ok && d.invite) {
           const acct = d.wallets > 1 ? ` across ${d.wallets} wallets` : "";
@@ -93,11 +106,17 @@
           const j = $("join"); j.href = d.invite; j.style.display = "inline-block";
         } else if (d.error === "not_enough") {
           const acct = d.wallets > 1 ? ` across ${d.wallets} wallets` : "";
-          st(`Not enough yet — ${fmt(d.balance)} $CATBOY${acct}, need ${fmt(d.minTokens)}${d.nftGate ? " (or a Catboy NFT)" : ""}. Add another wallet or top up, then verify again.`, true);
+          st(`Not enough yet — ${fmt(d.balance)} $CATBOY${acct}, need ${fmt(d.minTokens)}${d.nftGate ? " (or a Catboy NFT)" : ""}. Verify another wallet or top up, then try again.`, true);
         } else if (d.error === "wallet_linked_to_other") {
-          st("This wallet is already linked to a different Telegram account. Use a wallet that isn't linked elsewhere.", true);
-        } else if (d.error === "signature_invalid") {
-          st("Signature didn't verify — make sure you signed with the wallet you want to gate on.", true);
+          st("That wallet is already linked to a different Telegram account.", true);
+        } else if (d.error === "no_matching_transfer") {
+          st("Couldn't find that exact amount to the address. Send the EXACT amount shown, then paste the confirmed signature.", true);
+        } else if (d.error === "tx_not_found") {
+          st("Transaction not found yet — wait a few seconds for it to confirm, then try again.", true);
+        } else if (d.error === "tx_already_used") {
+          st("That transaction was already used. Get a fresh amount (reload) and send again.", true);
+        } else if (d.error === "challenge_expired" || d.error === "no_challenge") {
+          st("This session expired — reload the page for a fresh amount.", true);
         } else {
           st("Verification failed: " + (d.error || "unknown"), true);
         }

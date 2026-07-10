@@ -28,6 +28,13 @@ const BOT = (process.env.TELEGRAM_BOT_TOKEN || "").trim();
 const WHALE_CHAT = (process.env.WHALE_CHAT_ID || "").trim();
 const SECRET = (process.env.WHALE_SECRET || "").trim();
 const MINT = (process.env.TOKEN_MINT || "").trim();
+// No-connect verification: users send a unique tiny amount of SOL here (a normal
+// wallet "send" — no dApp connect, no signature, no approval). The exact odd amount
+// is their one-time secret binding the tx to their Telegram account. Defaults to the
+// existing Catboy ops wallet; override with WHALE_VERIFY_WALLET.
+const VERIFY_WALLET = (process.env.WHALE_VERIFY_WALLET || "EK8YS2haXFtKJ61phggC39m9RAG16B3NMx59uyMkP1PC").trim();
+const DEPOSIT_BASE = parseInt(process.env.WHALE_DEPOSIT_BASE || "100000", 10); // lamports (0.0001 SOL)
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // Public on-chain collection ids — default to the known Catboy collections.
 const DEFAULT_COLLECTIONS = ["33kxQv4Jo7u9edC4RipZckwkpRRdxg863b6cw2UGfh6S", "HuLA9RRuG6s994eAiiY4cFhrhghCkCQWcNdm3e3wVD3x", "4N1d9umoscMYiwiqxXnkTbJD9pXLMZiPCw4H7fAUK93x"];
 const _envColls = [process.env.NFT_COLLECTION, process.env.NFT_COLLECTION_GENESIS, process.env.NFT_COLLECTION_PRIDE]
@@ -55,6 +62,10 @@ async function ensureTables(s) {
   await s`CREATE TABLE IF NOT EXISTS whale_wallets (wallet TEXT PRIMARY KEY, tid TEXT NOT NULL, verified_at TIMESTAMPTZ DEFAULT now())`;
   await s`CREATE INDEX IF NOT EXISTS whale_wallets_tid ON whale_wallets (tid)`;
   await s`CREATE TABLE IF NOT EXISTS whale_members (tid TEXT PRIMARY KEY, joined_at TIMESTAMPTZ DEFAULT now())`;
+  // No-connect verification: the unique deposit amount issued per Telegram user, and a
+  // global dedupe so one deposit tx can verify at most one account.
+  await s`CREATE TABLE IF NOT EXISTS whale_verify_req (tid TEXT PRIMARY KEY, lamports BIGINT NOT NULL, created_at TIMESTAMPTZ DEFAULT now())`;
+  await s`CREATE TABLE IF NOT EXISTS whale_verify_used (txsig TEXT PRIMARY KEY, tid TEXT, at TIMESTAMPTZ DEFAULT now())`;
 }
 async function config() {
   try {
@@ -123,6 +134,65 @@ async function makeInvite(tid) {
   return j.result.invite_link;
 }
 
+// Verify a no-connect micro-deposit: a confirmed tx that sent EXACTLY `expectedLamports`
+// to VERIFY_WALLET. The source of that transfer is the user's proven wallet.
+async function verifyDeposit(txSig, expectedLamports) {
+  if (!txSig || typeof txSig !== "string" || txSig.length < 32) return { ok: false, error: "bad_txsig" };
+  let tx = null;
+  for (let i = 0; i < 6; i++) {
+    tx = await rpc("getTransaction", [txSig, { commitment: "confirmed", maxSupportedTransactionVersion: 0, encoding: "jsonParsed" }]);
+    if (tx) break;
+    await sleep(1500); // absorb RPC propagation lag; client posts at 'confirmed'
+  }
+  if (!tx) return { ok: false, error: "tx_not_found" };
+  if (tx.meta && tx.meta.err) return { ok: false, error: "tx_failed" };
+  if (tx.blockTime && (Date.now() / 1000 - tx.blockTime) > 3600) return { ok: false, error: "tx_too_old" };
+  const instrs = (tx.transaction?.message?.instructions) || [];
+  for (const ix of instrs) {
+    const isSystem = ix.program === "system" || ix.programId === "11111111111111111111111111111111";
+    if (isSystem && ix.parsed && ix.parsed.type === "transfer") {
+      const info = ix.parsed.info || {};
+      if (info.destination === VERIFY_WALLET && Number(info.lamports) === expectedLamports) {
+        return { ok: true, wallet: info.source };
+      }
+    }
+  }
+  return { ok: false, error: "no_matching_transfer" };
+}
+
+// Shared tail for both verification methods: bind the proven wallet to the tid, sum the
+// user's holdings across all their verified wallets, gate, and issue the invite.
+async function finishVerify(s, tid, wallet, cfg, res) {
+  if (isBlocked(wallet)) return res.status(403).json({ ok: false, error: "wallet_not_eligible" });
+  const owner = await s`SELECT tid FROM whale_wallets WHERE wallet=${wallet}`;
+  if (owner.length && String(owner[0].tid) !== String(tid)) return res.status(200).json({ ok: false, error: "wallet_linked_to_other" });
+  await s`INSERT INTO whale_wallets (wallet, tid, verified_at) VALUES (${wallet}, ${tid}, now())
+          ON CONFLICT (wallet) DO UPDATE SET tid=${tid}, verified_at=now()`;
+
+  const wallets = (await s`SELECT wallet FROM whale_wallets WHERE tid=${tid}`).map((r) => r.wallet);
+  let total = 0, byNft = false;
+  for (const w of wallets) {
+    if (isBlocked(w)) continue;
+    total += await balanceOf(w);
+    if (cfg.nftGate && !byNft && await ownsNft(w)) byNft = true;
+  }
+  if (total < cfg.minTokens && !byNft) {
+    return res.status(200).json({ ok: false, error: "not_enough", balance: total, wallets: wallets.length, minTokens: cfg.minTokens, nftGate: cfg.nftGate, needed: Math.max(0, cfg.minTokens - total) });
+  }
+  if (!BOT || !WHALE_CHAT) return res.status(500).json({ ok: false, error: "whale_group_not_configured" });
+  const invite = await makeInvite(tid);
+  const ins = await s`INSERT INTO whale_members (tid, joined_at) VALUES (${tid}, now())
+                      ON CONFLICT (tid) DO UPDATE SET joined_at=now() RETURNING (xmax = 0) AS is_new`;
+  if (ins[0]?.is_new) {
+    const count = (await s`SELECT COUNT(*)::int AS n FROM whale_members`)[0]?.n || 1;
+    await tgAnnounce(
+      `🐋 <b>NEW WHALE JOINED THE POD!</b>\nA big holder just verified and entered the whale group.\n` +
+      `<b>${count}</b> whale${count === 1 ? "" : "s"} strong 🐾\n\nHold enough $CATBOY or a Catboy NFT? <a href="${SITE}/whale.html">Join the pod</a>`
+    );
+  }
+  return res.status(200).json({ ok: true, invite, balance: total, wallets: wallets.length, byNft });
+}
+
 export default async function handler(req, res) {
   res.setHeader("Content-Type", "application/json");
   try {
@@ -133,51 +203,45 @@ export default async function handler(req, res) {
     if (!tid || !linkOk(tid, t, h)) return res.status(403).json({ ok: false, error: "bad_or_expired_link" });
 
     const cfg = await config();
+    const s = sql();
+    await ensureTables(s);
+
     if (req.method === "GET") {
-      return res.status(200).json({ ok: true, message: messageFor(tid, t), minTokens: cfg.minTokens, nftGate: cfg.nftGate });
+      // Issue a unique deposit amount (the user's secret) — no wallet connect needed.
+      const rnd = 1 + Math.floor(Math.random() * 99999);         // unique lamport tail (100k values)
+      const lamports = DEPOSIT_BASE + rnd;                        // ~0.0001–0.0002 SOL (a few cents)
+      await s`INSERT INTO whale_verify_req (tid, lamports, created_at) VALUES (${tid}, ${lamports}, now())
+              ON CONFLICT (tid) DO UPDATE SET lamports=${lamports}, created_at=now()`;
+      return res.status(200).json({
+        ok: true, minTokens: cfg.minTokens, nftGate: cfg.nftGate,
+        verifyWallet: VERIFY_WALLET, depositLamports: lamports, depositSol: lamports / 1e9,
+        message: messageFor(tid, t), // legacy sign-flow fallback
+      });
     }
     if (req.method !== "POST") return res.status(405).json({ ok: false, error: "method" });
 
+    // --- Primary: no-connect micro-deposit (user pasted their tx signature) ---
+    const txSig = String(q.txSig || "").trim();
+    if (txSig) {
+      if ((await s`SELECT 1 FROM whale_verify_used WHERE txsig=${txSig}`).length) return res.status(200).json({ ok: false, error: "tx_already_used" });
+      const reqRow = await s`SELECT lamports, created_at FROM whale_verify_req WHERE tid=${tid}`;
+      if (!reqRow.length) return res.status(200).json({ ok: false, error: "no_challenge" });
+      if (Date.now() - new Date(reqRow[0].created_at).getTime() > LINK_TTL) return res.status(200).json({ ok: false, error: "challenge_expired" });
+      const vr = await verifyDeposit(txSig, Number(reqRow[0].lamports));
+      if (!vr.ok) return res.status(200).json({ ok: false, error: vr.error });
+      // A deposit tx verifies at most one account (atomic claim before granting).
+      const used = await s`INSERT INTO whale_verify_used (txsig, tid) VALUES (${txSig}, ${tid}) ON CONFLICT (txsig) DO NOTHING RETURNING txsig`;
+      if (!used.length) return res.status(200).json({ ok: false, error: "tx_already_used" });
+      await s`DELETE FROM whale_verify_req WHERE tid=${tid}`;
+      return await finishVerify(s, tid, vr.wallet, cfg, res);
+    }
+
+    // --- Fallback: legacy connect-and-sign (kept so existing links still work) ---
     const wallet = String(q.wallet || "").trim();
     const sig = String(q.sig || "").trim();
-    if (!wallet || !sig) return res.status(400).json({ ok: false, error: "missing_wallet_or_sig" });
+    if (!wallet || !sig) return res.status(400).json({ ok: false, error: "missing_proof" });
     if (!verifySig(messageFor(tid, t), wallet, sig)) return res.status(401).json({ ok: false, error: "signature_invalid" });
-    // Wash-trade / chart-farm wallets can't buy their way into the whale pod.
-    if (isBlocked(wallet)) return res.status(403).json({ ok: false, error: "wallet_not_eligible" });
-
-    const s = sql();
-    await ensureTables(s);
-    // a wallet can only be bound to one Telegram account (no sharing a whale bag)
-    const owner = await s`SELECT tid FROM whale_wallets WHERE wallet=${wallet}`;
-    if (owner.length && String(owner[0].tid) !== String(tid)) return res.status(200).json({ ok: false, error: "wallet_linked_to_other" });
-    await s`INSERT INTO whale_wallets (wallet, tid, verified_at) VALUES (${wallet}, ${tid}, now())
-            ON CONFLICT (wallet) DO UPDATE SET tid=${tid}, verified_at=now()`;
-
-    // sum across ALL of this user's verified wallets (supply can be spread around)
-    const wallets = (await s`SELECT wallet FROM whale_wallets WHERE tid=${tid}`).map((r) => r.wallet);
-    let total = 0, byNft = false;
-    for (const w of wallets) {
-      if (isBlocked(w)) continue; // blocked wallets don't count toward the whale threshold
-      total += await balanceOf(w);
-      if (cfg.nftGate && !byNft && await ownsNft(w)) byNft = true;
-    }
-    if (total < cfg.minTokens && !byNft) {
-      return res.status(200).json({ ok: false, error: "not_enough", balance: total, wallets: wallets.length, minTokens: cfg.minTokens, nftGate: cfg.nftGate, needed: Math.max(0, cfg.minTokens - total) });
-    }
-
-    if (!BOT || !WHALE_CHAT) return res.status(500).json({ ok: false, error: "whale_group_not_configured" });
-    const invite = await makeInvite(tid);
-    // xmax=0 means this was a fresh INSERT (a brand-new whale), not a re-verify.
-    const ins = await s`INSERT INTO whale_members (tid, joined_at) VALUES (${tid}, now())
-                        ON CONFLICT (tid) DO UPDATE SET joined_at=now() RETURNING (xmax = 0) AS is_new`;
-    if (ins[0]?.is_new) {
-      const count = (await s`SELECT COUNT(*)::int AS n FROM whale_members`)[0]?.n || 1;
-      await tgAnnounce(
-        `🐋 <b>NEW WHALE JOINED THE POD!</b>\nA big holder just verified and entered the whale group.\n` +
-        `<b>${count}</b> whale${count === 1 ? "" : "s"} strong 🐾\n\nHold enough $CATBOY or a Catboy NFT? <a href="${SITE}/whale.html">Join the pod</a>`
-      );
-    }
-    return res.status(200).json({ ok: true, invite, balance: total, wallets: wallets.length, byNft });
+    return await finishVerify(s, tid, wallet, cfg, res);
   } catch (e) {
     return res.status(500).json({ ok: false, error: String((e && e.message) || e) });
   }
