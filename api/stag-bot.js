@@ -178,7 +178,9 @@ async function genImage(prompt) {
 }
 
 // ── DB ───────────────────────────────────────────────────────────────────────────
+let _ensured = false; // schema is idempotent — only run the DDL once per warm instance
 async function ensure(s) {
+  if (_ensured) return;
   await s`CREATE TABLE IF NOT EXISTS stag_pool (id INT PRIMARY KEY, used INT NOT NULL DEFAULT 0)`;
   await s`INSERT INTO stag_pool (id, used) VALUES (1, 0) ON CONFLICT (id) DO NOTHING`;
   await s`CREATE TABLE IF NOT EXISTS stag_bal (tid TEXT PRIMARY KEY, credits INT NOT NULL DEFAULT 0, updated_at TIMESTAMPTZ DEFAULT now())`;
@@ -194,6 +196,7 @@ async function ensure(s) {
   await s`CREATE TABLE IF NOT EXISTS stag_verify_used (txhash TEXT PRIMARY KEY, tid TEXT, at TIMESTAMPTZ DEFAULT now())`;
   await s`CREATE TABLE IF NOT EXISTS stag_cool (tid TEXT PRIMARY KEY, last_at TIMESTAMPTZ DEFAULT now())`;
   await s`CREATE TABLE IF NOT EXISTS stag_seen (uid BIGINT PRIMARY KEY, at TIMESTAMPTZ DEFAULT now())`;
+  _ensured = true;
 }
 const balOf = async (s, tid) => { const r = await s`SELECT credits FROM stag_bal WHERE tid=${tid}`; return r.length ? Number(r[0].credits) : 0; };
 const addCredits = (s, tid, n) => s`INSERT INTO stag_bal (tid, credits) VALUES (${tid}, ${n}) ON CONFLICT (tid) DO UPDATE SET credits = stag_bal.credits + ${n}, updated_at = now()`;
@@ -245,6 +248,8 @@ async function stagStats() {
       change24: Number(p.priceChange?.h24 || 0), liq: Number(p.liquidity?.usd || 0),
       vol24: Number(p.volume?.h24 || 0), url: p.url || ("https://dexscreener.com/robinhood/" + STAG_TOKEN),
       buys24: Number(p.txns?.h24?.buys || 0), sells24: Number(p.txns?.h24?.sells || 0),
+      // ETH/USD derived from the pair: (USD per $STAG) / (WETH per $STAG) = USD per WETH.
+      ethUsd: (Number(p.priceUsd) && Number(p.priceNative)) ? Number(p.priceUsd) / Number(p.priceNative) : 0,
     };
   } catch { return null; }
 }
@@ -429,11 +434,18 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
 
-    // ---------- FREE TOOLS: gas ----------
+    // ---------- FREE TOOLS: gas (shown as USD cost of a transaction) ----------
     if (cmd === "/gas") {
       try {
-        const gwei = Number(BigInt(await rpc("eth_gasPrice"))) / 1e9;
-        await say(chatId, replyTo, `⛽ *Robinhood Chain gas*\n\n*${gwei.toFixed(4)}* gwei — basically free. 🟢`);
+        const wei = Number(BigInt(await rpc("eth_gasPrice")));
+        const txEth = wei * 21000 / 1e18;            // a standard transfer = 21k gas
+        const d = await stagStats();
+        const txUsd = d && d.ethUsd ? txEth * d.ethUsd : null;
+        const usdStr = txUsd == null ? null : (txUsd < 0.01 ? "$" + txUsd.toFixed(4) : "$" + txUsd.toFixed(2));
+        await say(chatId, replyTo,
+          `⛽ *Robinhood Chain gas*\n\n` +
+          (usdStr ? `A transaction costs about *${usdStr}*.\n` : `Fractions of a cent per transaction.\n`) +
+          `Basically free. 🟢`);
       } catch { await say(chatId, replyTo, "⚠️ Couldn't read gas right now — try again."); }
       return res.status(200).json({ ok: true });
     }
@@ -443,14 +455,15 @@ export default async function handler(req, res) {
       const rows = await s`SELECT uname, COUNT(*)::int AS n FROM stag_log WHERE uname IS NOT NULL GROUP BY uname ORDER BY n DESC LIMIT 10`;
       if (!rows.length) { await say(chatId, replyTo, "🏆 No art made yet — be the first with /pfp!"); return res.status(200).json({ ok: true }); }
       const medals = ["🥇", "🥈", "🥉"];
-      const list = rows.map((r, i) => `${medals[i] || `${i + 1}.`} ${r.uname} — *${r.n}*`).join("\n");
-      await say(chatId, replyTo, `🏆 *$STAG top creators*\n\n${list}`);
+      // Plain text (no Markdown): usernames can contain _ * ` [ which would break a Markdown parse.
+      const list = rows.map((r, i) => `${medals[i] || `${i + 1}.`} ${r.uname} — ${r.n}`).join("\n");
+      await tg("sendMessage", { chat_id: chatId, reply_to_message_id: replyTo, disable_web_page_preview: true, text: `🏆 $STAG top creators\n\n${list}` });
       return res.status(200).json({ ok: true });
     }
 
     // ---------- RAID: generate ready-to-post content ----------
     if (cmd === "/raid") {
-      const content = arg.trim().slice(0, 220) || RAID_LINES[Math.floor(Math.random() * RAID_LINES.length)];
+      const content = arg.trim().replace(/`/g, "").slice(0, 220) || RAID_LINES[Math.floor(Math.random() * RAID_LINES.length)];
       const tags = HASHTAG_SETS[Math.floor(Math.random() * HASHTAG_SETS.length)];
       const linkPool = [LINKS.site, LINKS.chart, LINKS.x];
       const link = Math.random() < 0.7 ? linkPool[Math.floor(Math.random() * linkPool.length)] : ""; // random link, if any
