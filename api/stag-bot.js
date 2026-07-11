@@ -5,7 +5,7 @@
 //                       approved art; identity locked, fresh pose every time).
 //                       ONE free per person from the shared launch pool; after that
 //                       it costs credits.
-//   /imagine <prompt>-> generate ANY image from a prompt (open generator). Costs credits.
+//   /imagine <prompt>-> put the $STAG character into ANY scene you describe. Costs credits.
 //   /credits         -> your credit balance + the free-pool status.
 //   /buy             -> buy credits with $STAG (live-priced); send, then /claim <txhash>.
 //   /claim <txhash>  -> verify your $STAG payment on Robinhood Chain and top up.
@@ -114,12 +114,15 @@ const POSES = [
   "sitting on a throne of antlers and vines, king of the forest",
   "back-to-back silhouette turn, glancing over the shoulder",
 ];
-const STYLE_LOCK =
+// Identity + art-style lock (no framing) - used by BOTH /pfp and /imagine so every
+// image stays on-character. /imagine adds a free scene; /pfp adds portrait framing.
+const IDENTITY_LOCK =
   " CRITICAL: match the reference art style EXACTLY - dark cinematic digital painting," +
   " gritty realistic dark-fantasy, dramatic moody lighting, intense neon-green glow," +
   " cyber-forest vibe, ultra detailed, epic and premium. NOT flat cartoon, NOT clean" +
-  " vector. Keep his identity: large antlers, green Robin-Hood hood, glowing green eyes," +
-  " muscular build. Head-and-shoulders square profile picture, centered, no text, no watermark.";
+  " vector. Keep his identity EXACTLY: large antlers, green Robin-Hood hood, glowing" +
+  " green eyes, muscular build. no text, no watermark.";
+const STYLE_LOCK = IDENTITY_LOCK + " Head-and-shoulders square profile picture, centered.";
 const BANNED = /\b(nude|naked|nsfw|sex|sexual|porn|explicit|hentai|nipple|genital|underage|child|loli|shota|rape|gore|beastiality|cp)\b/i;
 
 // Cool "working on it" lines shown while an image renders (picked at random).
@@ -725,8 +728,9 @@ export default async function handler(req, res) {
         png = await editPfp(prompt);
         caption = `🦌 ${uname}, your $STAGWIFHOOD is ready. 🏹💚` + (style ? `\n🎨 "${style}"` : "");
       } else {
-        const prompt = genPrompt + ". High quality, detailed, dramatic lighting, no text, no watermark.";
-        png = await genImage(prompt);
+        // Locked to the $STAG character: the user's prompt is the SCENE, identity stays fixed.
+        const prompt = `THIS exact character, in this scene: ${genPrompt}.` + IDENTITY_LOCK;
+        png = await editPfp(prompt);
         caption = `🎨 ${uname} asked → delivered 🏹\n"${genPrompt.slice(0, 120)}"`;
       }
       const tag = funded === "owner" ? "👑" : funded === "pool" ? "🎁 that was your free one" : `-${cost} credits`;
