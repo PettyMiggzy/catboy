@@ -394,7 +394,7 @@ export default async function handler(req, res) {
       try {
         const st = neon(CONN);
         // Only the FIRST correct answer clears the live row (atomic single-winner).
-        const won = await st`DELETE FROM stag_trivia_active WHERE chat_id=${String(msg.chat.id)} AND answer=${ans} RETURNING started_at`;
+        const won = await st`DELETE FROM stag_trivia_active WHERE chat_id=${String(msg.chat.id)} AND answer=${ans} RETURNING started_at, qidx`;
         if (won.length) {
           const who = msg.from.username ? "@" + msg.from.username : (msg.from.first_name || "ranger");
           const wk = weekKey();
@@ -403,7 +403,13 @@ export default async function handler(req, res) {
           await st`INSERT INTO stag_trivia_score (tid, uname, week, points) VALUES (${String(msg.from.id)}, ${who}, ${wk}, ${pts}) ON CONFLICT (tid, week) DO UPDATE SET points = stag_trivia_score.points + ${pts}, uname = ${who}, updated_at = now()`;
           const pr = await st`SELECT points FROM stag_trivia_score WHERE tid=${String(msg.from.id)} AND week=${wk}`;
           const secs = (elapsed / 1000).toFixed(1);
-          await sendHitCard(msg.chat.id, msg.message_id, zone, `🎯 *${who} — ${label}!*  Answered in *${secs}s* → *+${pts} pts* (this week: *${(pr[0] && pr[0].points) || pts}*). 🏹\nNext: /trivia  ·  Board: /triviatop`);
+          await sendHitCard(msg.chat.id, msg.message_id, zone, `🎯 *${who} — ${label}!*  Answered in *${secs}s* → *+${pts} pts* (this week: *${(pr[0] && pr[0].points) || pts}*). 🏹\nBoard: /triviatop  ·  next question incoming...`);
+          // Keep the hunt going: auto-post the next question so play never stalls.
+          let nidx = Math.floor(Math.random() * TRIVIA.length);
+          if (TRIVIA.length > 1 && nidx === won[0].qidx) nidx = (nidx + 1) % TRIVIA.length;
+          const nq = TRIVIA[nidx];
+          await st`INSERT INTO stag_trivia_active (chat_id, qidx, answer) VALUES (${String(msg.chat.id)}, ${nidx}, ${nq.answer}) ON CONFLICT (chat_id) DO UPDATE SET qidx=${nidx}, answer=${nq.answer}, started_at=now(), miss_shown=false`;
+          await sendTriviaCard(msg.chat.id, null, nidx, nq);
         } else {
           // Wrong guess while a question is still live -> ONE miss reaction per round (no chat spam).
           const miss = await st`UPDATE stag_trivia_active SET miss_shown=true WHERE chat_id=${String(msg.chat.id)} AND miss_shown=false RETURNING chat_id`;
@@ -808,8 +814,8 @@ export default async function handler(req, res) {
     if (cmd === "/trivia" || cmd === "/quiz") {
       await settleTriviaWeek(s, chatId);
       const cur = await s`SELECT started_at FROM stag_trivia_active WHERE chat_id=${String(chatId)}`;
-      if (cur.length && (Date.now() - new Date(cur[0].started_at).getTime()) < 3 * 60 * 1000) {
-        await say(chatId, replyTo, "🏹 A question's already live - answer it first (A/B/C/D)!"); return res.status(200).json({ ok: true });
+      if (cur.length && (Date.now() - new Date(cur[0].started_at).getTime()) < 20 * 1000) {
+        await say(chatId, replyTo, "🏹 A question's already live - answer it (A/B/C/D)! Or wait a moment to skip."); return res.status(200).json({ ok: true });
       }
       const idx = Math.floor(Math.random() * TRIVIA.length);
       const q = TRIVIA[idx];
