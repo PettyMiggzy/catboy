@@ -48,7 +48,8 @@ const PFP_MODEL = (process.env.STAG_PFP_MODEL || "nano-banana-2-edit").trim();
 const GEN_MODEL = (process.env.STAG_GEN_MODEL || "nano-banana-2").trim();
 const PFP_COST = parseInt(process.env.STAG_PFP_COST || "80", 10);    // credits / PFP ($0.10)
 const GEN_COST = parseInt(process.env.STAG_GEN_COST || "80", 10);    // credits / image
-const OWNER = (process.env.STAG_OWNER || "6820752140").trim();       // unlimited, no limits, free
+const OWNERS = (process.env.STAG_OWNER || "6820752140").split(",").map((x) => x.trim()).filter(Boolean); // TG ids: unlimited, no limits, free
+const isOwnerId = (id) => OWNERS.includes(String(id));
 const OWNER_NAME = (process.env.STAG_OWNER_NAME || "King Petty").trim();
 const BOT_USERNAME = (process.env.STAG_BOT_USERNAME || "STAGZBOT").replace(/^@/, "").trim();
 const BUDGET = parseInt(process.env.STAG_PFP_BUDGET || "4000", 10);  // free pool (credits)
@@ -494,7 +495,7 @@ export default async function handler(req, res) {
 
     // ---------- reset (OWNER ONLY) ----------
     if (cmd === "/reset") {
-      if (tid !== OWNER) return res.status(200).json({ ok: true }); // silently ignore for everyone else
+      if (!isOwnerId(tid)) return res.status(200).json({ ok: true }); // silently ignore for everyone else
       const scope = arg.trim().toLowerCase();
       await s`UPDATE stag_pool SET used = 0 WHERE id = 1`; // zero the free-pool counter
       if (scope === "all") {
@@ -510,8 +511,10 @@ export default async function handler(req, res) {
     if (cmd === "/credits" || cmd === "/balance" || cmd === "/pfpcredits") {
       const [bal, used, verified] = [await balOf(s, tid), await poolUsed(s), await isVerified(s, tid)];
       const freeLeft = Math.max(0, BUDGET - used);
+      if (isOwnerId(tid)) { await say(chatId, replyTo, `👑 *Owner* - unlimited generations, no cooldown, no cost.\nYour Telegram id: \`${tid}\``); return res.status(200).json({ ok: true }); }
       await say(chatId, replyTo,
         `🎯 *Your $STAG credits:* ${bal} (~${Math.floor(bal / PFP_COST)} images)\n` +
+        `_Your Telegram id: ${tid}_\n` +
         `${verified ? "✅ *Verified holder* - 50% off\n" : ""}` +
         `Free launch pool: ${used}/${BUDGET} used (~${Math.floor(freeLeft / PFP_COST)} free PFPs left)\n\n` +
         `Top up: /buy  •  Holder discount: /verify`);
@@ -688,7 +691,7 @@ export default async function handler(req, res) {
     if (isGen && !genPrompt) { await say(chatId, replyTo, "Give me a scene: `/image the stag on a neon rooftop` — the $STAG character always stars in it"); return res.status(200).json({ ok: true }); }
     if (BANNED.test(style + " " + genPrompt)) { await say(chatId, replyTo, "🚫 Keep it clean, ranger."); return res.status(200).json({ ok: true }); }
 
-    const isOwner = tid === OWNER; // owner: unlimited, no cooldown, no credit cost
+    const isOwner = isOwnerId(tid); // owner(s): unlimited, no cooldown, no credit cost
 
     // cooldown (anti-spam pacing) - owner exempt
     if (COOLDOWN > 0 && !isOwner) {
