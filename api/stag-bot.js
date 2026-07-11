@@ -211,13 +211,13 @@ async function genImage(prompt) {
 }
 // Queue an async video render off the $STAG reference. Returns a queue_id; the
 // /api/stag-video-cron poller retrieves + delivers it (or refunds on failure).
-async function queueVideo(scene) {
+// Animate a SCENE still (base64 PNG) into a clip. The still already depicts the user's
+// scene (built via editPfp), so image-to-video brings THAT to life - not the bare reference.
+async function queueVideo(sceneImgB64, motionPrompt) {
   const key = veniceKey(); if (!key) throw new Error("venice_not_configured");
-  const prompt = `THIS exact character in motion: ${scene}. Keep his identity EXACTLY: large antlers, ` +
-    `green Robin-Hood hood, glowing green eyes, muscular build. Dark cinematic, smooth natural motion, no text.`;
   const r = await fetch("https://api.venice.ai/api/v1/video/queue", {
     method: "POST", headers: { Authorization: "Bearer " + key, "Content-Type": "application/json" },
-    body: JSON.stringify({ model: VIDEO_MODEL, prompt, duration: VIDEO_DURATION, image_url: "data:image/jpeg;base64," + STAG_REF_B64 }),
+    body: JSON.stringify({ model: VIDEO_MODEL, prompt: motionPrompt, duration: VIDEO_DURATION, image_url: "data:image/png;base64," + sceneImgB64 }),
   });
   const j = await r.json().catch(() => ({}));
   const qid = j.queue_id || j.id;
@@ -736,13 +736,20 @@ export default async function handler(req, res) {
         }
         vfunded = "balance";
       }
-      // Start the render; refund immediately if the queue call fails.
+      await say(chatId, replyTo, `🎥 Spinning your $STAG video up... it'll drop right here in ~2-4 min. ${owner ? "👑" : `-${VIDEO_COST} credits`} 🏹`);
+      // Build the SCENE first (SAME edit path as /image), then animate THAT still - so the
+      // video depicts what they asked for, never the bare reference image.
       let qid;
-      try { qid = await queueVideo(scene); }
-      catch (e) { if (vfunded === "balance") await addCredits(s, tid, VIDEO_COST); await say(chatId, replyTo, "⚠️ Couldn't start the render - no credits spent. Try again."); return res.status(200).json({ ok: false, error: String((e && e.message) || e) }); }
+      try {
+        const still = await editPfp(`THIS exact character, in this scene: ${scene}.` + IDENTITY_LOCK);
+        qid = await queueVideo(still.toString("base64"), `${scene}. Bring the $STAG stag to life: cinematic camera, smooth natural motion, keep his identity (large antlers, green Robin-Hood hood, glowing green eyes). No text.`);
+      } catch (e) {
+        if (vfunded === "balance") await addCredits(s, tid, VIDEO_COST);
+        await say(chatId, replyTo, "⚠️ The render hiccuped - credits refunded. Try again.");
+        return res.status(200).json({ ok: false, error: String((e && e.message) || e) });
+      }
       await s`INSERT INTO stag_video_jobs (queue_id, tid, chat_id, reply_to, uname, credits, funded, status) VALUES (${qid}, ${tid}, ${String(chatId)}, ${String(replyTo)}, ${uname}, ${owner ? 0 : VIDEO_COST}, ${vfunded}, 'pending') ON CONFLICT (queue_id) DO NOTHING`;
       if (!owner) await s`INSERT INTO stag_cool (tid, last_at) VALUES (${tid}, now()) ON CONFLICT (tid) DO UPDATE SET last_at=now()`;
-      await say(chatId, replyTo, `🎥 Spinning your $STAG video up... it'll drop right here in ~1-2 min. ${owner ? "👑" : `-${VIDEO_COST} credits`} 🏹`);
       return res.status(200).json({ ok: true });
     }
 
