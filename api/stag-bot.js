@@ -333,8 +333,22 @@ function weekKey(d = new Date()) {
   dt.setUTCDate(dt.getUTCDate() - daysSinceFri);
   return dt.toISOString().slice(0, 10);
 }
+// Answer speed -> [hit-image zone, points, label]. Faster = closer to bullseye.
+function speedTier(ms) {
+  if (ms < 3500) return [0, 10, "BULLSEYE"];
+  if (ms < 7000) return [1, 7, "Inner ring"];
+  if (ms < 13000) return [2, 5, "Solid hit"];
+  if (ms < 25000) return [3, 3, "Outer ring"];
+  return [4, 1, "Grazed it"];
+}
+async function sendHitCard(chatId, replyTo, zone, caption) {
+  let buf = null;
+  try { buf = readFileSync(`${process.cwd()}/assets/trivia/hit${zone}.jpg`); } catch {}
+  if (buf) return sendPhoto(chatId, buf, caption, replyTo, "Markdown", "image/jpeg", "hit.jpg");
+  await say(chatId, replyTo, caption);
+}
 async function sendTriviaCard(chatId, replyTo, idx, q) {
-  const caption = `🦌 *${q.cat === "STAG" ? "$STAG" : "Crypto"} Trivia* — reply *A / B / C / D*. First right wins a point! 🏹`;
+  const caption = `🦌 *${q.cat === "STAG" ? "$STAG" : "Crypto"} Trivia* — reply *A / B / C / D*. Answer fast: quicker = closer to bullseye = more points! 🏹`;
   let buf = null;
   try { buf = readFileSync(`${process.cwd()}/assets/trivia/t${String(idx + 1).padStart(2, "0")}.jpg`); } catch {}
   if (buf) return sendPhoto(chatId, buf, caption, replyTo, "Markdown", "image/jpeg", "trivia.jpg");
@@ -373,13 +387,16 @@ export default async function handler(req, res) {
       try {
         const st = neon(CONN);
         // Only the FIRST correct answer clears the live row (atomic single-winner).
-        const won = await st`DELETE FROM stag_trivia_active WHERE chat_id=${String(msg.chat.id)} AND answer=${ans} RETURNING answer`;
+        const won = await st`DELETE FROM stag_trivia_active WHERE chat_id=${String(msg.chat.id)} AND answer=${ans} RETURNING started_at`;
         if (won.length) {
           const who = msg.from.username ? "@" + msg.from.username : (msg.from.first_name || "ranger");
           const wk = weekKey();
-          await st`INSERT INTO stag_trivia_score (tid, uname, week, points) VALUES (${String(msg.from.id)}, ${who}, ${wk}, 1) ON CONFLICT (tid, week) DO UPDATE SET points = stag_trivia_score.points + 1, uname = ${who}, updated_at = now()`;
+          const elapsed = Date.now() - new Date(won[0].started_at).getTime();
+          const [zone, pts, label] = speedTier(elapsed);
+          await st`INSERT INTO stag_trivia_score (tid, uname, week, points) VALUES (${String(msg.from.id)}, ${who}, ${wk}, ${pts}) ON CONFLICT (tid, week) DO UPDATE SET points = stag_trivia_score.points + ${pts}, uname = ${who}, updated_at = now()`;
           const pr = await st`SELECT points FROM stag_trivia_score WHERE tid=${String(msg.from.id)} AND week=${wk}`;
-          await tg("sendMessage", { chat_id: msg.chat.id, reply_to_message_id: msg.message_id, allow_sending_without_reply: true, parse_mode: "Markdown", text: `🎯 *Correct, ${who}!* +1 (this week: *${(pr[0] && pr[0].points) || 1}*). 🏹\nNext: /trivia  ·  Board: /triviatop` });
+          const secs = (elapsed / 1000).toFixed(1);
+          await sendHitCard(msg.chat.id, msg.message_id, zone, `🎯 *${who} — ${label}!*  Answered in *${secs}s* → *+${pts} pts* (this week: *${(pr[0] && pr[0].points) || pts}*). 🏹\nNext: /trivia  ·  Board: /triviatop`);
         }
       } catch {}
       return res.status(200).json({ ok: true });
@@ -793,7 +810,7 @@ export default async function handler(req, res) {
       if (!rows.length) { await say(chatId, replyTo, "🏹 No scores yet this week - start with /trivia!"); return res.status(200).json({ ok: true }); }
       const medal = (i) => ["🥇", "🥈", "🥉"][i] || `${i + 1}.`;
       const list = rows.map((r, i) => `${medal(i)} ${r.uname} - *${r.points}*`).join("\n");
-      await say(chatId, replyTo, `🏆 *Trivia - this week*\n${list}\n\n👑 #1 every *Friday* wins *${TRIVIA_REWARD}* $STAG AI credits.\nPlay: /trivia`);
+      await say(chatId, replyTo, `🏆 *Trivia - this week*\n${list}\n\n⚡ Faster answers score more (bullseye = 10).\n👑 #1 every *Friday* wins *${TRIVIA_REWARD}* $STAG AI credits.\nPlay: /trivia`);
       return res.status(200).json({ ok: true });
     }
 
