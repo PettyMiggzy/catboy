@@ -253,11 +253,14 @@ async function ensure(s) {
   // Async video renders: queued here, delivered/refunded by the /api/stag-video-cron poller.
   await s`CREATE TABLE IF NOT EXISTS stag_video_jobs (queue_id TEXT PRIMARY KEY, tid TEXT, chat_id TEXT, reply_to TEXT, uname TEXT, credits INT NOT NULL DEFAULT 0, funded TEXT, status TEXT NOT NULL DEFAULT 'pending', created_at TIMESTAMPTZ DEFAULT now())`;
   // Trivia: one live question per chat; weekly scores (global); paid-weeks ledger.
-  await s`CREATE TABLE IF NOT EXISTS stag_trivia_active (chat_id TEXT PRIMARY KEY, qidx INT, answer TEXT, started_at TIMESTAMPTZ DEFAULT now(), miss_shown BOOLEAN NOT NULL DEFAULT false)`;
+  await s`CREATE TABLE IF NOT EXISTS stag_trivia_active (chat_id TEXT PRIMARY KEY, qidx INT, answer TEXT, started_at TIMESTAMPTZ DEFAULT now(), miss_shown BOOLEAN NOT NULL DEFAULT false, prev_answer TEXT)`;
   await s`ALTER TABLE stag_trivia_active ADD COLUMN IF NOT EXISTS miss_shown BOOLEAN NOT NULL DEFAULT false`;
+  await s`ALTER TABLE stag_trivia_active ADD COLUMN IF NOT EXISTS prev_answer TEXT`;
   await s`CREATE TABLE IF NOT EXISTS stag_trivia_score (tid TEXT, uname TEXT, week TEXT, points INT NOT NULL DEFAULT 0, updated_at TIMESTAMPTZ DEFAULT now(), PRIMARY KEY (tid, week))`;
   await s`CREATE TABLE IF NOT EXISTS stag_trivia_paid (week TEXT PRIMARY KEY, at TIMESTAMPTZ DEFAULT now())`;
   await s`CREATE TABLE IF NOT EXISTS stag_trivia_miss (chat_id TEXT, round TIMESTAMPTZ, tid TEXT, at TIMESTAMPTZ DEFAULT now(), PRIMARY KEY (chat_id, round, tid))`;
+  await s`CREATE TABLE IF NOT EXISTS stag_trivia_recent (chat_id TEXT, qidx INT, at TIMESTAMPTZ DEFAULT now())`;
+  await s`CREATE INDEX IF NOT EXISTS stag_trivia_recent_chat ON stag_trivia_recent(chat_id, at DESC)`;
   _ensured = true;
 }
 const balOf = async (s, tid) => { const r = await s`SELECT credits FROM stag_bal WHERE tid=${tid}`; return r.length ? Number(r[0].credits) : 0; };
@@ -363,17 +366,35 @@ async function sendTriviaCard(chatId, replyTo, idx, q) {
   // text fallback if the card file isn't bundled
   await say(chatId, replyTo, `❓ *${q.q}*\n\nA) ${q.A}\nB) ${q.B}\nC) ${q.C}\nD) ${q.D}\n\n_Reply A/B/C/D — first right wins!_`);
 }
-// Award last week's top scorer once, on the first trivia activity of a new week.
+// Settle EVERY unpaid past week (not just last week) so a quiet stretch never skips a
+// champion. Idempotent: the paid-weeks ledger claims each week exactly once.
 async function settleTriviaWeek(s, chatId) {
-  const prev = weekKey(new Date(Date.now() - 7 * 86400000));
-  if ((await s`SELECT 1 FROM stag_trivia_paid WHERE week=${prev}`).length) return;
-  const claimed = await s`INSERT INTO stag_trivia_paid (week) VALUES (${prev}) ON CONFLICT (week) DO NOTHING RETURNING week`;
-  if (!claimed.length) return; // another request settled it
-  const top = await s`SELECT tid, uname, points FROM stag_trivia_score WHERE week=${prev} ORDER BY points DESC, updated_at ASC LIMIT 1`;
-  if (top.length && TRIVIA_REWARD > 0) {
-    await addCredits(s, top[0].tid, TRIVIA_REWARD);
-    await say(chatId, null, `👑 *Trivia Champion — last week: ${top[0].uname}!*\n${top[0].points} correct → *${TRIVIA_REWARD} $STAG AI credits* awarded. 🏹🦌\nNew week, fresh hunt: /trivia`);
+  const cur = weekKey();
+  let weeks = [];
+  try { weeks = await s`SELECT DISTINCT week FROM stag_trivia_score WHERE week < ${cur} ORDER BY week ASC`; } catch { return; }
+  for (const w of weeks) {
+    const wk = w.week;
+    const claimed = await s`INSERT INTO stag_trivia_paid (week) VALUES (${wk}) ON CONFLICT (week) DO NOTHING RETURNING week`;
+    if (!claimed.length) continue; // already settled (or a concurrent request just did)
+    const top = await s`SELECT tid, uname, points FROM stag_trivia_score WHERE week=${wk} ORDER BY points DESC, updated_at ASC LIMIT 1`;
+    if (top.length && top[0].points > 0 && TRIVIA_REWARD > 0) {
+      await addCredits(s, top[0].tid, TRIVIA_REWARD);
+      await say(chatId, null, `👑 *Trivia Champion — week of ${wk}: ${top[0].uname}!*\n${top[0].points} points → *${TRIVIA_REWARD} $STAG AI credits* awarded. 🏹🦌\nNew week, fresh hunt: /trivia`);
+    }
   }
+  // Bloat control: drop stale per-round miss + recent-question rows.
+  try { await s`DELETE FROM stag_trivia_miss WHERE at < now() - interval '2 days'`; } catch {}
+  try { await s`DELETE FROM stag_trivia_recent WHERE at < now() - interval '3 days'`; } catch {}
+}
+// Pick a question for this chat avoiding the ~30 most-recently served (less repetition),
+// then record it. Falls back to any question if everything is recent.
+async function pickQuestion(s, chatId) {
+  let avoid = new Set();
+  try { const r = await s`SELECT qidx FROM stag_trivia_recent WHERE chat_id=${String(chatId)} ORDER BY at DESC LIMIT 30`; avoid = new Set(r.map((x) => x.qidx)); } catch {}
+  let idx = Math.floor(Math.random() * TRIVIA.length), tries = 0;
+  while (avoid.has(idx) && tries < 60) { idx = Math.floor(Math.random() * TRIVIA.length); tries++; }
+  try { await s`INSERT INTO stag_trivia_recent (chat_id, qidx) VALUES (${String(chatId)}, ${idx})`; } catch {}
+  return idx;
 }
 
 // ── Handler ──────────────────────────────────────────────────────────────────────
@@ -390,39 +411,60 @@ export default async function handler(req, res) {
   if (!msg || !msg.from || !msg.from.id || !msg.chat) return res.status(200).json({ ok: true });
   if (!text.trim().startsWith("/")) {
     // Trivia answer? A bare A/B/C/D while a question is live in this chat.
-    const ans = text.trim().toUpperCase();
-    if (/^[ABCD]$/.test(ans)) {
+    const am = text.trim().toUpperCase().match(/^([ABCD])[).:]?$/);
+    if (am) {
+      const ans = am[1];
+      // Points count only in group/supergroup chats. A private DM has no competition, so a
+      // solo player could otherwise farm the weekly reward - DMs still play, just no scoring.
+      const scored = msg.chat.type === "group" || msg.chat.type === "supergroup";
       try {
         const st = neon(CONN);
         // Only the FIRST correct answer clears the live row (atomic single-winner).
         const won = await st`DELETE FROM stag_trivia_active WHERE chat_id=${String(msg.chat.id)} AND answer=${ans} RETURNING started_at, qidx`;
         if (won.length) {
           const who = msg.from.username ? "@" + msg.from.username : (msg.from.first_name || "ranger");
-          const wk = weekKey();
           const elapsed = Date.now() - new Date(won[0].started_at).getTime();
           const [zone, pts, label] = speedTier(elapsed);
-          await st`INSERT INTO stag_trivia_score (tid, uname, week, points) VALUES (${String(msg.from.id)}, ${who}, ${wk}, ${pts}) ON CONFLICT (tid, week) DO UPDATE SET points = stag_trivia_score.points + ${pts}, uname = ${who}, updated_at = now()`;
-          const pr = await st`SELECT points FROM stag_trivia_score WHERE tid=${String(msg.from.id)} AND week=${wk}`;
           const secs = (elapsed / 1000).toFixed(1);
-          await sendHitCard(msg.chat.id, msg.message_id, zone, `🎯 *${who} — ${label}!*  Answered in *${secs}s* → *+${pts} pts* (this week: *${(pr[0] && pr[0].points) || pts}*). 🏹\nBoard: /triviatop  ·  next question incoming...`);
-          // Keep the hunt going: auto-post the next question so play never stalls.
-          let nidx = Math.floor(Math.random() * TRIVIA.length);
-          if (TRIVIA.length > 1 && nidx === won[0].qidx) nidx = (nidx + 1) % TRIVIA.length;
+          let caption;
+          if (scored) {
+            const wk = weekKey();
+            await st`INSERT INTO stag_trivia_score (tid, uname, week, points) VALUES (${String(msg.from.id)}, ${who}, ${wk}, ${pts}) ON CONFLICT (tid, week) DO UPDATE SET points = stag_trivia_score.points + ${pts}, uname = ${who}, updated_at = now()`;
+            const pr = await st`SELECT points FROM stag_trivia_score WHERE tid=${String(msg.from.id)} AND week=${wk}`;
+            caption = `🎯 *${who} — ${label}!*  Answered in *${secs}s* → *+${pts} pts* (this week: *${(pr[0] && pr[0].points) || pts}*). 🏹\nBoard: /triviatop  ·  next question incoming...`;
+          } else {
+            caption = `🎯 *${who} — ${label}!*  Answered in *${secs}s*. 🏹\n_Practice mode — play in the group to score._  next question incoming...`;
+          }
+          await sendHitCard(msg.chat.id, msg.message_id, zone, caption);
+          // Auto-post the next question (no-repeat), and remember the answer just used so a
+          // stale double-tap / late answer / webhook retry isn't mis-scored as a miss.
+          const nidx = await pickQuestion(st, msg.chat.id);
           const nq = TRIVIA[nidx];
-          await st`INSERT INTO stag_trivia_active (chat_id, qidx, answer) VALUES (${String(msg.chat.id)}, ${nidx}, ${nq.answer}) ON CONFLICT (chat_id) DO UPDATE SET qidx=${nidx}, answer=${nq.answer}, started_at=now(), miss_shown=false`;
+          await st`INSERT INTO stag_trivia_active (chat_id, qidx, answer, prev_answer) VALUES (${String(msg.chat.id)}, ${nidx}, ${nq.answer}, ${ans}) ON CONFLICT (chat_id) DO UPDATE SET qidx=${nidx}, answer=${nq.answer}, started_at=now(), miss_shown=false, prev_answer=${ans}`;
           await sendTriviaCard(msg.chat.id, null, nidx, nq);
         } else {
           // Wrong guess while a question is live -> call out each person who misses ONCE per
           // question (one spammer can't flood), and dock a point if they have one to lose.
-          const live = await st`SELECT started_at FROM stag_trivia_active WHERE chat_id=${String(msg.chat.id)}`;
+          const live = await st`SELECT started_at, prev_answer FROM stag_trivia_active WHERE chat_id=${String(msg.chat.id)}`;
           if (live.length) {
-            const fresh = await st`INSERT INTO stag_trivia_miss (chat_id, round, tid) VALUES (${String(msg.chat.id)}, ${live[0].started_at}, ${String(msg.from.id)}) ON CONFLICT DO NOTHING RETURNING tid`;
-            if (fresh.length) {
-              const who = msg.from.username ? "@" + msg.from.username : (msg.from.first_name || "ranger");
-              const wk = weekKey();
-              const lost = await st`UPDATE stag_trivia_score SET points = points - 1, updated_at = now() WHERE tid=${String(msg.from.id)} AND week=${wk} AND points > 0 RETURNING points`;
-              const tail = lost.length ? `*-1 point* (this week: *${lost[0].points}*).` : `No points to lose yet - get one right!`;
-              await sendMissCard(msg.chat.id, msg.message_id, `❌ *${who} missed the mark!* ${tail} 🏹🦌`);
+            // Ignore a stale answer to the question that was JUST replaced (double-tap, a late
+            // correct answer, or a webhook retry): the previous round's answer within a few
+            // seconds of the new question starting is not a real miss - stay silent, no penalty.
+            const justAdvanced = (Date.now() - new Date(live[0].started_at).getTime()) < 5000;
+            if (!(justAdvanced && ans === live[0].prev_answer)) {
+              const fresh = await st`INSERT INTO stag_trivia_miss (chat_id, round, tid) VALUES (${String(msg.chat.id)}, ${live[0].started_at}, ${String(msg.from.id)}) ON CONFLICT DO NOTHING RETURNING tid`;
+              if (fresh.length) {
+                const who = msg.from.username ? "@" + msg.from.username : (msg.from.first_name || "ranger");
+                let tail;
+                if (scored) {
+                  const wk = weekKey();
+                  const lost = await st`UPDATE stag_trivia_score SET points = points - 1, updated_at = now() WHERE tid=${String(msg.from.id)} AND week=${wk} AND points > 0 RETURNING points`;
+                  tail = lost.length ? `*-1 point* (this week: *${lost[0].points}*).` : `No points to lose yet - get one right!`;
+                } else {
+                  tail = `_Practice mode — play in the group to score._`;
+                }
+                await sendMissCard(msg.chat.id, msg.message_id, `❌ *${who} missed the mark!* ${tail} 🏹🦌`);
+              }
             }
           }
         }
@@ -825,9 +867,9 @@ export default async function handler(req, res) {
       if (cur.length && (Date.now() - new Date(cur[0].started_at).getTime()) < 20 * 1000) {
         await say(chatId, replyTo, "🏹 A question's already live - answer it (A/B/C/D)! Or wait a moment to skip."); return res.status(200).json({ ok: true });
       }
-      const idx = Math.floor(Math.random() * TRIVIA.length);
+      const idx = await pickQuestion(s, chatId);
       const q = TRIVIA[idx];
-      await s`INSERT INTO stag_trivia_active (chat_id, qidx, answer) VALUES (${String(chatId)}, ${idx}, ${q.answer}) ON CONFLICT (chat_id) DO UPDATE SET qidx=${idx}, answer=${q.answer}, started_at=now(), miss_shown=false`;
+      await s`INSERT INTO stag_trivia_active (chat_id, qidx, answer, prev_answer) VALUES (${String(chatId)}, ${idx}, ${q.answer}, ${null}) ON CONFLICT (chat_id) DO UPDATE SET qidx=${idx}, answer=${q.answer}, started_at=now(), miss_shown=false, prev_answer=${null}`;
       await sendTriviaCard(chatId, replyTo, idx, q);
       return res.status(200).json({ ok: true });
     }
