@@ -15,7 +15,7 @@
 //
 // Economics (all env-tunable): credits are the internal unit; 1 credit ≈ $0.00125 of
 // generation cost (so the 4000-credit free pool ≈ $5). A PFP/image costs 144 credits.
-// Buying credits costs 2× that (markup = profit); verified 1M holders pay half.
+// Buying credits costs 3× that (markup = profit); verified 1M holders pay half.
 //
 // Required Vercel env (PUBLIC repo - only NAMES here, never values):
 //   STAG_BOT_TOKEN   Telegram token for @STAGZBOT
@@ -27,7 +27,7 @@
 //   STAG_BOT_SECRET     Telegram webhook secret-token header (recommended)
 //   STAG_PFP_MODEL(nano-banana-pro-edit) STAG_GEN_MODEL(nano-banana-pro)
 //   STAG_PFP_COST(144) STAG_GEN_COST(144) STAG_PFP_BUDGET(4000) STAG_PFP_COOLDOWN(45)
-//   STAG_CREDIT_USD(0.00125) STAG_MARKUP(2) STAG_HOLDER_DISCOUNT(0.5) STAG_HOLD_MIN(1000000)
+//   STAG_CREDIT_USD(0.00125) STAG_MARKUP(3) STAG_HOLDER_DISCOUNT(0.5) STAG_HOLD_MIN(1000000)
 //
 // SECURITY: never mentions catboy. Venice key must be an inference key. No secrets in repo.
 
@@ -57,7 +57,7 @@ const REQ_TTL = 7 * 24 * 3600 * 1000; // buy/verify request validity - long is s
                                       // the payment must also be newer than the request (below)
 
 const CREDIT_USD = parseFloat(process.env.STAG_CREDIT_USD || "0.00125"); // cost basis / credit
-const MARKUP = parseFloat(process.env.STAG_MARKUP || "2");               // retail = 2× cost
+const MARKUP = parseFloat(process.env.STAG_MARKUP || "3");               // retail = 3× cost
 const HOLDER_DISCOUNT = parseFloat(process.env.STAG_HOLDER_DISCOUNT || "0.5"); // holders pay ½
 const HOLD_MIN = parseFloat(process.env.STAG_HOLD_MIN || "1000000");     // $STAG for holder perk
 const BUNDLES_USD = (process.env.STAG_BUNDLES || "3,10,25").split(",").map((x) => parseFloat(x));
