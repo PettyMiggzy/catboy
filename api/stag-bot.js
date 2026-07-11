@@ -6,6 +6,7 @@
 //                       ONE free per person from the shared launch pool; after that
 //                       it costs credits.
 //   /imagine <prompt>-> put the $STAG character into ANY scene you describe. Costs credits.
+//   /image <prompt>  -> open generator: draws literally anything (no character). Costs credits.
 //   /credits         -> your credit balance + the free-pool status.
 //   /buy             -> buy credits with $STAG (live-priced); send, then /claim <txhash>.
 //   /claim <txhash>  -> verify your $STAG payment on Robinhood Chain and top up.
@@ -318,7 +319,8 @@ export default async function handler(req, res) {
         "_Make $STAG art right here in chat._\n\n" +
         "🦌 `/pfp` - your $STAG profile pic *(1 FREE!)*\n" +
         "🎨 `/pfp cyber samurai` - add any theme\n" +
-        "🖼️ `/imagine <anything>` - generate *any* image\n\n" +
+        "🖼️ `/imagine <scene>` - drop the stag into *any* scene\n" +
+        "🎨 `/image <anything>` - open generator, draws anything\n\n" +
         "💰 *Want more?* Grab credits:\n" +
         "💳 `/buy` - pay in $STAG  ·  `/credits` - your balance\n" +
         "🔐 `/verify` - hold *1M+ $STAG* → *50% OFF*\n\n" +
@@ -671,12 +673,14 @@ export default async function handler(req, res) {
 
     // ---------- generation: /pfp and /imagine ----------
     const isPfp = cmd === "/pfp";
-    const isGen = cmd === "/imagine" || cmd === "/gen" || cmd === "/image";
+    const isScene = cmd === "/imagine" || cmd === "/gen"; // the $STAG stag dropped into ANY scene (identity locked)
+    const isOpen = cmd === "/image" || cmd === "/anything"; // open generator - draws literally anything
+    const isGen = isScene || isOpen;
     if (!isPfp && !isGen) return res.status(200).json({ ok: true }); // ignore other commands
 
     const style = isPfp ? arg.slice(0, 200) : "";
     const genPrompt = isGen ? arg.slice(0, 400) : "";
-    if (isGen && !genPrompt) { await say(chatId, replyTo, "Give me something to draw: `/imagine a hooded stag archer on a neon rooftop`"); return res.status(200).json({ ok: true }); }
+    if (isGen && !genPrompt) { await say(chatId, replyTo, "Give me something to draw: `/imagine <scene>` (stag in it) or `/image <anything>` (open)"); return res.status(200).json({ ok: true }); }
     if (BANNED.test(style + " " + genPrompt)) { await say(chatId, replyTo, "🚫 Keep it clean, ranger."); return res.status(200).json({ ok: true }); }
 
     const isOwner = tid === OWNER; // owner: unlimited, no cooldown, no credit cost
@@ -727,11 +731,16 @@ export default async function handler(req, res) {
           (style ? ` Also work in this theme: ${style}.` : "") + STYLE_LOCK;
         png = await editPfp(prompt);
         caption = `🦌 ${uname}, your $STAGWIFHOOD is ready. 🏹💚` + (style ? `\n🎨 "${style}"` : "");
+      } else if (isOpen) {
+        // Open generator: draws whatever the prompt says, no character lock.
+        const prompt = genPrompt + ". High quality, detailed, dramatic lighting, no text, no watermark.";
+        png = await genImage(prompt);
+        caption = `🖼️ ${uname} → open canvas\n"${genPrompt.slice(0, 120)}"`;
       } else {
-        // Locked to the $STAG character: the user's prompt is the SCENE, identity stays fixed.
+        // /imagine: the $STAG character dropped into the user's scene (identity locked).
         const prompt = `THIS exact character, in this scene: ${genPrompt}.` + IDENTITY_LOCK;
         png = await editPfp(prompt);
-        caption = `🎨 ${uname} asked → delivered 🏹\n"${genPrompt.slice(0, 120)}"`;
+        caption = `🎨 ${uname} (as the stag) 🏹\n"${genPrompt.slice(0, 120)}"`;
       }
       const tag = funded === "owner" ? "👑" : funded === "pool" ? "🎁 that was your free one" : `-${cost} credits`;
       await sendPhoto(chatId, png, caption + `\n\n${tag}  •  another? /pfp /imagine  •  /credits`, replyTo);
