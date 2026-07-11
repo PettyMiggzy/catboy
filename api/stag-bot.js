@@ -6,7 +6,7 @@
 //                       ONE free per person from the shared launch pool; after that
 //                       it costs credits.
 //   /image <prompt>  -> put the $STAG character into ANY scene you describe. Costs credits.
-//   /video <prompt>  -> a short animated $STAG clip of your scene. Costs credits (owner free).
+//   /vid <prompt>    -> a short animated $STAG clip of your scene. Costs credits (owner free).
 //   /credits         -> your credit balance + the free-pool status.
 //   /buy             -> buy credits with $STAG (live-priced); send, then /claim <txhash>.
 //   /claim <txhash>  -> verify your $STAG payment on Robinhood Chain and top up.
@@ -363,7 +363,7 @@ export default async function handler(req, res) {
         "🦌 `/pfp` - your $STAG profile pic *(1 FREE!)*\n" +
         "🎨 `/pfp cyber samurai` - add any theme\n" +
         "🖼️ `/image <scene>` - drop the stag into *any* scene you want\n" +
-        "🎥 `/video <scene>` - a 5s animated $STAG clip\n\n" +
+        "🎥 `/vid <scene>` - a 5s animated $STAG clip\n\n" +
         "💰 *Want more?* Grab credits:\n" +
         "💳 `/buy` - pay in $STAG  ·  `/credits` - your balance\n" +
         "🔐 `/verify` - hold *1M+ $STAG* → *50% OFF*\n\n" +
@@ -717,9 +717,9 @@ export default async function handler(req, res) {
     }
 
     // ---------- video generation (async: queue now, poller delivers) ----------
-    if (cmd === "/video" || cmd === "/vid") {
+    if (cmd === "/vid") { // /vid (not /video) to avoid clashing with other bots in group chats
       const scene = arg.slice(0, 400);
-      if (!scene) { await say(chatId, replyTo, "🎥 Give me a scene: `/video the stag firing a glowing arrow off a neon rooftop`"); return res.status(200).json({ ok: true }); }
+      if (!scene) { await say(chatId, replyTo, "🎥 Give me a scene: `/vid the stag firing a glowing arrow off a neon rooftop`"); return res.status(200).json({ ok: true }); }
       if (BANNED.test(scene)) { await say(chatId, replyTo, "🚫 Keep it clean, ranger."); return res.status(200).json({ ok: true }); }
       const owner = isOwnerId(tid); // owner: unlimited, free, no cooldown
       if (VIDEO_COOLDOWN > 0 && !owner) {
