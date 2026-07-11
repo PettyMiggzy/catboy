@@ -253,7 +253,8 @@ async function ensure(s) {
   // Async video renders: queued here, delivered/refunded by the /api/stag-video-cron poller.
   await s`CREATE TABLE IF NOT EXISTS stag_video_jobs (queue_id TEXT PRIMARY KEY, tid TEXT, chat_id TEXT, reply_to TEXT, uname TEXT, credits INT NOT NULL DEFAULT 0, funded TEXT, status TEXT NOT NULL DEFAULT 'pending', created_at TIMESTAMPTZ DEFAULT now())`;
   // Trivia: one live question per chat; weekly scores (global); paid-weeks ledger.
-  await s`CREATE TABLE IF NOT EXISTS stag_trivia_active (chat_id TEXT PRIMARY KEY, qidx INT, answer TEXT, started_at TIMESTAMPTZ DEFAULT now())`;
+  await s`CREATE TABLE IF NOT EXISTS stag_trivia_active (chat_id TEXT PRIMARY KEY, qidx INT, answer TEXT, started_at TIMESTAMPTZ DEFAULT now(), miss_shown BOOLEAN NOT NULL DEFAULT false)`;
+  await s`ALTER TABLE stag_trivia_active ADD COLUMN IF NOT EXISTS miss_shown BOOLEAN NOT NULL DEFAULT false`;
   await s`CREATE TABLE IF NOT EXISTS stag_trivia_score (tid TEXT, uname TEXT, week TEXT, points INT NOT NULL DEFAULT 0, updated_at TIMESTAMPTZ DEFAULT now(), PRIMARY KEY (tid, week))`;
   await s`CREATE TABLE IF NOT EXISTS stag_trivia_paid (week TEXT PRIMARY KEY, at TIMESTAMPTZ DEFAULT now())`;
   _ensured = true;
@@ -347,6 +348,12 @@ async function sendHitCard(chatId, replyTo, zone, caption) {
   if (buf) return sendPhoto(chatId, buf, caption, replyTo, "Markdown", "image/jpeg", "hit.jpg");
   await say(chatId, replyTo, caption);
 }
+async function sendMissCard(chatId, replyTo, caption) {
+  let buf = null;
+  try { buf = readFileSync(`${process.cwd()}/assets/trivia/miss.jpg`); } catch {}
+  if (buf) return sendPhoto(chatId, buf, caption, replyTo, "Markdown", "image/jpeg", "miss.jpg");
+  await say(chatId, replyTo, caption);
+}
 async function sendTriviaCard(chatId, replyTo, idx, q) {
   const caption = `🦌 *${q.cat === "STAG" ? "$STAG" : "Crypto"} Trivia* — reply *A / B / C / D*. Answer fast: quicker = closer to bullseye = more points! 🏹`;
   let buf = null;
@@ -397,6 +404,13 @@ export default async function handler(req, res) {
           const pr = await st`SELECT points FROM stag_trivia_score WHERE tid=${String(msg.from.id)} AND week=${wk}`;
           const secs = (elapsed / 1000).toFixed(1);
           await sendHitCard(msg.chat.id, msg.message_id, zone, `🎯 *${who} — ${label}!*  Answered in *${secs}s* → *+${pts} pts* (this week: *${(pr[0] && pr[0].points) || pts}*). 🏹\nNext: /trivia  ·  Board: /triviatop`);
+        } else {
+          // Wrong guess while a question is still live -> ONE miss reaction per round (no chat spam).
+          const miss = await st`UPDATE stag_trivia_active SET miss_shown=true WHERE chat_id=${String(msg.chat.id)} AND miss_shown=false RETURNING chat_id`;
+          if (miss.length) {
+            const who = msg.from.username ? "@" + msg.from.username : (msg.from.first_name || "ranger");
+            await sendMissCard(msg.chat.id, msg.message_id, `❌ *${who} missed the mark!* Wrong shot. First to nail the right *A / B / C / D* takes the points. 🏹🦌`);
+          }
         }
       } catch {}
       return res.status(200).json({ ok: true });
@@ -799,7 +813,7 @@ export default async function handler(req, res) {
       }
       const idx = Math.floor(Math.random() * TRIVIA.length);
       const q = TRIVIA[idx];
-      await s`INSERT INTO stag_trivia_active (chat_id, qidx, answer) VALUES (${String(chatId)}, ${idx}, ${q.answer}) ON CONFLICT (chat_id) DO UPDATE SET qidx=${idx}, answer=${q.answer}, started_at=now()`;
+      await s`INSERT INTO stag_trivia_active (chat_id, qidx, answer) VALUES (${String(chatId)}, ${idx}, ${q.answer}) ON CONFLICT (chat_id) DO UPDATE SET qidx=${idx}, answer=${q.answer}, started_at=now(), miss_shown=false`;
       await sendTriviaCard(chatId, replyTo, idx, q);
       return res.status(200).json({ ok: true });
     }
