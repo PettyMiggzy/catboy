@@ -737,7 +737,10 @@ export default async function handler(req, res) {
       }
       const tag = funded === "owner" ? "👑" : funded === "pool" ? "🎁 that was your free one" : `-${cost} credits`;
       await sendPhoto(chatId, png, caption + `\n\n${tag}  •  another? /pfp /imagine  •  /credits`, replyTo);
-      await s`INSERT INTO stag_log (tid, uname, kind, credits) VALUES (${tid}, ${uname}, ${isPfp ? "pfp" : "gen"}, ${funded === "owner" ? 0 : cost})`;
+      // Image is delivered — post-delivery bookkeeping must NEVER fall into the refund
+      // catch, or a DB hiccup here would hand back the free slot / credits AFTER the user
+      // already got the image (a path to a 2nd free). Swallow logging errors instead.
+      try { await s`INSERT INTO stag_log (tid, uname, kind, credits) VALUES (${tid}, ${uname}, ${isPfp ? "pfp" : "gen"}, ${funded === "owner" ? 0 : cost})`; } catch {}
       return res.status(200).json({ ok: true });
     } catch (e) {
       // refund whatever funded it (owner paid nothing). Pool refund releases the free
