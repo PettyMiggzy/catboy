@@ -73,11 +73,12 @@ export default async function handler(req, res) {
     // binary body = finished mp4
     const buf = Buffer.from(await r.arrayBuffer());
     if (buf.length < 2000) { pending++; continue; } // not really ready
-    // Claim the job atomically so two overlapping cron runs can't double-send.
+    // Claim atomically (mark done) so two overlapping cron runs can't double-send.
     const claim = await s`UPDATE stag_video_jobs SET status='done' WHERE queue_id=${j.queue_id} AND status='pending' RETURNING queue_id`;
     if (!claim.length) continue;
-    await sendVideo(j.chat_id, buf, `🎥 ${j.uname || "ranger"}, your $STAG video is ready. 🏹🦌`, j.reply_to);
-    delivered++;
+    const sent = await sendVideo(j.chat_id, buf, `🎥 ${j.uname || "ranger"}, your $STAG video is ready. 🏹🦌`, j.reply_to);
+    if (sent && sent.ok) { delivered++; }
+    else { await s`UPDATE stag_video_jobs SET status='pending' WHERE queue_id=${j.queue_id}`; pending++; } // Telegram rejected it -> back to pending, retry next tick (20-min cap still refunds)
   }
   return res.status(200).json({ ok: true, scanned: jobs.length, delivered, failed, pending });
 }
