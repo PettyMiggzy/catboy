@@ -257,6 +257,7 @@ async function ensure(s) {
   await s`ALTER TABLE stag_trivia_active ADD COLUMN IF NOT EXISTS miss_shown BOOLEAN NOT NULL DEFAULT false`;
   await s`CREATE TABLE IF NOT EXISTS stag_trivia_score (tid TEXT, uname TEXT, week TEXT, points INT NOT NULL DEFAULT 0, updated_at TIMESTAMPTZ DEFAULT now(), PRIMARY KEY (tid, week))`;
   await s`CREATE TABLE IF NOT EXISTS stag_trivia_paid (week TEXT PRIMARY KEY, at TIMESTAMPTZ DEFAULT now())`;
+  await s`CREATE TABLE IF NOT EXISTS stag_trivia_miss (chat_id TEXT, round TIMESTAMPTZ, tid TEXT, at TIMESTAMPTZ DEFAULT now(), PRIMARY KEY (chat_id, round, tid))`;
   _ensured = true;
 }
 const balOf = async (s, tid) => { const r = await s`SELECT credits FROM stag_bal WHERE tid=${tid}`; return r.length ? Number(r[0].credits) : 0; };
@@ -411,11 +412,18 @@ export default async function handler(req, res) {
           await st`INSERT INTO stag_trivia_active (chat_id, qidx, answer) VALUES (${String(msg.chat.id)}, ${nidx}, ${nq.answer}) ON CONFLICT (chat_id) DO UPDATE SET qidx=${nidx}, answer=${nq.answer}, started_at=now(), miss_shown=false`;
           await sendTriviaCard(msg.chat.id, null, nidx, nq);
         } else {
-          // Wrong guess while a question is still live -> ONE miss reaction per round (no chat spam).
-          const miss = await st`UPDATE stag_trivia_active SET miss_shown=true WHERE chat_id=${String(msg.chat.id)} AND miss_shown=false RETURNING chat_id`;
-          if (miss.length) {
-            const who = msg.from.username ? "@" + msg.from.username : (msg.from.first_name || "ranger");
-            await sendMissCard(msg.chat.id, msg.message_id, `❌ *${who} missed the mark!* Wrong shot. First to nail the right *A / B / C / D* takes the points. 🏹🦌`);
+          // Wrong guess while a question is live -> call out each person who misses ONCE per
+          // question (one spammer can't flood), and dock a point if they have one to lose.
+          const live = await st`SELECT started_at FROM stag_trivia_active WHERE chat_id=${String(msg.chat.id)}`;
+          if (live.length) {
+            const fresh = await st`INSERT INTO stag_trivia_miss (chat_id, round, tid) VALUES (${String(msg.chat.id)}, ${live[0].started_at}, ${String(msg.from.id)}) ON CONFLICT DO NOTHING RETURNING tid`;
+            if (fresh.length) {
+              const who = msg.from.username ? "@" + msg.from.username : (msg.from.first_name || "ranger");
+              const wk = weekKey();
+              const lost = await st`UPDATE stag_trivia_score SET points = points - 1, updated_at = now() WHERE tid=${String(msg.from.id)} AND week=${wk} AND points > 0 RETURNING points`;
+              const tail = lost.length ? `*-1 point* (this week: *${lost[0].points}*).` : `No points to lose yet - get one right!`;
+              await sendMissCard(msg.chat.id, msg.message_id, `❌ *${who} missed the mark!* ${tail} 🏹🦌`);
+            }
           }
         }
       } catch {}
@@ -830,7 +838,7 @@ export default async function handler(req, res) {
       if (!rows.length) { await say(chatId, replyTo, "🏹 No scores yet this week - start with /trivia!"); return res.status(200).json({ ok: true }); }
       const medal = (i) => ["🥇", "🥈", "🥉"][i] || `${i + 1}.`;
       const list = rows.map((r, i) => `${medal(i)} ${r.uname} - *${r.points}*`).join("\n");
-      await say(chatId, replyTo, `🏆 *Trivia - this week*\n${list}\n\n⚡ Faster answers score more (bullseye = 10).\n👑 #1 every *Friday* wins *${TRIVIA_REWARD}* $STAG AI credits.\nPlay: /trivia`);
+      await say(chatId, replyTo, `🏆 *Trivia - this week*\n${list}\n\n⚡ Faster answers score more (bullseye = 10). Miss = -1 point.\n👑 #1 every *Friday* wins *${TRIVIA_REWARD}* $STAG AI credits.\nPlay: /trivia`);
       return res.status(200).json({ ok: true });
     }
 
