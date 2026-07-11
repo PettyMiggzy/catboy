@@ -6,6 +6,7 @@
 //                       ONE free per person from the shared launch pool; after that
 //                       it costs credits.
 //   /image <prompt>  -> put the $STAG character into ANY scene you describe. Costs credits.
+//   /video <prompt>  -> a short animated $STAG clip of your scene. Costs credits (owner free).
 //   /credits         -> your credit balance + the free-pool status.
 //   /buy             -> buy credits with $STAG (live-priced); send, then /claim <txhash>.
 //   /claim <txhash>  -> verify your $STAG payment on Robinhood Chain and top up.
@@ -62,6 +63,13 @@ const MARKUP = parseFloat(process.env.STAG_MARKUP || "3");               // reta
 const HOLDER_DISCOUNT = parseFloat(process.env.STAG_HOLDER_DISCOUNT || "0.5"); // holders pay ½
 const HOLD_MIN = parseFloat(process.env.STAG_HOLD_MIN || "1000000");     // $STAG for holder perk
 const BUNDLES_USD = (process.env.STAG_BUNDLES || "3,10,25").split(",").map((x) => parseFloat(x));
+// ── Video tier (async render; owner free, everyone else pays) ────────────────────
+// Cost basis (Venice kling-v3-pro 5s) ≈ $0.92. VIDEO_COST credits × CREDIT_USD × MARKUP
+// = retail; 540 × 0.00125 × 3 ≈ $2.03, safely above cost so a sale never loses money.
+const VIDEO_MODEL = (process.env.STAG_VIDEO_MODEL || "kling-v3-pro-image-to-video").trim();
+const VIDEO_DURATION = (process.env.STAG_VIDEO_DURATION || "5s").trim();
+const VIDEO_COST = parseInt(process.env.STAG_VIDEO_COST || "540", 10);
+const VIDEO_COOLDOWN = parseInt(process.env.STAG_VIDEO_COOLDOWN || "60", 10) * 1000;
 const LINKS = {
   site: process.env.STAG_SITE || "https://www.stagwifhood.fun",
   x: process.env.STAG_X || "https://x.com/StagWifHood",
@@ -159,6 +167,15 @@ async function sendPhoto(chatId, pngBuf, caption, replyTo, parseMode) {
   try { const r = await fetch(TG("sendPhoto"), { method: "POST", body: fd }); return await r.json().catch(() => ({})); }
   catch { return {}; }
 }
+async function sendVideo(chatId, mp4Buf, caption, replyTo) {
+  const fd = new FormData();
+  fd.append("chat_id", String(chatId));
+  if (caption) fd.append("caption", caption);
+  if (replyTo) { fd.append("reply_to_message_id", String(replyTo)); fd.append("allow_sending_without_reply", "true"); }
+  fd.append("video", new Blob([mp4Buf], { type: "video/mp4" }), "stag.mp4");
+  try { const r = await fetch(TG("sendVideo"), { method: "POST", body: fd }); return await r.json().catch(() => ({})); }
+  catch { return {}; }
+}
 // Decoded once - the embedded $STAG character, reused as the welcome image.
 let _welcomeBuf = null;
 const welcomeImg = () => (_welcomeBuf ||= Buffer.from(STAG_WELCOME_B64, "base64"));
@@ -192,6 +209,21 @@ async function genImage(prompt) {
   if (!r.ok || !j.images || !j.images[0]) throw new Error((j && j.error) || "venice_" + r.status);
   return Buffer.from(j.images[0], "base64");
 }
+// Queue an async video render off the $STAG reference. Returns a queue_id; the
+// /api/stag-video-cron poller retrieves + delivers it (or refunds on failure).
+async function queueVideo(scene) {
+  const key = veniceKey(); if (!key) throw new Error("venice_not_configured");
+  const prompt = `THIS exact character in motion: ${scene}. Keep his identity EXACTLY: large antlers, ` +
+    `green Robin-Hood hood, glowing green eyes, muscular build. Dark cinematic, smooth natural motion, no text.`;
+  const r = await fetch("https://api.venice.ai/api/v1/video/queue", {
+    method: "POST", headers: { Authorization: "Bearer " + key, "Content-Type": "application/json" },
+    body: JSON.stringify({ model: VIDEO_MODEL, prompt, duration: VIDEO_DURATION, image_url: "data:image/jpeg;base64," + STAG_REF_B64 }),
+  });
+  const j = await r.json().catch(() => ({}));
+  const qid = j.queue_id || j.id;
+  if (!r.ok || !qid) throw new Error((j && j.error) || "venice_" + r.status);
+  return qid;
+}
 
 // ── DB ───────────────────────────────────────────────────────────────────────────
 let _ensured = false; // schema is idempotent - only run the DDL once per warm instance
@@ -213,6 +245,8 @@ async function ensure(s) {
   await s`CREATE TABLE IF NOT EXISTS stag_verify_used (txhash TEXT PRIMARY KEY, tid TEXT, at TIMESTAMPTZ DEFAULT now())`;
   await s`CREATE TABLE IF NOT EXISTS stag_cool (tid TEXT PRIMARY KEY, last_at TIMESTAMPTZ DEFAULT now())`;
   await s`CREATE TABLE IF NOT EXISTS stag_seen (uid BIGINT PRIMARY KEY, at TIMESTAMPTZ DEFAULT now())`;
+  // Async video renders: queued here, delivered/refunded by the /api/stag-video-cron poller.
+  await s`CREATE TABLE IF NOT EXISTS stag_video_jobs (queue_id TEXT PRIMARY KEY, tid TEXT, chat_id TEXT, reply_to TEXT, uname TEXT, credits INT NOT NULL DEFAULT 0, funded TEXT, status TEXT NOT NULL DEFAULT 'pending', created_at TIMESTAMPTZ DEFAULT now())`;
   _ensured = true;
 }
 const balOf = async (s, tid) => { const r = await s`SELECT credits FROM stag_bal WHERE tid=${tid}`; return r.length ? Number(r[0].credits) : 0; };
@@ -328,7 +362,8 @@ export default async function handler(req, res) {
         "_Make $STAG art right here in chat._\n\n" +
         "🦌 `/pfp` - your $STAG profile pic *(1 FREE!)*\n" +
         "🎨 `/pfp cyber samurai` - add any theme\n" +
-        "🖼️ `/image <scene>` - drop the stag into *any* scene you want\n\n" +
+        "🖼️ `/image <scene>` - drop the stag into *any* scene you want\n" +
+        "🎥 `/video <scene>` - a 5s animated $STAG clip\n\n" +
         "💰 *Want more?* Grab credits:\n" +
         "💳 `/buy` - pay in $STAG  ·  `/credits` - your balance\n" +
         "🔐 `/verify` - hold *1M+ $STAG* → *50% OFF*\n\n" +
@@ -678,6 +713,36 @@ export default async function handler(req, res) {
       }
       await s`DELETE FROM stag_verify_req WHERE tid=${tid}`;
       await say(chatId, replyTo, `✅ *Verified holder!* ${fmt(held)} $STAG. You now get *50% off* all credits. 🏹💚\n/buy to stock up cheap.`);
+      return res.status(200).json({ ok: true });
+    }
+
+    // ---------- video generation (async: queue now, poller delivers) ----------
+    if (cmd === "/video" || cmd === "/vid") {
+      const scene = arg.slice(0, 400);
+      if (!scene) { await say(chatId, replyTo, "🎥 Give me a scene: `/video the stag firing a glowing arrow off a neon rooftop`"); return res.status(200).json({ ok: true }); }
+      if (BANNED.test(scene)) { await say(chatId, replyTo, "🚫 Keep it clean, ranger."); return res.status(200).json({ ok: true }); }
+      const owner = isOwnerId(tid); // owner: unlimited, free, no cooldown
+      if (VIDEO_COOLDOWN > 0 && !owner) {
+        const cr = await s`SELECT last_at FROM stag_cool WHERE tid=${tid}`;
+        if (cr.length) { const wait = VIDEO_COOLDOWN - (Date.now() - new Date(cr[0].last_at).getTime()); if (wait > 0) { await say(chatId, replyTo, `⏳ Easy - ${Math.ceil(wait / 1000)}s til your next render.`); return res.status(200).json({ ok: true }); } }
+      }
+      // Fund: owner free; everyone else pays VIDEO_COST up front (NO free videos).
+      let vfunded = owner ? "owner" : null;
+      if (!vfunded) {
+        if ((await spend(s, tid, VIDEO_COST)) == null) {
+          const bal = await balOf(s, tid);
+          await say(chatId, replyTo, `🎥 Videos are *${VIDEO_COST}* credits - you have *${bal}*.\nTop up: /buy${(await isVerified(s, tid)) ? "" : "  •  Hold 1M+ for 50% off: /verify"}`);
+          return res.status(200).json({ ok: true });
+        }
+        vfunded = "balance";
+      }
+      // Start the render; refund immediately if the queue call fails.
+      let qid;
+      try { qid = await queueVideo(scene); }
+      catch (e) { if (vfunded === "balance") await addCredits(s, tid, VIDEO_COST); await say(chatId, replyTo, "⚠️ Couldn't start the render - no credits spent. Try again."); return res.status(200).json({ ok: false, error: String((e && e.message) || e) }); }
+      await s`INSERT INTO stag_video_jobs (queue_id, tid, chat_id, reply_to, uname, credits, funded, status) VALUES (${qid}, ${tid}, ${String(chatId)}, ${String(replyTo)}, ${uname}, ${owner ? 0 : VIDEO_COST}, ${vfunded}, 'pending') ON CONFLICT (queue_id) DO NOTHING`;
+      if (!owner) await s`INSERT INTO stag_cool (tid, last_at) VALUES (${tid}, now()) ON CONFLICT (tid) DO UPDATE SET last_at=now()`;
+      await say(chatId, replyTo, `🎥 Spinning your $STAG video up... it'll drop right here in ~1-2 min. ${owner ? "👑" : `-${VIDEO_COST} credits`} 🏹`);
       return res.status(200).json({ ok: true });
     }
 

@@ -4,6 +4,9 @@
       "claude/catboy-website-nspovy": false
     }
   },
+  "crons": [
+    { "path": "/api/stag-video-cron", "schedule": "* * * * *" }
+  ],
   "headers": [
     {
       "source": "/(.*)",
