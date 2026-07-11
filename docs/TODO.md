@@ -19,9 +19,9 @@ Running list of parked work. Newest context at top of each section.
 ## $CATBOY AI bot — go-live (needs droplet access, after-work)
 - [ ] Droplet `bot/.env`: set `AI_PROVIDER_KEY`, `AI_PROVIDER_BASE`, `AI_IMAGE_MODEL`,
       `AI_VIDEO_MODEL`, `AI_SECRET`, prices, then `git pull && pm2 restart catboy-buybot`.
-- [ ] Vercel: `AI_SECRET` (match droplet), `AI_TREASURY`, `AI_DECIMALS=6`.
+- [ ] Vercel: `AI_SECRET` (match droplet), `AI_TREASURY`. (Top-ups are native SOL — no `AI_DECIMALS`/`TOKEN_MINT` needed.)
 - [ ] Decide the `AI_TREASURY` wallet (fresh recommended) — public address only.
-- [ ] Live end-to-end test: `/credits` → pay $CATBOY → `/img` in the group.
+- [ ] Live end-to-end test: `/credits` → pay SOL → `/img` in the group.
 - [ ] **Monthly rebate payout** — cron/script to compute each holder's rebate (spend ×
       tier %, 0.5%/M up to 9M, 20% at 10M+), pay in $CATBOY, reset the month. (Phase 3.)
 - [ ] **`/vid`** — flip `AI_ENABLE_VIDEO=true` once images are proven; consider running the

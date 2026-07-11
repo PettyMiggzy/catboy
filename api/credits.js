@@ -1,24 +1,33 @@
 // $CATBOY AI — credit top-up endpoint (Vercel side).
-//   GET  /api/credits?tid&t&h            -> bundles, live $CATBOY/USD, payTo, message
+//   GET  /api/credits?tid&t&h            -> bundles (priced in SOL), live SOL/USD, payTo, message
 //   POST /api/credits {tid,t,h,wallet,sig,usdCents,txSig}
-//        -> verify the signed link + wallet signature + the $CATBOY payment,
+//        -> verify the signed link + wallet signature + the SOL payment,
 //           then credit the Telegram account and bind wallet<->tid (for rebates).
 //
-// Env (Vercel): DATABASE_URL, AI_SECRET (matches the bot), TOKEN_MINT,
-//   SOLANA_RPC, AI_TREASURY (wallet receiving $CATBOY), AI_DECIMALS(=6).
+// Credits are accounted internally in USD cents; only the on-ramp is SOL.
+//
+// Env (Vercel): DATABASE_URL, AI_SECRET (matches the bot),
+//   SOLANA_RPC, AI_TREASURY (wallet receiving the SOL top-ups).
 //   No provider keys here — this is only payments.
 import { neon } from "@neondatabase/serverless";
 import { PublicKey } from "@solana/web3.js";
 import crypto from "crypto";
 
+// getTransaction is retried up to ~16s while the RPC indexes a just-sent payment.
+export const config = { maxDuration: 60 };
+
 const CONN = (process.env.DATABASE_URL || process.env.POSTGRES_URL || "").trim();
 const SECRET = (process.env.AI_SECRET || "").trim();
-const MINT = (process.env.TOKEN_MINT || "3UCdpV5mTb4TmJSCyPkaAsuUFvaF4ofc2uXCEj3Jpump").trim();
 const RPC = (process.env.SOLANA_RPC || "").trim();
 const TREASURY = (process.env.AI_TREASURY || "").trim();
-const DECIMALS = parseInt(process.env.AI_DECIMALS || "6", 10);
+const LAMPORTS = 1e9; // lamports per SOL
+const WSOL = "So11111111111111111111111111111111111111112"; // wrapped-SOL mint (for the SOL/USD quote)
 const LINK_TTL = 20 * 60 * 1000; // 20 min
-const PRICE_TOL = 0.85; // accept >=85% of the USD value in $CATBOY (absorbs price drift between quote and pay)
+const MAX_TX_AGE_S = 30 * 60;    // only credit recent payments
+// accept >=97% of the USD value in SOL — absorbs the small price drift between the GET quote and the
+// POST verify (which happens seconds later). Matches api/mint.js. Looser values (e.g. 0.85) are a
+// standing discount to a hand-built client, since the credited USD is fixed regardless of SOL sent.
+const PRICE_TOL = 0.97;
 const BUNDLES = [{ usdCents: 500 }, { usdCents: 1500 }, { usdCents: 5000 }]; // $5 / $15 / $50
 
 const sql = () => { if (!CONN) throw new Error("db_not_configured"); return neon(CONN); };
@@ -42,37 +51,41 @@ async function rpc(method, params = []) {
   const r = await fetch(RPC, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) });
   const j = await r.json(); if (j.error) throw new Error(j.error.message || "rpc_error"); return j.result;
 }
-// live $CATBOY price in USD (DexScreener); returns catboy-per-USD too
-async function priceUsd() {
+// live SOL price in USD (DexScreener) — take the deepest pair where SOL is the base token
+async function solPriceUsd() {
   try {
-    const r = await fetch("https://api.dexscreener.com/latest/dex/tokens/" + MINT);
+    const r = await fetch("https://api.dexscreener.com/latest/dex/tokens/" + WSOL);
     const j = await r.json();
-    const pairs = (j.pairs || []).filter((p) => p.priceUsd);
+    const pairs = (j.pairs || []).filter((p) => p.priceUsd && p.baseToken && p.baseToken.address === WSOL);
     if (!pairs.length) return 0;
     pairs.sort((a, b) => (Number(b.liquidity?.usd) || 0) - (Number(a.liquidity?.usd) || 0));
     return Number(pairs[0].priceUsd) || 0;
   } catch { return 0; }
 }
-// confirm the tx moved >= needTokens (whole $CATBOY) FROM `wallet` INTO the treasury.
+// confirm the tx moved >= needSol (native SOL) FROM `wallet` INTO the treasury, recently.
 // Binding to `wallet` stops anyone from claiming someone else's pending payment.
-async function verifyPayment(txSig, needTokens, wallet) {
+async function verifyPayment(txSig, needSol, wallet) {
   if (!txSig || typeof txSig !== "string" || txSig.length < 32) return { ok: false, err: "bad_sig" };
-  const tx = await rpc("getTransaction", [txSig, { maxSupportedTransactionVersion: 0, encoding: "jsonParsed", commitment: "confirmed" }]);
+  // The client POSTs within ms of signAndSendTransaction, so the RPC often hasn't indexed the tx at
+  // 'confirmed' yet. Retry a few times before giving up, else honest paid top-ups fail as tx_not_found.
+  let tx = null;
+  for (let i = 0; i < 8; i++) {
+    tx = await rpc("getTransaction", [txSig, { maxSupportedTransactionVersion: 0, encoding: "jsonParsed", commitment: "confirmed" }]);
+    if (tx) break;
+    await new Promise((r) => setTimeout(r, 2000));
+  }
   if (!tx || !tx.meta) return { ok: false, err: "tx_not_found" };
   if (tx.meta.err) return { ok: false, err: "tx_failed" };
-  const pre = tx.meta.preTokenBalances || [], post = tx.meta.postTokenBalances || [];
-  const k = (b) => `${b.owner}:${b.mint}`;
-  const preMap = new Map(pre.map((b) => [k(b), Number(b.uiTokenAmount.amount)]));
-  let delta = 0, fromWallet = 0;
-  for (const b of post) {
-    if (b.mint !== MINT) continue;
-    const d = Number(b.uiTokenAmount.amount) - (preMap.get(k(b)) || 0);
-    if (b.owner === TREASURY) delta += d;          // treasury received
-    if (b.owner === wallet) fromWallet += -d;       // signer sent (balance dropped)
-  }
-  const needRaw = BigInt(Math.floor(needTokens * 10 ** DECIMALS));
-  if (BigInt(Math.round(delta)) < needRaw) return { ok: false, err: "underpaid" };
-  if (BigInt(Math.round(fromWallet)) < needRaw) return { ok: false, err: "not_payer" };
+  if (tx.blockTime && (Date.now() / 1000 - tx.blockTime) > MAX_TX_AGE_S) return { ok: false, err: "tx_too_old" };
+  const keys = (tx.transaction.message.accountKeys || []).map((k) => (typeof k === "string" ? k : k.pubkey));
+  const pre = tx.meta.preBalances || [], post = tx.meta.postBalances || [];
+  const need = Math.round(needSol * LAMPORTS);
+  const ti = keys.indexOf(TREASURY);
+  const recv = ti < 0 ? 0 : Math.max(0, post[ti] - pre[ti]); // treasury's SOL balance went up
+  if (recv < need) return { ok: false, err: "underpaid" };
+  const bi = keys.indexOf(wallet);
+  const paid = bi < 0 ? 0 : Math.max(0, pre[bi] - post[bi]); // signer's SOL balance dropped (they paid)
+  if (paid < need) return { ok: false, err: "not_payer" };
   return { ok: true };
 }
 async function ensure(s) {
@@ -88,13 +101,14 @@ export default async function handler(req, res) {
     const tid = String(q.tid || "").trim(), t = String(q.t || "").trim(), h = String(q.h || "").trim();
     if (!linkOk(tid, t, h)) return res.status(403).json({ ok: false, error: "bad_or_expired_link" });
 
-    const px = await priceUsd();
+    const px = await solPriceUsd();
     if (req.method === "GET") {
       const s = sql(); await ensure(s);
       const bal = (await s`SELECT balance_cents FROM ai_credits WHERE tid=${tid}`)[0];
-      // per-bundle $CATBOY amounts at the live price (0 if price unavailable)
-      const bundles = BUNDLES.map((b) => ({ usdCents: b.usdCents, usd: (b.usdCents / 100).toFixed(2), catboy: px ? Math.ceil((b.usdCents / 100) / px) : null }));
-      return res.status(200).json({ ok: true, message: messageFor(tid, t), payTo: TREASURY, mint: MINT, decimals: DECIMALS, priceUsd: px, bundles, balanceCents: bal ? Number(bal.balance_cents) : 0 });
+      // per-bundle SOL amounts at the live price (null if price unavailable). Round UP to 4 decimals
+      // (0.0001 SOL) so the quoted amount never rounds below the bundle's USD value.
+      const bundles = BUNDLES.map((b) => ({ usdCents: b.usdCents, usd: (b.usdCents / 100).toFixed(2), sol: px ? Math.ceil((b.usdCents / 100) / px * 1e4) / 1e4 : null }));
+      return res.status(200).json({ ok: true, message: messageFor(tid, t), payTo: TREASURY, priceUsd: px, bundles, balanceCents: bal ? Number(bal.balance_cents) : 0 });
     }
     if (req.method !== "POST") return res.status(405).json({ ok: false, error: "method" });
     if (!TREASURY || !RPC) return res.status(503).json({ ok: false, error: "not_configured" });
@@ -113,8 +127,8 @@ export default async function handler(req, res) {
       const bal = (await s`SELECT balance_cents FROM ai_credits WHERE tid=${tid}`)[0];
       return res.status(200).json({ ok: true, credited: false, balanceCents: bal ? Number(bal.balance_cents) : 0, note: "already_credited" });
     }
-    const needCatboy = (usdCents / 100) / px * PRICE_TOL;
-    const pay = await verifyPayment(txSig, needCatboy, wallet);
+    const needSol = (usdCents / 100) / px * PRICE_TOL;
+    const pay = await verifyPayment(txSig, needSol, wallet);
     if (!pay.ok) return res.status(402).json({ ok: false, error: "payment_" + pay.err });
 
     // Atomic idempotency: only the request that actually INSERTs the topup row

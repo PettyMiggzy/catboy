@@ -5,7 +5,8 @@
 //                       approved art; identity locked, fresh pose every time).
 //                       ONE free per person from the shared launch pool; after that
 //                       it costs credits.
-//   /imagine <prompt>-> generate ANY image from a prompt (open generator). Costs credits.
+//   /imagine <prompt>-> put the $STAG character into ANY scene you describe. Costs credits.
+//   /image <prompt>  -> same as /imagine: the $STAG character dropped into any scene. Costs credits.
 //   /credits         -> your credit balance + the free-pool status.
 //   /buy             -> buy credits with $STAG (live-priced); send, then /claim <txhash>.
 //   /claim <txhash>  -> verify your $STAG payment on Robinhood Chain and top up.
@@ -15,7 +16,7 @@
 //
 // Economics (all env-tunable): credits are the internal unit; 1 credit ≈ $0.00125 of
 // generation cost (so the 4000-credit free pool ≈ $5). A PFP/image costs 144 credits.
-// Buying credits costs 2× that (markup = profit); verified 1M holders pay half.
+// Buying credits costs 3× that (markup = profit); verified 1M holders pay half.
 //
 // Required Vercel env (PUBLIC repo - only NAMES here, never values):
 //   STAG_BOT_TOKEN   Telegram token for @STAGZBOT
@@ -27,7 +28,7 @@
 //   STAG_BOT_SECRET     Telegram webhook secret-token header (recommended)
 //   STAG_PFP_MODEL(nano-banana-pro-edit) STAG_GEN_MODEL(nano-banana-pro)
 //   STAG_PFP_COST(144) STAG_GEN_COST(144) STAG_PFP_BUDGET(4000) STAG_PFP_COOLDOWN(45)
-//   STAG_CREDIT_USD(0.00125) STAG_MARKUP(2) STAG_HOLDER_DISCOUNT(0.5) STAG_HOLD_MIN(1000000)
+//   STAG_CREDIT_USD(0.00125) STAG_MARKUP(3) STAG_HOLDER_DISCOUNT(0.5) STAG_HOLD_MIN(1000000)
 //
 // SECURITY: never mentions catboy. Venice key must be an inference key. No secrets in repo.
 
@@ -57,7 +58,7 @@ const REQ_TTL = 7 * 24 * 3600 * 1000; // buy/verify request validity - long is s
                                       // the payment must also be newer than the request (below)
 
 const CREDIT_USD = parseFloat(process.env.STAG_CREDIT_USD || "0.00125"); // cost basis / credit
-const MARKUP = parseFloat(process.env.STAG_MARKUP || "2");               // retail = 2× cost
+const MARKUP = parseFloat(process.env.STAG_MARKUP || "3");               // retail = 3× cost
 const HOLDER_DISCOUNT = parseFloat(process.env.STAG_HOLDER_DISCOUNT || "0.5"); // holders pay ½
 const HOLD_MIN = parseFloat(process.env.STAG_HOLD_MIN || "1000000");     // $STAG for holder perk
 const BUNDLES_USD = (process.env.STAG_BUNDLES || "3,10,25").split(",").map((x) => parseFloat(x));
@@ -114,12 +115,15 @@ const POSES = [
   "sitting on a throne of antlers and vines, king of the forest",
   "back-to-back silhouette turn, glancing over the shoulder",
 ];
-const STYLE_LOCK =
+// Identity + art-style lock (no framing) - used by BOTH /pfp and /imagine so every
+// image stays on-character. /imagine adds a free scene; /pfp adds portrait framing.
+const IDENTITY_LOCK =
   " CRITICAL: match the reference art style EXACTLY - dark cinematic digital painting," +
   " gritty realistic dark-fantasy, dramatic moody lighting, intense neon-green glow," +
   " cyber-forest vibe, ultra detailed, epic and premium. NOT flat cartoon, NOT clean" +
-  " vector. Keep his identity: large antlers, green Robin-Hood hood, glowing green eyes," +
-  " muscular build. Head-and-shoulders square profile picture, centered, no text, no watermark.";
+  " vector. Keep his identity EXACTLY: large antlers, green Robin-Hood hood, glowing" +
+  " green eyes, muscular build. no text, no watermark.";
+const STYLE_LOCK = IDENTITY_LOCK + " Head-and-shoulders square profile picture, centered.";
 const BANNED = /\b(nude|naked|nsfw|sex|sexual|porn|explicit|hentai|nipple|genital|underage|child|loli|shota|rape|gore|beastiality|cp)\b/i;
 
 // Cool "working on it" lines shown while an image renders (picked at random).
@@ -315,7 +319,8 @@ export default async function handler(req, res) {
         "_Make $STAG art right here in chat._\n\n" +
         "🦌 `/pfp` - your $STAG profile pic *(1 FREE!)*\n" +
         "🎨 `/pfp cyber samurai` - add any theme\n" +
-        "🖼️ `/imagine <anything>` - generate *any* image\n\n" +
+        "🖼️ `/imagine <scene>` - drop the stag into *any* scene\n" +
+        "🎨 `/image <scene>` - same, the stag in your scene\n\n" +
         "💰 *Want more?* Grab credits:\n" +
         "💳 `/buy` - pay in $STAG  ·  `/credits` - your balance\n" +
         "🔐 `/verify` - hold *1M+ $STAG* → *50% OFF*\n\n" +
@@ -668,12 +673,12 @@ export default async function handler(req, res) {
 
     // ---------- generation: /pfp and /imagine ----------
     const isPfp = cmd === "/pfp";
-    const isGen = cmd === "/imagine" || cmd === "/gen" || cmd === "/image";
+    const isGen = cmd === "/imagine" || cmd === "/gen" || cmd === "/image"; // all locked to the stag, user gives the scene
     if (!isPfp && !isGen) return res.status(200).json({ ok: true }); // ignore other commands
 
     const style = isPfp ? arg.slice(0, 200) : "";
     const genPrompt = isGen ? arg.slice(0, 400) : "";
-    if (isGen && !genPrompt) { await say(chatId, replyTo, "Give me something to draw: `/imagine a hooded stag archer on a neon rooftop`"); return res.status(200).json({ ok: true }); }
+    if (isGen && !genPrompt) { await say(chatId, replyTo, "Give me something to draw: `/imagine a hooded stag on a neon rooftop` — the stag stars in it"); return res.status(200).json({ ok: true }); }
     if (BANNED.test(style + " " + genPrompt)) { await say(chatId, replyTo, "🚫 Keep it clean, ranger."); return res.status(200).json({ ok: true }); }
 
     const isOwner = tid === OWNER; // owner: unlimited, no cooldown, no credit cost
@@ -725,9 +730,10 @@ export default async function handler(req, res) {
         png = await editPfp(prompt);
         caption = `🦌 ${uname}, your $STAGWIFHOOD is ready. 🏹💚` + (style ? `\n🎨 "${style}"` : "");
       } else {
-        const prompt = genPrompt + ". High quality, detailed, dramatic lighting, no text, no watermark.";
-        png = await genImage(prompt);
-        caption = `🎨 ${uname} asked → delivered 🏹\n"${genPrompt.slice(0, 120)}"`;
+        // /imagine AND /image: the $STAG character dropped into the user's scene, identity ALWAYS locked.
+        const prompt = `THIS exact character, in this scene: ${genPrompt}.` + IDENTITY_LOCK;
+        png = await editPfp(prompt);
+        caption = `🎨 ${uname} (as the stag) 🏹\n"${genPrompt.slice(0, 120)}"`;
       }
       const tag = funded === "owner" ? "👑" : funded === "pool" ? "🎁 that was your free one" : `-${cost} credits`;
       await sendPhoto(chatId, png, caption + `\n\n${tag}  •  another? /pfp /imagine  •  /credits`, replyTo);
