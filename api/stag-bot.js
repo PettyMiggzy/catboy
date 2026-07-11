@@ -325,12 +325,13 @@ async function holdersCount() {
 const shortAddr = (a) => a.slice(0, 6) + "…" + a.slice(-4);
 
 // ── Trivia helpers ─────────────────────────────────────────────────────────────
+// A trivia "week" runs Friday -> Thursday; the key is that period's Friday date (UTC).
+// The champ is settled/paid each Friday, on the first play after the new period starts.
 function weekKey(d = new Date()) {
   const dt = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-  const day = dt.getUTCDay() || 7; dt.setUTCDate(dt.getUTCDate() + 4 - day);
-  const yStart = new Date(Date.UTC(dt.getUTCFullYear(), 0, 1));
-  const wk = Math.ceil((((dt - yStart) / 86400000) + 1) / 7);
-  return dt.getUTCFullYear() + "-W" + String(wk).padStart(2, "0");
+  const daysSinceFri = (dt.getUTCDay() - 5 + 7) % 7; // Fri = 5
+  dt.setUTCDate(dt.getUTCDate() - daysSinceFri);
+  return dt.toISOString().slice(0, 10);
 }
 async function sendTriviaCard(chatId, replyTo, idx, q) {
   const caption = `🦌 *${q.cat === "STAG" ? "$STAG" : "Crypto"} Trivia* — reply *A / B / C / D*. First right wins a point! 🏹`;
@@ -792,7 +793,7 @@ export default async function handler(req, res) {
       if (!rows.length) { await say(chatId, replyTo, "🏹 No scores yet this week - start with /trivia!"); return res.status(200).json({ ok: true }); }
       const medal = (i) => ["🥇", "🥈", "🥉"][i] || `${i + 1}.`;
       const list = rows.map((r, i) => `${medal(i)} ${r.uname} - *${r.points}*`).join("\n");
-      await say(chatId, replyTo, `🏆 *Trivia - this week*\n${list}\n\n👑 #1 on Sunday wins *${TRIVIA_REWARD}* $STAG AI credits.\nPlay: /trivia`);
+      await say(chatId, replyTo, `🏆 *Trivia - this week*\n${list}\n\n👑 #1 every *Friday* wins *${TRIVIA_REWARD}* $STAG AI credits.\nPlay: /trivia`);
       return res.status(200).json({ ok: true });
     }
 
