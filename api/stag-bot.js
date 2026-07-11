@@ -33,8 +33,10 @@
 // SECURITY: never mentions catboy. Venice key must be an inference key. No secrets in repo.
 
 import { neon } from "@neondatabase/serverless";
+import { readFileSync } from "node:fs";
 import { STAG_REF_B64 } from "./_stagref.js";
 import { STAG_WELCOME_B64 } from "./_stagwelcome.js";
+import { TRIVIA } from "./_trivia.js";
 import { verifyStagPayment, verifyMicroDeposit, stagBalanceWhole, stagTotalSupplyWhole, rpc, STAG_TOKEN, DEAD } from "./_rhchain.js";
 
 const CONN = (process.env.DATABASE_URL || process.env.POSTGRES_URL || "").trim();
@@ -70,6 +72,9 @@ const VIDEO_MODEL = (process.env.STAG_VIDEO_MODEL || "kling-v3-pro-image-to-vide
 const VIDEO_DURATION = (process.env.STAG_VIDEO_DURATION || "5s").trim();
 const VIDEO_COST = parseInt(process.env.STAG_VIDEO_COST || "540", 10);
 const VIDEO_COOLDOWN = parseInt(process.env.STAG_VIDEO_COOLDOWN || "60", 10) * 1000;
+// ── Trivia game ──────────────────────────────────────────────────────────────────
+// /trivia posts a card, first to reply A/B/C/D wins a point; weekly #1 gets credits.
+const TRIVIA_REWARD = parseInt(process.env.STAG_TRIVIA_REWARD || "2000", 10); // credits to weekly champ
 const LINKS = {
   site: process.env.STAG_SITE || "https://www.stagwifhood.fun",
   x: process.env.STAG_X || "https://x.com/StagWifHood",
@@ -157,13 +162,13 @@ async function tg(method, payload) {
   } catch { return {}; }
 }
 const say = (chatId, replyTo, text) => tg("sendMessage", { chat_id: chatId, reply_to_message_id: replyTo, allow_sending_without_reply: true, parse_mode: "Markdown", disable_web_page_preview: true, text });
-async function sendPhoto(chatId, pngBuf, caption, replyTo, parseMode) {
+async function sendPhoto(chatId, pngBuf, caption, replyTo, parseMode, mime = "image/png", fname = "stag.png") {
   const fd = new FormData();
   fd.append("chat_id", String(chatId));
   if (caption) fd.append("caption", caption);
   if (parseMode) fd.append("parse_mode", parseMode);
   if (replyTo) { fd.append("reply_to_message_id", String(replyTo)); fd.append("allow_sending_without_reply", "true"); }
-  fd.append("photo", new Blob([pngBuf], { type: "image/png" }), "stag.png");
+  fd.append("photo", new Blob([pngBuf], { type: mime }), fname);
   try { const r = await fetch(TG("sendPhoto"), { method: "POST", body: fd }); return await r.json().catch(() => ({})); }
   catch { return {}; }
 }
@@ -247,6 +252,10 @@ async function ensure(s) {
   await s`CREATE TABLE IF NOT EXISTS stag_seen (uid BIGINT PRIMARY KEY, at TIMESTAMPTZ DEFAULT now())`;
   // Async video renders: queued here, delivered/refunded by the /api/stag-video-cron poller.
   await s`CREATE TABLE IF NOT EXISTS stag_video_jobs (queue_id TEXT PRIMARY KEY, tid TEXT, chat_id TEXT, reply_to TEXT, uname TEXT, credits INT NOT NULL DEFAULT 0, funded TEXT, status TEXT NOT NULL DEFAULT 'pending', created_at TIMESTAMPTZ DEFAULT now())`;
+  // Trivia: one live question per chat; weekly scores (global); paid-weeks ledger.
+  await s`CREATE TABLE IF NOT EXISTS stag_trivia_active (chat_id TEXT PRIMARY KEY, qidx INT, answer TEXT, started_at TIMESTAMPTZ DEFAULT now())`;
+  await s`CREATE TABLE IF NOT EXISTS stag_trivia_score (tid TEXT, uname TEXT, week TEXT, points INT NOT NULL DEFAULT 0, updated_at TIMESTAMPTZ DEFAULT now(), PRIMARY KEY (tid, week))`;
+  await s`CREATE TABLE IF NOT EXISTS stag_trivia_paid (week TEXT PRIMARY KEY, at TIMESTAMPTZ DEFAULT now())`;
   _ensured = true;
 }
 const balOf = async (s, tid) => { const r = await s`SELECT credits FROM stag_bal WHERE tid=${tid}`; return r.length ? Number(r[0].credits) : 0; };
@@ -315,6 +324,35 @@ async function holdersCount() {
 }
 const shortAddr = (a) => a.slice(0, 6) + "…" + a.slice(-4);
 
+// ── Trivia helpers ─────────────────────────────────────────────────────────────
+function weekKey(d = new Date()) {
+  const dt = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  const day = dt.getUTCDay() || 7; dt.setUTCDate(dt.getUTCDate() + 4 - day);
+  const yStart = new Date(Date.UTC(dt.getUTCFullYear(), 0, 1));
+  const wk = Math.ceil((((dt - yStart) / 86400000) + 1) / 7);
+  return dt.getUTCFullYear() + "-W" + String(wk).padStart(2, "0");
+}
+async function sendTriviaCard(chatId, replyTo, idx, q) {
+  const caption = `🦌 *${q.cat === "STAG" ? "$STAG" : "Crypto"} Trivia* — reply *A / B / C / D*. First right wins a point! 🏹`;
+  let buf = null;
+  try { buf = readFileSync(`${process.cwd()}/assets/trivia/t${String(idx + 1).padStart(2, "0")}.jpg`); } catch {}
+  if (buf) return sendPhoto(chatId, buf, caption, replyTo, "Markdown", "image/jpeg", "trivia.jpg");
+  // text fallback if the card file isn't bundled
+  await say(chatId, replyTo, `❓ *${q.q}*\n\nA) ${q.A}\nB) ${q.B}\nC) ${q.C}\nD) ${q.D}\n\n_Reply A/B/C/D — first right wins!_`);
+}
+// Award last week's top scorer once, on the first trivia activity of a new week.
+async function settleTriviaWeek(s, chatId) {
+  const prev = weekKey(new Date(Date.now() - 7 * 86400000));
+  if ((await s`SELECT 1 FROM stag_trivia_paid WHERE week=${prev}`).length) return;
+  const claimed = await s`INSERT INTO stag_trivia_paid (week) VALUES (${prev}) ON CONFLICT (week) DO NOTHING RETURNING week`;
+  if (!claimed.length) return; // another request settled it
+  const top = await s`SELECT tid, uname, points FROM stag_trivia_score WHERE week=${prev} ORDER BY points DESC, updated_at ASC LIMIT 1`;
+  if (top.length && TRIVIA_REWARD > 0) {
+    await addCredits(s, top[0].tid, TRIVIA_REWARD);
+    await say(chatId, null, `👑 *Trivia Champion — last week: ${top[0].uname}!*\n${top[0].points} correct → *${TRIVIA_REWARD} $STAG AI credits* awarded. 🏹🦌\nNew week, fresh hunt: /trivia`);
+  }
+}
+
 // ── Handler ──────────────────────────────────────────────────────────────────────
 export default async function handler(req, res) {
   if (req.method !== "POST") { res.setHeader("Allow", "POST"); return res.status(405).end(); }
@@ -328,6 +366,23 @@ export default async function handler(req, res) {
   const text = (msg && msg.text) || "";
   if (!msg || !msg.from || !msg.from.id || !msg.chat) return res.status(200).json({ ok: true });
   if (!text.trim().startsWith("/")) {
+    // Trivia answer? A bare A/B/C/D while a question is live in this chat.
+    const ans = text.trim().toUpperCase();
+    if (/^[ABCD]$/.test(ans)) {
+      try {
+        const st = neon(CONN);
+        // Only the FIRST correct answer clears the live row (atomic single-winner).
+        const won = await st`DELETE FROM stag_trivia_active WHERE chat_id=${String(msg.chat.id)} AND answer=${ans} RETURNING answer`;
+        if (won.length) {
+          const who = msg.from.username ? "@" + msg.from.username : (msg.from.first_name || "ranger");
+          const wk = weekKey();
+          await st`INSERT INTO stag_trivia_score (tid, uname, week, points) VALUES (${String(msg.from.id)}, ${who}, ${wk}, 1) ON CONFLICT (tid, week) DO UPDATE SET points = stag_trivia_score.points + 1, uname = ${who}, updated_at = now()`;
+          const pr = await st`SELECT points FROM stag_trivia_score WHERE tid=${String(msg.from.id)} AND week=${wk}`;
+          await tg("sendMessage", { chat_id: msg.chat.id, reply_to_message_id: msg.message_id, allow_sending_without_reply: true, parse_mode: "Markdown", text: `🎯 *Correct, ${who}!* +1 (this week: *${(pr[0] && pr[0].points) || 1}*). 🏹\nNext: /trivia  ·  Board: /triviatop` });
+        }
+      } catch {}
+      return res.status(200).json({ ok: true });
+    }
     // Never reveal the underlying AI/model. Answer identity questions (in DMs, or when
     // the bot is @-mentioned) with the on-brand line; else stay silent (no group spam).
     const addressed = msg.chat.type === "private" || /@stagzbot\b/i.test(text);
@@ -363,7 +418,8 @@ export default async function handler(req, res) {
         "🦌 `/pfp` - your $STAG profile pic *(1 FREE!)*\n" +
         "🎨 `/pfp cyber samurai` - add any theme\n" +
         "🖼️ `/image <scene>` - drop the stag into *any* scene you want\n" +
-        "🎥 `/vid <scene>` - a 5s animated $STAG clip\n\n" +
+        "🎥 `/vid <scene>` - a 5s animated $STAG clip\n" +
+        "🏹 `/trivia` - play trivia, win $STAG credits  ·  `/triviatop`\n\n" +
         "💰 *Want more?* Grab credits:\n" +
         "💳 `/buy` - pay in $STAG  ·  `/credits` - your balance\n" +
         "🔐 `/verify` - hold *1M+ $STAG* → *50% OFF*\n\n" +
@@ -713,6 +769,30 @@ export default async function handler(req, res) {
       }
       await s`DELETE FROM stag_verify_req WHERE tid=${tid}`;
       await say(chatId, replyTo, `✅ *Verified holder!* ${fmt(held)} $STAG. You now get *50% off* all credits. 🏹💚\n/buy to stock up cheap.`);
+      return res.status(200).json({ ok: true });
+    }
+
+    // ---------- trivia game ----------
+    if (cmd === "/trivia" || cmd === "/quiz") {
+      await settleTriviaWeek(s, chatId);
+      const cur = await s`SELECT started_at FROM stag_trivia_active WHERE chat_id=${String(chatId)}`;
+      if (cur.length && (Date.now() - new Date(cur[0].started_at).getTime()) < 3 * 60 * 1000) {
+        await say(chatId, replyTo, "🏹 A question's already live - answer it first (A/B/C/D)!"); return res.status(200).json({ ok: true });
+      }
+      const idx = Math.floor(Math.random() * TRIVIA.length);
+      const q = TRIVIA[idx];
+      await s`INSERT INTO stag_trivia_active (chat_id, qidx, answer) VALUES (${String(chatId)}, ${idx}, ${q.answer}) ON CONFLICT (chat_id) DO UPDATE SET qidx=${idx}, answer=${q.answer}, started_at=now()`;
+      await sendTriviaCard(chatId, replyTo, idx, q);
+      return res.status(200).json({ ok: true });
+    }
+    if (cmd === "/triviatop" || cmd === "/tlb" || cmd === "/triviaboard") {
+      await settleTriviaWeek(s, chatId);
+      const wk = weekKey();
+      const rows = await s`SELECT uname, points FROM stag_trivia_score WHERE week=${wk} ORDER BY points DESC, updated_at ASC LIMIT 10`;
+      if (!rows.length) { await say(chatId, replyTo, "🏹 No scores yet this week - start with /trivia!"); return res.status(200).json({ ok: true }); }
+      const medal = (i) => ["🥇", "🥈", "🥉"][i] || `${i + 1}.`;
+      const list = rows.map((r, i) => `${medal(i)} ${r.uname} - *${r.points}*`).join("\n");
+      await say(chatId, replyTo, `🏆 *Trivia - this week*\n${list}\n\n👑 #1 on Sunday wins *${TRIVIA_REWARD}* $STAG AI credits.\nPlay: /trivia`);
       return res.status(200).json({ ok: true });
     }
 
