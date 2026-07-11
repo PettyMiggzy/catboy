@@ -5,8 +5,7 @@
 //                       approved art; identity locked, fresh pose every time).
 //                       ONE free per person from the shared launch pool; after that
 //                       it costs credits.
-//   /imagine <prompt>-> put the $STAG character into ANY scene you describe. Costs credits.
-//   /image <prompt>  -> same as /imagine: the $STAG character dropped into any scene. Costs credits.
+//   /image <prompt>  -> put the $STAG character into ANY scene you describe. Costs credits.
 //   /credits         -> your credit balance + the free-pool status.
 //   /buy             -> buy credits with $STAG (live-priced); send, then /claim <txhash>.
 //   /claim <txhash>  -> verify your $STAG payment on Robinhood Chain and top up.
@@ -115,8 +114,8 @@ const POSES = [
   "sitting on a throne of antlers and vines, king of the forest",
   "back-to-back silhouette turn, glancing over the shoulder",
 ];
-// Identity + art-style lock (no framing) - used by BOTH /pfp and /imagine so every
-// image stays on-character. /imagine adds a free scene; /pfp adds portrait framing.
+// Identity + art-style lock (no framing) - used by BOTH /pfp and /image so every
+// image stays on-character. /image adds a free scene; /pfp adds portrait framing.
 const IDENTITY_LOCK =
   " CRITICAL: match the reference art style EXACTLY - dark cinematic digital painting," +
   " gritty realistic dark-fantasy, dramatic moody lighting, intense neon-green glow," +
@@ -319,8 +318,7 @@ export default async function handler(req, res) {
         "_Make $STAG art right here in chat._\n\n" +
         "🦌 `/pfp` - your $STAG profile pic *(1 FREE!)*\n" +
         "🎨 `/pfp cyber samurai` - add any theme\n" +
-        "🖼️ `/imagine <scene>` - drop the stag into *any* scene\n" +
-        "🎨 `/image <scene>` - same, the stag in your scene\n\n" +
+        "🖼️ `/image <scene>` - drop the stag into *any* scene you want\n\n" +
         "💰 *Want more?* Grab credits:\n" +
         "💳 `/buy` - pay in $STAG  ·  `/credits` - your balance\n" +
         "🔐 `/verify` - hold *1M+ $STAG* → *50% OFF*\n\n" +
@@ -599,7 +597,7 @@ export default async function handler(req, res) {
       try { await addCredits(s, tid, credits); }
       catch { await s`DELETE FROM stag_claims WHERE txhash=${txh}`; await say(chatId, replyTo, "⚠️ Network hiccup crediting - your payment is safe, run `/claim` again in a moment."); return res.status(200).json({ ok: true }); }
       await s`DELETE FROM stag_buy_req WHERE tid=${tid}`;
-      await say(chatId, replyTo, `✅ Credited *${credits}* credits. Balance: *${await balOf(s, tid)}*.\nGo wild: /pfp or /imagine 🏹`);
+      await say(chatId, replyTo, `✅ Credited *${credits}* credits. Balance: *${await balOf(s, tid)}*.\nGo wild: /pfp or /image 🏹`);
       return res.status(200).json({ ok: true });
     }
 
@@ -671,14 +669,14 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
 
-    // ---------- generation: /pfp and /imagine ----------
+    // ---------- generation: /pfp and /image (both locked to the $STAG character) ----------
     const isPfp = cmd === "/pfp";
-    const isGen = cmd === "/imagine" || cmd === "/gen" || cmd === "/image"; // all locked to the stag, user gives the scene
+    const isGen = cmd === "/image" || cmd === "/gen"; // the $STAG stag dropped into any scene you describe (locked)
     if (!isPfp && !isGen) return res.status(200).json({ ok: true }); // ignore other commands
 
     const style = isPfp ? arg.slice(0, 200) : "";
     const genPrompt = isGen ? arg.slice(0, 400) : "";
-    if (isGen && !genPrompt) { await say(chatId, replyTo, "Give me something to draw: `/imagine a hooded stag on a neon rooftop` — the stag stars in it"); return res.status(200).json({ ok: true }); }
+    if (isGen && !genPrompt) { await say(chatId, replyTo, "Give me a scene: `/image the stag on a neon rooftop` — the $STAG character always stars in it"); return res.status(200).json({ ok: true }); }
     if (BANNED.test(style + " " + genPrompt)) { await say(chatId, replyTo, "🚫 Keep it clean, ranger."); return res.status(200).json({ ok: true }); }
 
     const isOwner = tid === OWNER; // owner: unlimited, no cooldown, no credit cost
@@ -730,13 +728,13 @@ export default async function handler(req, res) {
         png = await editPfp(prompt);
         caption = `🦌 ${uname}, your $STAGWIFHOOD is ready. 🏹💚` + (style ? `\n🎨 "${style}"` : "");
       } else {
-        // /imagine AND /image: the $STAG character dropped into the user's scene, identity ALWAYS locked.
+        // /image: the $STAG character dropped into the user scene, identity ALWAYS locked.
         const prompt = `THIS exact character, in this scene: ${genPrompt}.` + IDENTITY_LOCK;
         png = await editPfp(prompt);
         caption = `🎨 ${uname} (as the stag) 🏹\n"${genPrompt.slice(0, 120)}"`;
       }
       const tag = funded === "owner" ? "👑" : funded === "pool" ? "🎁 that was your free one" : `-${cost} credits`;
-      await sendPhoto(chatId, png, caption + `\n\n${tag}  •  another? /pfp /imagine  •  /credits`, replyTo);
+      await sendPhoto(chatId, png, caption + `\n\n${tag}  •  another? /pfp /image  •  /credits`, replyTo);
       // Image is delivered — post-delivery bookkeeping must NEVER fall into the refund
       // catch, or a DB hiccup here would hand back the free slot / credits AFTER the user
       // already got the image (a path to a 2nd free). Swallow logging errors instead.
