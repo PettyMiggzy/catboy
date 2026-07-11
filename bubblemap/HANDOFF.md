@@ -86,3 +86,31 @@ Blockscout, MegaETH, Monad, Sourcify, GitHub, IPFS — all empty; NOXA strips me
 solc 0.8.30). Fix = NOXA verifies their template once (Blockscout auto-matches all their tokens) or sends
 the `.sol`. Ask: `@Noxa_Fi` / AmunPhantom. On-chain genuineness IS provable via `launchFactory()` /
 `getLaunchedToken()`. Not part of bubble maps — noted for continuity.
+
+---
+
+## INTEGRATING INTO THE $STAG SITE (separate repo + Vercel + domain)
+
+The $STAG utility site is its **own** GitHub repo + Vercel project + domain (NOT catboy).
+The bubble map is also standalone. Connect them WITHOUT merging code or DBs:
+
+**Recommended — subdomain + nav button:**
+1. Deploy bubble-map repo as its own Vercel project.
+2. That project → Settings → Domains → add `bubbles.<stag-domain>`; DNS CNAME `bubbles` → `cname.vercel-dns.com`.
+3. Add one nav button on the $STAG site linking to `https://bubbles.<stag-domain>`.
+
+**Alternative — path rewrite** in the $STAG site's `vercel.json`:
+```json
+{ "rewrites": [
+  { "source": "/bubbles", "destination": "https://<bubblemap-project>.vercel.app/bubblemap.html" },
+  { "source": "/bubbles/:path*", "destination": "https://<bubblemap-project>.vercel.app/:path*" }
+]}
+```
+
+**Ready-to-paste nav button** (restyle to match the $STAG nav):
+```html
+<a href="https://bubbles.<stag-domain>" class="nav-link" rel="noopener">Bubble Map</a>
+```
+
+**To wire this in a future session:** grant GitHub access to BOTH repos — the bubble-map repo AND the
+$STAG site repo — so the nav-link/rewrite edit can be made. Otherwise it's a 30-sec manual edit on the site.
