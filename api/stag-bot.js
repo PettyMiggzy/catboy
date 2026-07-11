@@ -81,7 +81,9 @@ const RAID_LINES = [
 ];
 
 const TG = (m) => `https://api.telegram.org/bot${TOKEN}/${m}`;
-export const config = { maxDuration: 60 };
+// Vercel Pro allows up to 300s; give slow renders real headroom so they finish and
+// deliver instead of being killed at 60s (which left a stuck spinner with no image).
+export const config = { maxDuration: 120 };
 
 // ── Venice inference key (prefix words are PART of the key) ──────────────────────
 const VK_PREFIX = "VENICE_INFERENCE_KEY_";
@@ -163,14 +165,21 @@ const welcomeImg = () => (_welcomeBuf ||= Buffer.from(STAG_WELCOME_B64, "base64"
 // ── Venice generation ────────────────────────────────────────────────────────────
 async function editPfp(prompt) {
   const key = veniceKey(); if (!key) throw new Error("venice_not_configured");
-  const r = await fetch("https://api.venice.ai/api/v1/image/edit", {
-    method: "POST", headers: { Authorization: "Bearer " + key, "Content-Type": "application/json" },
-    body: JSON.stringify({ model: PFP_MODEL, prompt, image: STAG_REF_B64 }),
-  });
-  const buf = Buffer.from(await r.arrayBuffer());
-  if (buf.length > 8 && buf[0] === 0x89 && buf[1] === 0x50) return buf; // PNG magic
-  let msg = "venice_" + r.status; try { const j = JSON.parse(buf.toString("utf8")); msg = (j && (j.error || j.message)) || msg; } catch {}
-  throw new Error(msg);
+  // Abort a slow render before Vercel silently kills the whole function, so the user
+  // always gets a "try again" reply instead of a stuck spinner with no image/message.
+  const ac = new AbortController();
+  const t = setTimeout(() => ac.abort(), 105000); // just under maxDuration so a hung render fails gracefully
+  try {
+    const r = await fetch("https://api.venice.ai/api/v1/image/edit", {
+      method: "POST", headers: { Authorization: "Bearer " + key, "Content-Type": "application/json" },
+      body: JSON.stringify({ model: PFP_MODEL, prompt, image: STAG_REF_B64 }), signal: ac.signal,
+    });
+    const buf = Buffer.from(await r.arrayBuffer());
+    if (buf.length > 8 && buf[0] === 0x89 && buf[1] === 0x50) return buf; // PNG magic
+    let msg = "venice_" + r.status; try { const j = JSON.parse(buf.toString("utf8")); msg = (j && (j.error || j.message)) || msg; } catch {}
+    throw new Error(msg);
+  } catch (e) { throw (e && e.name === "AbortError") ? new Error("render_timeout") : e; }
+  finally { clearTimeout(t); }
 }
 async function genImage(prompt) {
   const key = veniceKey(); if (!key) throw new Error("venice_not_configured");
