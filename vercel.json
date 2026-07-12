@@ -9,7 +9,7 @@
     { "path": "/api/stag-onchain", "schedule": "* * * * *" }
   ],
   "functions": {
-    "api/stag-bot.js": { "includeFiles": "assets/trivia/**" }
+    "api/stag-bot.js": { "includeFiles": "assets/{trivia,hype}/**" }
   },
   "headers": [
     {

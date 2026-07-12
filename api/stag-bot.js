@@ -359,6 +359,13 @@ async function sendMissCard(chatId, replyTo, caption) {
   if (buf) return sendPhoto(chatId, buf, caption, replyTo, "Markdown", "image/jpeg", "miss.jpg");
   await say(chatId, replyTo, caption);
 }
+// Hype commands: send the on-brand $STAG art card with the text as caption; fall back to text.
+async function hypeSend(chatId, replyTo, name, text) {
+  let buf = null;
+  try { buf = readFileSync(`${process.cwd()}/assets/hype/${name}.jpg`); } catch {}
+  if (buf) { const r = await sendPhoto(chatId, buf, text, replyTo, "Markdown", "image/jpeg", `${name}.jpg`); if (r && r.ok !== false) return; }
+  await say(chatId, replyTo, text);
+}
 async function sendTriviaCard(chatId, replyTo, idx, q) {
   const caption = `🦌 *${q.cat === "STAG" ? "$STAG" : "Crypto"} Trivia* — reply *A / B / C / D*. Answer fast: quicker = closer to bullseye = more points! 🏹`;
   let buf = null;
@@ -616,7 +623,7 @@ export default async function handler(req, res) {
     if (cmd === "/staked" || cmd === "/totalstaked" || cmd === "/staking") {
       try {
         const st = await stakingStats();
-        await say(chatId, replyTo, `🔒🦌 *$STAG Staking*\n\nTotal staked: *${fmt(st.stagStaked)} $STAG*\nNFTs staked: *${st.nftsStaked}/20* Hooded Twenty\nReward pool: *${st.poolEth.toFixed(4)} ETH*\n\n_Stake $STAG or your Hooded Twenty to earn ETH._ 💚`);
+        await hypeSend(chatId, replyTo, "staked", `🔒🦌 *$STAG Staking*\n\nTotal staked: *${fmt(st.stagStaked)} $STAG*\nNFTs staked: *${st.nftsStaked}/20* Hooded Twenty\nReward pool: *${st.poolEth.toFixed(4)} ETH*\n\n_Stake $STAG or your Hooded Twenty to earn ETH._ 💚`);
       } catch { await say(chatId, replyTo, "⚠️ Couldn't read staking right now - try again."); }
       return res.status(200).json({ ok: true });
     }
@@ -625,14 +632,14 @@ export default async function handler(req, res) {
         const st = await stakingStats();
         const active = st.periodFinish > Math.floor(Date.now() / 1000);
         const daily = st.rewardEthPerSec * 86400;
-        await say(chatId, replyTo, `💰🏹 *Staking Reward Pool*\n\nPool: *${st.poolEth.toFixed(4)} ETH*\n${active ? `🟢 Emitting ~*${daily.toFixed(4)} ETH/day*` : "🔴 Rewards paused - awaiting top-up"}\n\nStaked: *${fmt(st.stagStaked)} $STAG* · *${st.nftsStaked}* NFTs`);
+        await hypeSend(chatId, replyTo, "pool", `💰🏹 *Staking Reward Pool*\n\nPool: *${st.poolEth.toFixed(4)} ETH*\n${active ? `🟢 Emitting ~*${daily.toFixed(4)} ETH/day*` : "🔴 Rewards paused - awaiting top-up"}\n\nStaked: *${fmt(st.stagStaked)} $STAG* · *${st.nftsStaked}* NFTs`);
       } catch { await say(chatId, replyTo, "⚠️ Couldn't read the pool right now - try again."); }
       return res.status(200).json({ ok: true });
     }
     if (cmd === "/mints" || cmd === "/minted" || cmd === "/mintstatus") {
       try {
         const n = await nftMintStats();
-        await say(chatId, replyTo, `🦌🏹 *Hooded Twenty NFT*\n\nMinted: *${n.minted}/${n.max}*  ·  Left: *${n.remaining}*\nMint: ${n.active ? "🟢 *LIVE*" : "🔴 not open yet"}${n.price > 0 ? `  ·  ~*${n.price} ETH*` : ""}`);
+        await hypeSend(chatId, replyTo, "mints", `🦌🏹 *Hooded Twenty NFT*\n\nMinted: *${n.minted}/${n.max}*  ·  Left: *${n.remaining}*\nMint: ${n.active ? "🟢 *LIVE*" : "🔴 not open yet"}${n.price > 0 ? `  ·  ~*${n.price} ETH*` : ""}`);
       } catch { await say(chatId, replyTo, "⚠️ Couldn't read mint status - try again."); }
       return res.status(200).json({ ok: true });
     }
@@ -653,12 +660,12 @@ export default async function handler(req, res) {
         if (h) m += `👥 Holders: *${h.toLocaleString("en-US")}* and climbing\n`;
         if (n && n.remaining > 0) m += `🎟️ NFTs left: *${n.remaining}/${n.max}*${n.active ? " · 🟢 minting now" : ""}\n`;
         m += `\n${pick(hooks)}\n\n_Antlers up. Not financial advice._`;
-        await say(chatId, replyTo, m);
+        await hypeSend(chatId, replyTo, "fomo", m);
       } catch { await say(chatId, replyTo, "🚨🦌 *$STAG* - you're early, ranger. Antlers up. 🏹"); }
       return res.status(200).json({ ok: true });
     }
     if (cmd === "/pump" || cmd === "/pumpit") {
-      await say(chatId, replyTo, `${pick([
+      await hypeSend(chatId, replyTo, "pump", `${pick([
         "📈🟢🟢 SEND IT 🟢🟢📈", "🚀 $STAG doesn't pump - it STAMPEDES. 🦌💨",
         "Green candles incoming. Grab your antlers. 🕯️💚", "🏹 One arrow, one target: UP.",
         "Bears in Sherwood? The stag hunts back. 🐻➡️🦌",
@@ -666,7 +673,7 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
     if (cmd === "/wagmi") {
-      await say(chatId, replyTo, `💚🦌 *WAGMI* 🦌💚\n\n${pick([
+      await hypeSend(chatId, replyTo, "wagmi", `💚🦌 *WAGMI* 🦌💚\n\n${pick([
         "We're All Gonna Make It. Antlers up. 🏹", "The hood takes care of its own. 💚",
         "Steal the pump. Feed the holders. WAGMI.", "Diamond antlers, ranger. We ride. 💎🦌",
       ])}`);
@@ -687,14 +694,14 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
     if (cmd === "/moon" || cmd === "/wen") {
-      await say(chatId, replyTo, pick([
+      await hypeSend(chatId, replyTo, "moon", pick([
         "Wen moon? The hood doesn't ask - the hood accumulates. 🌕🦌", "Moon's not a question, it's a checkpoint. 🚀",
         "Wen? When weak hands finish leaving. 💎", "The stag WALKS to the moon. It's in no rush. 🦌🌙",
       ]));
       return res.status(200).json({ ok: true });
     }
     if (cmd === "/hodl" || cmd === "/diamond" || cmd === "/dh") {
-      await say(chatId, replyTo, pick([
+      await hypeSend(chatId, replyTo, "hodl", pick([
         "💎🦌 Diamond antlers. Never sold, never will.", "Paper hands feed the legend. HODL, ranger. 🏹",
         "The hood holds - through red, through green, through everything. 💚", "Sold? In THIS forest? Never. 🌿💎",
       ]));
