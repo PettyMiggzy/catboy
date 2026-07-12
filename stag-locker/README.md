@@ -82,7 +82,7 @@ Then `verify` on Blockscout and hand the address to the front-end.
 2. ✅ **Self-review pass** (findings above; stranded-NFT bug fixed). ⚠️ Still get a **third-party audit** before other people's funds go in.
 3. ✅ **Front-end** (`public/locker.html`): connect wallet + network guard → **Lock** (ERC-20 or V3 LP, approve+lock) → **My Locks** (withdraw/extend/top-up) → **public Verify page** (paste a token/LP address, see all locks + amounts + owners + unlock dates, no wallet needed). Self-contained page, matches the bubble-map green theme, ethers v6 from CDN. **After deploy, set the address** (`window.STAG_LOCKER_ADDRESS` or edit the `LOCKER` const in `locker.html`).
 4. **Deploy** to Robinhood Chain mainnet (`npm run deploy`, needs `DEPLOYER_KEY`/`LOCKER_TREASURY`/`LOCKER_ADMIN` env) + Blockscout verify, then paste the address into the front-end.
-5. **Branding/handoff:** logo (green-eyed stag + padlock), a one-pager, and a clean address + docs so any project — or a buyer — can use/white-label it.
+5. ✅ **Branding:** antler-shackle padlock logo + glowing keyhole (`public/brand/logo.png` · `icon.png`) and a cinematic hero image — the $STAG crew under a looming antler-padlock crest (`public/brand/hero.png`), wired into the site. ⏳ still to do: a one-pager for buyers/white-label partners.
 
 ## Handoff notes
 - Contract is self-contained OZ-5 Solidity; drop `contracts/StagLocker.sol` into the Hardhat
