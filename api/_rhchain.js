@@ -42,6 +42,44 @@ export async function stagTotalSupplyWhole() {
   return Number(raw / 10n ** BigInt(Math.max(0, STAG_DECIMALS - 6))) / 1e6;
 }
 
+// ── Hooded Twenty NFT + StagStaking on-chain stats (read-only) ─────────────────
+export const HOODED_NFT = (process.env.STAG_NFT || "0x4384cB362D908d36266bDF3C31F18DB95EB127dc").toLowerCase();
+export const STAG_STAKING = (process.env.STAG_STAKING || "0x2faA6672546912e7cDec4E1AaCF1eeF52bA524fF").toLowerCase();
+const _call = (to, data) => rpc("eth_call", [{ to, data }, "latest"]);
+const _big = (h) => BigInt(h || "0x0");
+const _balData = (a) => "0x70a08231" + "0".repeat(24) + a.toLowerCase().replace(/^0x/, "");
+const _whole = (raw, dec = STAG_DECIMALS) => Number(raw / 10n ** BigInt(Math.max(0, dec - 6))) / 1e6;
+
+// Total $STAG staked, NFTs staked, ETH reward pool + emission. (Staked = held by the pool.)
+export async function stakingStats() {
+  const [stag, nfts, poolWei, rate, finish] = await Promise.all([
+    _call(STAG_TOKEN, _balData(STAG_STAKING)),
+    _call(HOODED_NFT, _balData(STAG_STAKING)),
+    rpc("eth_getBalance", [STAG_STAKING, "latest"]),
+    _call(STAG_STAKING, "0x7b0a47ee"), // rewardRate()
+    _call(STAG_STAKING, "0xebe2b12b"), // periodFinish()
+  ]);
+  return {
+    stagStaked: _whole(_big(stag)), nftsStaked: Number(_big(nfts)),
+    poolEth: Number(_big(poolWei)) / 1e18, rewardEthPerSec: Number(_big(rate)) / 1e18,
+    periodFinish: Number(_big(finish)),
+  };
+}
+// Hooded Twenty mint progress.
+export async function nftMintStats() {
+  const [m, max, rem, active, price] = await Promise.all([
+    _call(HOODED_NFT, "0x4f02c420"), // minted()
+    _call(HOODED_NFT, "0x32cb6b0c"), // MAX_SUPPLY()
+    _call(HOODED_NFT, "0x55234ec0"), // remaining()
+    _call(HOODED_NFT, "0x25fd90f3"), // mintActive()
+    _call(HOODED_NFT, "0x0a096373").catch(() => "0x0"), // randomPrice() (may revert pre-launch)
+  ]);
+  return {
+    minted: Number(_big(m)), max: Number(_big(max)), remaining: Number(_big(rem)),
+    active: _big(active) !== 0n, price: Number(_big(price)) / 1e18,
+  };
+}
+
 // Verify an ERC-20 $STAG payment: tx confirmed, transfers >= minWhole $STAG INTO `treasury`.
 // Returns { ok, from, amountWhole } or { ok:false, err }.
 export async function verifyStagPayment(txHash, treasury) {

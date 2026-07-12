@@ -37,7 +37,7 @@ import { readFileSync } from "node:fs";
 import { STAG_REF_B64 } from "./_stagref.js";
 import { STAG_WELCOME_B64 } from "./_stagwelcome.js";
 import { TRIVIA } from "./_trivia.js";
-import { verifyStagPayment, verifyMicroDeposit, stagBalanceWhole, stagTotalSupplyWhole, rpc, STAG_TOKEN, DEAD } from "./_rhchain.js";
+import { verifyStagPayment, verifyMicroDeposit, stagBalanceWhole, stagTotalSupplyWhole, rpc, STAG_TOKEN, DEAD, stakingStats, nftMintStats } from "./_rhchain.js";
 
 const CONN = (process.env.DATABASE_URL || process.env.POSTGRES_URL || "").trim();
 const TOKEN = (process.env.STAG_BOT_TOKEN || "").trim();
@@ -511,6 +511,7 @@ export default async function handler(req, res) {
         "💰 *Want more?* Grab credits:\n" +
         "💳 `/buy` - pay in $STAG  ·  `/credits` - your balance\n" +
         "🔐 `/verify` - hold *1M+ $STAG* → *50% OFF*\n\n" +
+        "🔒 *NFT & Staking:* `/mints` `/staked` `/pool` - live on-chain stats\n\n" +
         "🆓 *Free tools:* `/price` `/burn` `/holders` `/ca` `/links` - full list: `/tools`\n\n" +
         "🔓 *No wallet connection - ever.* Just send $STAG, no connect, no signing.\n" +
         "_Use me in the group or DM me privately. Antlers up. 💚🦌_";
@@ -606,6 +607,31 @@ export default async function handler(req, res) {
         const circ = Math.max(0, supply - burned);
         await say(chatId, replyTo, `🪙 *$STAG supply*\n\nTotal: *${fmt(supply)}*\n🔥 Burned: ${fmt(burned)}\n🟢 Circulating: *${fmt(circ)}*`);
       } catch { await say(chatId, replyTo, "⚠️ Couldn't read supply right now - try again."); }
+      return res.status(200).json({ ok: true });
+    }
+
+    // ---------- ON-CHAIN: staking + NFT stats (Hooded Twenty) ----------
+    if (cmd === "/staked" || cmd === "/totalstaked" || cmd === "/staking") {
+      try {
+        const st = await stakingStats();
+        await say(chatId, replyTo, `🔒🦌 *$STAG Staking*\n\nTotal staked: *${fmt(st.stagStaked)} $STAG*\nNFTs staked: *${st.nftsStaked}/20* Hooded Twenty\nReward pool: *${st.poolEth.toFixed(4)} ETH*\n\n_Stake $STAG or your Hooded Twenty to earn ETH._ 💚`);
+      } catch { await say(chatId, replyTo, "⚠️ Couldn't read staking right now - try again."); }
+      return res.status(200).json({ ok: true });
+    }
+    if (cmd === "/pool" || cmd === "/rewards" || cmd === "/apr") {
+      try {
+        const st = await stakingStats();
+        const active = st.periodFinish > Math.floor(Date.now() / 1000);
+        const daily = st.rewardEthPerSec * 86400;
+        await say(chatId, replyTo, `💰🏹 *Staking Reward Pool*\n\nPool: *${st.poolEth.toFixed(4)} ETH*\n${active ? `🟢 Emitting ~*${daily.toFixed(4)} ETH/day*` : "🔴 Rewards paused - awaiting top-up"}\n\nStaked: *${fmt(st.stagStaked)} $STAG* · *${st.nftsStaked}* NFTs`);
+      } catch { await say(chatId, replyTo, "⚠️ Couldn't read the pool right now - try again."); }
+      return res.status(200).json({ ok: true });
+    }
+    if (cmd === "/mints" || cmd === "/minted" || cmd === "/mintstatus") {
+      try {
+        const n = await nftMintStats();
+        await say(chatId, replyTo, `🦌🏹 *Hooded Twenty NFT*\n\nMinted: *${n.minted}/${n.max}*  ·  Left: *${n.remaining}*\nMint: ${n.active ? "🟢 *LIVE*" : "🔴 not open yet"}${n.price > 0 ? `  ·  ~*${n.price} ETH*` : ""}`);
+      } catch { await say(chatId, replyTo, "⚠️ Couldn't read mint status - try again."); }
       return res.status(200).json({ ok: true });
     }
 
