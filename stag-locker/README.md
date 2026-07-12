@@ -4,8 +4,9 @@ A permissionless locker any project on Robinhood Chain can use to **lock LP or t
 and prove they can't rug. Public, verifiable, and it earns a small fee per lock. Built to be
 **handed off / white-labeled** once launch-ready — the trust layer of the chain, branded $STAG.
 
-Status: **IN PROGRESS** — core contract written + **self-audited + full test suite passing (16/16)**.
-Not third-party audited, not deployed. See "Self-audit" and "Roadmap" below.
+Status: **IN PROGRESS** — contract written + **self-audited + 16/16 tests passing** + **front-end built**
+(`public/locker.html`: lock / my-locks / public verify). Not third-party audited, not deployed yet.
+Remaining: deploy + Blockscout verify, then branding/handoff. See "Self-audit" and "Roadmap" below.
 
 ---
 
@@ -79,8 +80,8 @@ Then `verify` on Blockscout and hand the address to the front-end.
 ## Roadmap (what's left before "launch ready")
 1. ✅ **Tests** (Hardhat): lock/withdraw/extend/topUp, early-withdraw reverts, admin-can't-touch-funds, fee + refund, fee-on-transfer token, V3 NFT lock via both paths — **16 passing**.
 2. ✅ **Self-review pass** (findings above; stranded-NFT bug fixed). ⚠️ Still get a **third-party audit** before other people's funds go in.
-3. **Front-end** (`stag-locker` site): connect wallet → lock tokens/LP → "my locks" → a **public verify page** (paste a token/LP address, see all its locks + unlock dates). Read via the view fns + events; write via the 3 lock/manage calls.
-4. **Deploy** to Robinhood Chain mainnet + Blockscout verify.
+3. ✅ **Front-end** (`public/locker.html`): connect wallet + network guard → **Lock** (ERC-20 or V3 LP, approve+lock) → **My Locks** (withdraw/extend/top-up) → **public Verify page** (paste a token/LP address, see all locks + amounts + owners + unlock dates, no wallet needed). Self-contained page, matches the bubble-map green theme, ethers v6 from CDN. **After deploy, set the address** (`window.STAG_LOCKER_ADDRESS` or edit the `LOCKER` const in `locker.html`).
+4. **Deploy** to Robinhood Chain mainnet (`npm run deploy`, needs `DEPLOYER_KEY`/`LOCKER_TREASURY`/`LOCKER_ADMIN` env) + Blockscout verify, then paste the address into the front-end.
 5. **Branding/handoff:** logo (green-eyed stag + padlock), a one-pager, and a clean address + docs so any project — or a buyer — can use/white-label it.
 
 ## Handoff notes
