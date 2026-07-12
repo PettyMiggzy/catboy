@@ -301,6 +301,7 @@ const fmt = (n) => n >= 1000 ? Math.round(n).toLocaleString("en-US") : n.toPreci
 const money = (n) => "$" + (n >= 1e9 ? (n / 1e9).toFixed(2) + "B" : n >= 1e6 ? (n / 1e6).toFixed(2) + "M" : n >= 1e3 ? (n / 1e3).toFixed(1) + "K" : Number(n).toFixed(2));
 
 // Live $STAG stats (DexScreener, Robinhood Chain) for the free /price + /mc tools.
+const pick = (a) => a[Math.floor(Math.random() * a.length)];
 async function stagStats() {
   try {
     const r = await fetch("https://api.dexscreener.com/latest/dex/tokens/" + STAG_TOKEN);
@@ -511,7 +512,8 @@ export default async function handler(req, res) {
         "💰 *Want more?* Grab credits:\n" +
         "💳 `/buy` - pay in $STAG  ·  `/credits` - your balance\n" +
         "🔐 `/verify` - hold *1M+ $STAG* → *50% OFF*\n\n" +
-        "🔒 *NFT & Staking:* `/mints` `/staked` `/pool` - live on-chain stats\n\n" +
+        "🔒 *NFT & Staking:* `/mints` `/staked` `/pool` - live on-chain stats\n" +
+        "🔥 *Hype:* `/fomo` `/pump` `/wagmi` `/gm` `/moon` `/hodl` `/green` `/fud`\n\n" +
         "🆓 *Free tools:* `/price` `/burn` `/holders` `/ca` `/links` - full list: `/tools`\n\n" +
         "🔓 *No wallet connection - ever.* Just send $STAG, no connect, no signing.\n" +
         "_Use me in the group or DM me privately. Antlers up. 💚🦌_";
@@ -632,6 +634,91 @@ export default async function handler(req, res) {
         const n = await nftMintStats();
         await say(chatId, replyTo, `🦌🏹 *Hooded Twenty NFT*\n\nMinted: *${n.minted}/${n.max}*  ·  Left: *${n.remaining}*\nMint: ${n.active ? "🟢 *LIVE*" : "🔴 not open yet"}${n.price > 0 ? `  ·  ~*${n.price} ETH*` : ""}`);
       } catch { await say(chatId, replyTo, "⚠️ Couldn't read mint status - try again."); }
+      return res.status(200).json({ ok: true });
+    }
+
+    // ---------- FOMO / bullish hype commands ----------
+    if (cmd === "/fomo") {
+      const hooks = [
+        "You're still early, ranger. The hood is filling up. 🏹",
+        "Every dip is a gift. Steal the pump, feed the holders. 🦌",
+        "Blink and you'll be telling people you were here at THIS market cap. 👀",
+        "Sherwood doesn't wait. Antlers up. 🌿",
+        "Weak hands feed the legend. Diamond antlers stay. 💚",
+      ];
+      try {
+        const [d, h, n] = await Promise.all([stagStats(), holdersCount().catch(() => 0), nftMintStats().catch(() => null)]);
+        let m = `🚨🦌 *$STAG FOMO CHECK* 🦌🚨\n\n`;
+        if (d) m += `🏦 MC: *${money(d.mcap)}*  ·  ${d.change24 >= 0 ? "🟢 +" : "🔴 "}${d.change24.toFixed(1)}% 24h\n`;
+        if (h) m += `👥 Holders: *${h.toLocaleString("en-US")}* and climbing\n`;
+        if (n && n.remaining > 0) m += `🎟️ NFTs left: *${n.remaining}/${n.max}*${n.active ? " · 🟢 minting now" : ""}\n`;
+        m += `\n${pick(hooks)}\n\n_Antlers up. Not financial advice._`;
+        await say(chatId, replyTo, m);
+      } catch { await say(chatId, replyTo, "🚨🦌 *$STAG* - you're early, ranger. Antlers up. 🏹"); }
+      return res.status(200).json({ ok: true });
+    }
+    if (cmd === "/pump" || cmd === "/pumpit") {
+      await say(chatId, replyTo, `${pick([
+        "📈🟢🟢 SEND IT 🟢🟢📈", "🚀 $STAG doesn't pump - it STAMPEDES. 🦌💨",
+        "Green candles incoming. Grab your antlers. 🕯️💚", "🏹 One arrow, one target: UP.",
+        "Bears in Sherwood? The stag hunts back. 🐻➡️🦌",
+      ])}\n\n🟩🟩🟩🟩🟩🟩🟩🟩\n*WAGMI, ranger.* 🦌`);
+      return res.status(200).json({ ok: true });
+    }
+    if (cmd === "/wagmi") {
+      await say(chatId, replyTo, `💚🦌 *WAGMI* 🦌💚\n\n${pick([
+        "We're All Gonna Make It. Antlers up. 🏹", "The hood takes care of its own. 💚",
+        "Steal the pump. Feed the holders. WAGMI.", "Diamond antlers, ranger. We ride. 💎🦌",
+      ])}`);
+      return res.status(200).json({ ok: true });
+    }
+    if (cmd === "/gm") {
+      await say(chatId, replyTo, pick([
+        "GM rangers. New day, same mission: steal the pump. 🌅🦌", "GM. Antlers up, hood on. Let's hunt. 🏹",
+        "GM legends. Sherwood is green today. 🌿💚", "GM. The stag already ate. Have you? 🦌",
+      ]));
+      return res.status(200).json({ ok: true });
+    }
+    if (cmd === "/gn") {
+      await say(chatId, replyTo, pick([
+        "GN rangers. The stag never sleeps on the bag. 🌙🦌", "GN. Rest up, we hunt at dawn. 🏹",
+        "GN legends. Dream green. 💚",
+      ]));
+      return res.status(200).json({ ok: true });
+    }
+    if (cmd === "/moon" || cmd === "/wen") {
+      await say(chatId, replyTo, pick([
+        "Wen moon? The hood doesn't ask - the hood accumulates. 🌕🦌", "Moon's not a question, it's a checkpoint. 🚀",
+        "Wen? When weak hands finish leaving. 💎", "The stag WALKS to the moon. It's in no rush. 🦌🌙",
+      ]));
+      return res.status(200).json({ ok: true });
+    }
+    if (cmd === "/hodl" || cmd === "/diamond" || cmd === "/dh") {
+      await say(chatId, replyTo, pick([
+        "💎🦌 Diamond antlers. Never sold, never will.", "Paper hands feed the legend. HODL, ranger. 🏹",
+        "The hood holds - through red, through green, through everything. 💚", "Sold? In THIS forest? Never. 🌿💎",
+      ]));
+      return res.status(200).json({ ok: true });
+    }
+    if (cmd === "/green" || cmd === "/greencandle" || cmd === "/candles") {
+      await say(chatId, replyTo, `🕯️💚 *GREEN CANDLES* 💚🕯️\n\`\`\`\n          🟩\n        🟩🟩\n     🟩🟩🟩\n   🟩🟩🟩🟩\n 🟩🟩🟩🟩🟩\n\`\`\`\n$STAG only knows one direction. Antlers up. 🦌📈`);
+      return res.status(200).json({ ok: true });
+    }
+    if (cmd === "/fud") {
+      await say(chatId, replyTo, pick([
+        "FUD detected. The stag doesn't flinch. 🦌🛡️", "Every FUDder is tomorrow's holder. Zoom out. 🔭",
+        "FUD is just fear in a costume. Antlers up. 🏹", "Nice try, sheriff. The hood stays. 💚",
+      ]));
+      return res.status(200).json({ ok: true });
+    }
+    if (cmd === "/send" || cmd === "/sendit" || cmd === "/lfg") {
+      await say(chatId, replyTo, pick([
+        "🏹 SEND IT. No hesitation. 🦌", "Arrow's nocked. LFG. 🟢🟢🟢", "Full send, ranger. Sherwood or bust. 💚🦌",
+      ]));
+      return res.status(200).json({ ok: true });
+    }
+    if (cmd === "/based") {
+      await say(chatId, replyTo, pick(["Based and antlers-pilled. 🦌", "Certified based, ranger. 💚", "The hood approves. Based. 🏹"]));
       return res.status(200).json({ ok: true });
     }
 
