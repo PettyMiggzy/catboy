@@ -216,16 +216,20 @@ contract StagLocker is Ownable, ReentrancyGuard, IERC721Receiver {
         emit V3Locked(id, owner, tokenId, unlockTime);
     }
 
-    /// @dev Accept V3 NFTs. If sent via safeTransferFrom with abi.encode(uint64 unlockTime),
-    ///      auto-creates the lock owned by `from`; otherwise reverts (use lockV3Position).
+    /// @dev Accept V3 position NFTs ONLY as a lock creation: must come from the
+    ///      configured positionManager and carry abi.encode(uint64 unlockTime) as data,
+    ///      which auto-creates the lock owned by `from`. Anything else reverts, so a
+    ///      stray/mis-encoded safeTransferFrom can never strand an NFT in this contract
+    ///      with no lock recorded. (Fee-exempt by nature: safeTransferFrom carries no ETH;
+    ///      use lockV3Position if a creation fee must be charged.)
     function onERC721Received(address, address from, uint256 tokenId, bytes calldata data)
         external override returns (bytes4)
     {
-        if (msg.sender == positionManager && data.length == 32) {
-            uint64 unlockTime = abi.decode(data, (uint64));
-            if (unlockTime <= block.timestamp) revert BadUnlockTime();
-            _recordV3(from, tokenId, unlockTime);
-        }
+        if (msg.sender != positionManager) revert WrongKind();
+        if (data.length != 32) revert BadUnlockTime();
+        uint64 unlockTime = abi.decode(data, (uint64));
+        if (unlockTime <= block.timestamp) revert BadUnlockTime();
+        _recordV3(from, tokenId, unlockTime);
         return this.onERC721Received.selector;
     }
 }
