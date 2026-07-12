@@ -84,12 +84,39 @@ function _decodeUserInfo(hex) {
   const d = (hex || "0x").replace(/^0x/, "");
   const word = (i) => { const s = d.slice(i * 64, i * 64 + 64); return s ? BigInt("0x" + s) : 0n; };
   // [4]stakedAt [5]lockTier [6]unlockAt [7]pendingEth [8]nftsOffset [9]locked
-  const unlockAt = Number(word(6)), lockTier = Number(word(5)), locked = word(9) !== 0n;
+  const weight = Number(word(3)), unlockAt = Number(word(6)), lockTier = Number(word(5)), locked = word(9) !== 0n;
   const off = Number(word(8)) / 32;
   const len = off > 0 ? Number(word(off)) : 0;
   const nfts = [];
   for (let i = 0; i < len && i < 40; i++) nfts.push(Number(word(off + 1 + i)));
-  return { unlockAt, lockTier, locked, nfts };
+  return { weight, unlockAt, lockTier, locked, nfts };
+}
+// Top stakers by weight (the contract's reward-share metric). Gathers stakers from stake
+// events, reads each one's live weight, ranks. Capped for a single serverless call.
+export async function topStakers(limit = 10) {
+  const STAKED_TOKENS = "0xe28ac993e6e9802e861a36a4c6b790999a65dfdc1df4dc3b2d16cc15dd511e3c";
+  const STAKED_NFT = "0xa3a2f4924c244b65a4ecb0f6c615dc546a3510483f569d676ae4485f759d98d7";
+  const tip = Number(BigInt(await rpc("eth_blockNumber", [])));
+  const from = "0x" + Math.max(0, tip - 1500000).toString(16); // staking is new; this covers deploy
+  let logs = [];
+  try {
+    const [a, b] = await Promise.all([
+      rpc("eth_getLogs", [{ address: STAG_STAKING, topics: [STAKED_TOKENS], fromBlock: from, toBlock: "latest" }]),
+      rpc("eth_getLogs", [{ address: STAG_STAKING, topics: [STAKED_NFT], fromBlock: from, toBlock: "latest" }]),
+    ]);
+    logs = [...(a || []), ...(b || [])];
+  } catch { return []; }
+  const stakers = [...new Set(logs.map((l) => "0x" + l.topics[1].slice(26).toLowerCase()))].slice(0, 100);
+  if (!stakers.length) return [];
+  const [tw, ...infos] = await Promise.all([
+    _call(STAG_STAKING, "0x96c82e57"), // totalWeight()
+    ...stakers.map((w) => _call(STAG_STAKING, "0x1959a002" + "0".repeat(24) + w.replace(/^0x/, "")).catch(() => "0x")),
+  ]);
+  const totalW = Number(_big(tw)) || 1;
+  return stakers.map((w, i) => {
+    const info = _decodeUserInfo(infos[i]);
+    return { wallet: w, weight: info.weight, nfts: info.nfts.length, share: (info.weight / totalW) * 100 };
+  }).filter((x) => x.weight > 0).sort((a, b) => b.weight - a.weight).slice(0, limit);
 }
 // A specific wallet's staking position: $STAG staked, NFTs staked (+ids), pending ETH, unlock.
 export async function walletStake(wallet) {

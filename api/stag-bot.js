@@ -37,7 +37,7 @@ import { readFileSync } from "node:fs";
 import { STAG_REF_B64 } from "./_stagref.js";
 import { STAG_WELCOME_B64 } from "./_stagwelcome.js";
 import { TRIVIA } from "./_trivia.js";
-import { verifyStagPayment, verifyMicroDeposit, stagBalanceWhole, stagTotalSupplyWhole, rpc, STAG_TOKEN, DEAD, stakingStats, nftMintStats, walletStake } from "./_rhchain.js";
+import { verifyStagPayment, verifyMicroDeposit, stagBalanceWhole, stagTotalSupplyWhole, rpc, STAG_TOKEN, DEAD, stakingStats, nftMintStats, walletStake, topStakers } from "./_rhchain.js";
 
 const CONN = (process.env.DATABASE_URL || process.env.POSTGRES_URL || "").trim();
 const TOKEN = (process.env.STAG_BOT_TOKEN || "").trim();
@@ -519,7 +519,7 @@ export default async function handler(req, res) {
         "💰 *Want more?* Grab credits:\n" +
         "💳 `/buy` - pay in $STAG  ·  `/credits` - your balance\n" +
         "🔐 `/verify` - hold *1M+ $STAG* → *50% OFF*\n\n" +
-        "🔒 *NFT & Staking:* `/mints` `/staked` `/pool` `/mystake 0x…` - live on-chain\n" +
+        "🔒 *NFT & Staking:* `/mints` `/staked` `/pool` `/mystake 0x…` `/topstakers` - live\n" +
         "🔥 *Hype:* `/fomo` `/pump` `/wagmi` `/gm` `/moon` `/hodl` `/green` `/fud`\n\n" +
         "🆓 *Free tools:* `/price` `/burn` `/holders` `/ca` `/links` - full list: `/tools`\n\n" +
         "🔓 *No wallet connection - ever.* Just send $STAG, no connect, no signing.\n" +
@@ -657,6 +657,16 @@ export default async function handler(req, res) {
           await say(chatId, replyTo, `🔒🦌 *Your Staking* \`${shortAddr(w)}\`\n\nStaked: *${fmt(p.stakedStag)} $STAG*\nNFTs staked: *${p.nftsStaked}*${ids}\nPending rewards: *${p.pendingEth.toFixed(6)} ETH*${lock}`);
         }
       } catch { await say(chatId, replyTo, "⚠️ Couldn't read that wallet's staking - check the address."); }
+      return res.status(200).json({ ok: true });
+    }
+    if (cmd === "/topstakers" || cmd === "/topstake" || cmd === "/stakers" || cmd === "/stakingtop") {
+      try {
+        const top = await topStakers(10);
+        if (!top.length) { await say(chatId, replyTo, "🔒 No stakers yet - be the FIRST. Stake $STAG or your Hooded Twenty to earn ETH. 🦌🏹"); return res.status(200).json({ ok: true }); }
+        const medal = (i) => ["🥇", "🥈", "🥉"][i] || `${i + 1}.`;
+        const list = top.map((s, i) => `${medal(i)} \`${shortAddr(s.wallet)}\` - *${s.share.toFixed(1)}%*${s.nfts ? ` · ${s.nfts}🦌` : ""}`).join("\n");
+        await say(chatId, replyTo, `🏆🔒 *Top $STAG Stakers*\n\n${list}\n\n_Share of the reward pool by stake weight. 🦌_`);
+      } catch { await say(chatId, replyTo, "⚠️ Couldn't load stakers right now - try again."); }
       return res.status(200).json({ ok: true });
     }
 
