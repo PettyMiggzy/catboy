@@ -55,26 +55,25 @@ export default async function handler(req, res) {
   const range = { fromBlock: "0x" + from.toString(16), toBlock: "0x" + to.toString(16) };
 
   // collect events
-  let nftLogs = [], stakeIn = [], stakeOut = [];
+  // Only bullish signals: mints, buys, stakes. Unstakes are intentionally NOT queried/announced.
+  let nftLogs = [], stakeIn = [];
   try {
-    [nftLogs, stakeIn, stakeOut] = await Promise.all([
+    [nftLogs, stakeIn] = await Promise.all([
       rpc("eth_getLogs", [{ address: NFT, topics: [TRANSFER], ...range }]),
       rpc("eth_getLogs", [{ address: STAG, topics: [TRANSFER, null, STK_TOPIC], ...range }]), // $STAG -> staking
-      rpc("eth_getLogs", [{ address: STAG, topics: [TRANSFER, STK_TOPIC], ...range }]),       // $STAG <- staking
     ]);
   } catch (e) { return res.status(200).json({ ok: false, error: String(e).slice(0, 150) }); }
 
   const events = [];
   for (const lg of nftLogs) {
     const f = addr(lg.topics[1]), t = addr(lg.topics[2]), id = String(big(lg.topics[3] || "0x0"));
+    if (f.toLowerCase() === STAKING) continue;   // skip NFT unstakes (bearish)
     let kind = "nft_xfer";
     if (f.toLowerCase() === ZERO) kind = "nft_mint";
     else if (t.toLowerCase() === STAKING) kind = "nft_stake";
-    else if (f.toLowerCase() === STAKING) kind = "nft_unstake";
     events.push({ kind, f, t, id, lg });
   }
   for (const lg of stakeIn) events.push({ kind: "stake", f: addr(lg.topics[1]), amt: eth(big(lg.data)), lg });
-  for (const lg of stakeOut) events.push({ kind: "unstake", t: addr(lg.topics[2]), amt: eth(big(lg.data)), lg });
 
   let posted = 0;
   for (const e of events) {
@@ -88,17 +87,13 @@ export default async function handler(req, res) {
       msg = `🦌🏹 *NEW $STAG NFT MINTED!*\nHooded Twenty *#${e.id}* minted by ${link(e.t)}${price}.\n[View](${EXPLORER}/token/${NFT}/instance/${e.id})  ·  Mint: /nft`;
     } else if (e.kind === "nft_stake") {
       msg = `🔒🦌 *NFT STAKED!*\n${link(e.f)} staked Hooded Twenty *#${e.id}* — earning $STAG. 🌿`;
-    } else if (e.kind === "nft_unstake") {
-      msg = `🔓 *NFT unstaked*\nHooded Twenty *#${e.id}* → ${link(e.t)}.`;
     } else if (e.kind === "nft_xfer") {
       msg = `🛒🦌 *$STAG NFT moved*\nHooded Twenty *#${e.id}*: ${link(e.f)} → ${link(e.t)}.`;
     } else if (e.kind === "stake") {
       msg = `🔒💚 *$STAG STAKED!*\n${link(e.f)} staked *${fmt(e.amt)} $STAG*. Steal the pump, feed the holders. 🦌`;
-    } else if (e.kind === "unstake") {
-      msg = `🔓 *$STAG unstaked*\n${link(e.t)} pulled *${fmt(e.amt)} $STAG* from staking.`;
     }
     if (msg && (await tg(msg))) posted++;
   }
   await s`INSERT INTO stag_chain_state (k, v) VALUES ('last_block', ${to}) ON CONFLICT (k) DO UPDATE SET v=${to}`;
-  return res.status(200).json({ ok: true, from, to, tip, nft: nftLogs.length, stakeIn: stakeIn.length, stakeOut: stakeOut.length, posted });
+  return res.status(200).json({ ok: true, from, to, tip, nft: nftLogs.length, stakeIn: stakeIn.length, posted });
 }
