@@ -6,7 +6,8 @@
   },
   "crons": [
     { "path": "/api/stag-video-cron", "schedule": "* * * * *" },
-    { "path": "/api/stag-onchain", "schedule": "* * * * *" }
+    { "path": "/api/stag-onchain", "schedule": "* * * * *" },
+    { "path": "/api/stag-bot", "schedule": "* * * * *" }
   ],
   "functions": {
     "api/stag-bot.js": { "includeFiles": "assets/trivia/**" }

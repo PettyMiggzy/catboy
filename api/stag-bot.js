@@ -407,6 +407,9 @@ async function pickQuestion(s, chatId) {
 
 // ── Handler ──────────────────────────────────────────────────────────────────────
 export default async function handler(req, res) {
+  // Warm-up ping (Vercel cron GET): return immediately so an idle instance stays hot and
+  // real Telegram webhooks don't pay a cold-start penalty. No work, no DB, just keep-alive.
+  if (req.method === "GET") return res.status(200).json({ ok: true, warm: true });
   if (req.method !== "POST") { res.setHeader("Allow", "POST"); return res.status(405).end(); }
   // Fail closed: without the shared secret we cannot prove a request is really from
   // Telegram, so anyone could spoof updates and drain the pool / spend others' credits.
