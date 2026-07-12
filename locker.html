@@ -1,0 +1,429 @@
+<title>Stag Locker — Robinhood Chain token &amp; LP locker</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/png" href="assets/locker/icon.png">
+<style>
+  :root{
+    --bg:#080b08; --panel:#111811; --panel2:#161e16; --line:#1e281e;
+    --ink:#e9f1e6; --mut:#8b9a89; --dim:#5f6d5e;
+    --acc:#9ef418; --acc-dim:#5f8f14; --teal:#37d6c4; --gold:#f5b301; --hot:#ff5d3b;
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,"Roboto Mono",Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%}
+  body{
+    background:
+      radial-gradient(1200px 700px at 72% -10%, #0f1a0d 0%, transparent 60%),
+      radial-gradient(900px 600px at 8% 110%, #10160f 0%, transparent 55%),
+      var(--bg);
+    color:var(--ink); font-family:var(--sans); line-height:1.5;
+  }
+  a{color:var(--acc);text-decoration:none} a:hover{text-decoration:underline}
+  header{
+    display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+    padding:14px 20px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,rgba(158,244,24,.05),transparent);
+  }
+  .brand{display:flex;align-items:center;gap:11px}
+  .brand img{width:34px;height:34px;flex:none}
+  .brand h1{font-size:15px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;margin:0}
+  .brand h1 b{color:var(--acc)}
+  .brand .chain{font:600 10px/1 var(--mono);letter-spacing:.18em;text-transform:uppercase;color:var(--mut);
+    border:1px solid var(--line);border-radius:999px;padding:5px 9px}
+  .grow{margin-left:auto}
+  button{font-family:var(--sans);cursor:pointer;border-radius:8px;border:1px solid var(--line);
+    background:var(--panel2);color:var(--ink);padding:9px 14px;font-size:13px;font-weight:600}
+  button:hover{border-color:var(--acc-dim)}
+  button.primary{background:var(--acc);color:#0a0f06;border-color:var(--acc)}
+  button.primary:hover{filter:brightness(1.08)}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  .wallet{font:600 12px/1 var(--mono);color:var(--mut)}
+  .wallet b{color:var(--teal)}
+  .hero{position:relative;height:200px;overflow:hidden;border-bottom:1px solid var(--line)}
+  .hero img{width:100%;height:100%;object-fit:cover;object-position:center 38%;display:block}
+  .hero .cap{position:absolute;left:0;right:0;bottom:0;padding:14px 20px;
+    background:linear-gradient(0deg,rgba(6,10,6,.92),transparent);
+    font:600 13px/1.4 var(--mono);color:var(--ink)}
+  .hero .cap b{color:var(--acc)}
+  main{max-width:860px;margin:0 auto;padding:22px 18px 60px}
+  .tabs{display:flex;gap:6px;margin-bottom:18px;flex-wrap:wrap}
+  .tabs button{background:transparent;border-color:transparent;color:var(--mut);padding:8px 12px}
+  .tabs button.on{color:var(--acc);border-color:var(--acc-dim);background:var(--panel)}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 18px;margin-bottom:14px}
+  .card h2{margin:0 0 4px;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink)}
+  .card p.hint{margin:0 0 16px;font-size:12.5px;color:var(--mut)}
+  label{display:block;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);margin:12px 0 5px}
+  input,select{width:100%;font-family:var(--mono);font-size:13px;color:var(--ink);background:#0c110c;
+    border:1px solid var(--line);border-radius:8px;padding:10px 11px}
+  input:focus,select:focus{outline:none;border-color:var(--acc-dim)}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media(max-width:560px){.two{grid-template-columns:1fr}}
+  .actions{margin-top:18px;display:flex;gap:10px;flex-wrap:wrap}
+  .msg{margin-top:14px;font:500 12.5px/1.5 var(--mono);padding:10px 12px;border-radius:8px;display:none}
+  .msg.show{display:block}
+  .msg.ok{color:var(--acc);background:rgba(158,244,24,.07);border:1px solid var(--acc-dim)}
+  .msg.err{color:var(--hot);background:rgba(255,93,59,.07);border:1px solid #55231a}
+  .msg.info{color:var(--mut);background:var(--panel2);border:1px solid var(--line)}
+  .lock{border:1px solid var(--line);border-radius:10px;padding:13px 14px;margin-bottom:10px;background:var(--panel2)}
+  .lock .top{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  .lock .id{font:700 12px/1 var(--mono);color:var(--gold)}
+  .lock .kind{font:600 9.5px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--teal);
+    border:1px solid var(--line);border-radius:999px;padding:4px 8px}
+  .badge{font:600 9.5px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;border-radius:999px;padding:4px 8px;margin-left:auto}
+  .badge.locked{color:var(--hot);border:1px solid #55231a;background:rgba(255,93,59,.06)}
+  .badge.open{color:var(--acc);border:1px solid var(--acc-dim);background:rgba(158,244,24,.06)}
+  .lock .grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 18px;margin-top:10px;font:500 12px/1.4 var(--mono)}
+  .lock .grid .k{color:var(--dim);font-size:10px;letter-spacing:.08em;text-transform:uppercase}
+  .lock .grid .v{color:var(--ink)}
+  .lock .rowbtns{margin-top:11px;display:flex;gap:8px;flex-wrap:wrap}
+  .lock .rowbtns button{padding:6px 10px;font-size:11.5px}
+  .empty{color:var(--dim);font-size:13px;padding:18px 2px;text-align:center}
+  code{font-family:var(--mono);color:var(--teal);font-size:12px;word-break:break-all}
+  .note{font-size:11.5px;color:var(--dim);margin-top:10px}
+  .foot{max-width:860px;margin:0 auto;padding:0 18px 40px;color:var(--dim);font-size:11.5px}
+</style>
+
+<header>
+  <div class="brand"><img src="assets/locker/icon.png" alt="Stag Locker"><h1>Stag <b>Locker</b></h1><span class="chain">Robinhood Chain · 4663</span></div>
+  <div class="grow"></div>
+  <span id="wallet" class="wallet">not connected</span>
+  <button id="connect" class="primary">Connect Wallet</button>
+</header>
+
+<div class="hero">
+  <img src="assets/locker/hero.png" alt="Stag Locker">
+  <div class="cap">Lock LP or team tokens. Prove you can't rug. <b>Anyone can verify.</b></div>
+</div>
+
+<main>
+  <div class="tabs">
+    <button data-tab="lock" class="on">Lock</button>
+    <button data-tab="mine">My Locks</button>
+    <button data-tab="verify">Verify</button>
+  </div>
+
+  <!-- LOCK -->
+  <section data-panel="lock">
+    <div class="card">
+      <h2>Lock tokens or LP</h2>
+      <p class="hint">Lock ERC-20 tokens or a Uniswap V3 LP position until a date you choose. Locks can only be
+        extended or topped up - never shortened or pulled early. Prove you can't rug.</p>
+      <label>What are you locking?</label>
+      <select id="kind">
+        <option value="erc20">ERC-20 tokens</option>
+        <option value="v3">Uniswap V3 LP position (NFT)</option>
+      </select>
+
+      <div id="erc20Fields">
+        <label>Token address</label>
+        <input id="token" placeholder="0x…" spellcheck="false">
+        <div class="two">
+          <div><label>Amount</label><input id="amount" placeholder="e.g. 1000000" spellcheck="false"></div>
+          <div><label>Unlock date</label><input id="unlock1" type="datetime-local"></div>
+        </div>
+      </div>
+
+      <div id="v3Fields" style="display:none">
+        <div class="two">
+          <div><label>Position token ID</label><input id="tokenId" placeholder="e.g. 42" spellcheck="false"></div>
+          <div><label>Unlock date</label><input id="unlock2" type="datetime-local"></div>
+        </div>
+        <div class="note">Position manager: <code id="pmAddr">…</code></div>
+      </div>
+
+      <div class="actions">
+        <button id="approveBtn">1 · Approve</button>
+        <button id="lockBtn" class="primary">2 · Lock</button>
+      </div>
+      <div class="note" id="feeNote"></div>
+      <div id="lockMsg" class="msg"></div>
+    </div>
+  </section>
+
+  <!-- MY LOCKS -->
+  <section data-panel="mine" style="display:none">
+    <div class="card">
+      <h2>My locks</h2>
+      <p class="hint">Everything you've locked. Withdraw unlocks automatically once the date passes.</p>
+      <div id="mineList"><div class="empty">Connect your wallet to see your locks.</div></div>
+    </div>
+  </section>
+
+  <!-- VERIFY -->
+  <section data-panel="verify" style="display:none">
+    <div class="card">
+      <h2>Verify a lock (public)</h2>
+      <p class="hint">Paste any token or LP contract address to see every lock against it, how much, who owns it,
+        and when it unlocks. No wallet needed - anyone can verify.</p>
+      <label>Token or LP address</label>
+      <input id="verifyAddr" placeholder="0x…" spellcheck="false">
+      <div class="actions"><button id="verifyBtn" class="primary">Verify</button></div>
+      <div id="verifyMsg" class="msg"></div>
+      <div id="verifyList"></div>
+    </div>
+  </section>
+</main>
+
+<div class="foot">
+  Locker contract: <code id="lockerAddr">not set</code> · <span id="explorerLink"></span>
+  Admin can set a small creation fee but can <b>never</b> touch locked assets.
+</div>
+
+<script type="module">
+import { ethers } from "https://esm.sh/ethers@6.13.4";
+
+// ─── config (set LOCKER after deploy) ──────────────────────────────────────
+const CHAIN_ID = 4663;
+const CHAIN_HEX = "0x" + CHAIN_ID.toString(16);
+const RPC = "https://rpc.mainnet.chain.robinhood.com";
+const EXPLORER = "https://robinhoodchain.blockscout.com";
+const LOCKER = window.STAG_LOCKER_ADDRESS || ""; // ← paste deployed address here
+const POSITION_MANAGER = "0x73991a25c818bf1f1128deaab1492d45638de0d3";
+
+const CHAIN_PARAMS = {
+  chainId: CHAIN_HEX, chainName: "Robinhood Chain",
+  nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+  rpcUrls: [RPC], blockExplorerUrls: [EXPLORER],
+};
+
+const LOCKER_ABI = [
+  "function flatFeeWei() view returns (uint256)",
+  "function positionManager() view returns (address)",
+  "function nextLockId() view returns (uint256)",
+  "function getLock(uint256) view returns (tuple(uint8 kind,address asset,uint256 amountOrId,address owner,uint64 unlockTime,bool withdrawn))",
+  "function ownerLockIds(address) view returns (uint256[])",
+  "function assetLockIds(address) view returns (uint256[])",
+  "function lockTokens(address token,uint256 amount,uint64 unlockTime) payable returns (uint256)",
+  "function lockV3Position(uint256 tokenId,uint64 unlockTime) payable returns (uint256)",
+  "function extendLock(uint256 id,uint64 newUnlockTime)",
+  "function topUp(uint256 id,uint256 amount)",
+  "function withdraw(uint256 id)",
+];
+const ERC20_ABI = [
+  "function decimals() view returns (uint8)",
+  "function symbol() view returns (string)",
+  "function allowance(address,address) view returns (uint256)",
+  "function approve(address,uint256) returns (bool)",
+];
+const ERC721_ABI = ["function approve(address,uint256)","function getApproved(uint256) view returns (address)"];
+
+// ─── state ─────────────────────────────────────────────────────────────────
+const read = new ethers.JsonRpcProvider(RPC, CHAIN_ID);
+let signer = null, account = null;
+const $ = (id) => document.getElementById(id);
+const short = (a) => a.slice(0,6) + "…" + a.slice(-4);
+const readLocker = () => new ethers.Contract(LOCKER, LOCKER_ABI, read);
+function msg(el, text, cls){ el.className = "msg show " + cls; el.textContent = text; }
+function hide(el){ el.className = "msg"; }
+function toUnix(v){ if(!v) return 0; return Math.floor(new Date(v).getTime()/1000); }
+function fmtDate(u){ return new Date(Number(u)*1000).toLocaleString(); }
+function fmtAmt(x){ const n = Number(x); return n >= 1e9 ? (n/1e9).toFixed(2)+"B" : n >= 1e6 ? (n/1e6).toFixed(2)+"M" : n >= 1e3 ? (n/1e3).toFixed(1)+"k" : n.toLocaleString(); }
+
+$("lockerAddr").textContent = LOCKER || "not set — deploy first, then set window.STAG_LOCKER_ADDRESS";
+$("pmAddr").textContent = POSITION_MANAGER;
+$("explorerLink").innerHTML = LOCKER ? `<a href="${EXPLORER}/address/${LOCKER}" target="_blank">view on explorer</a> · ` : "";
+
+// ─── wallet ────────────────────────────────────────────────────────────────
+$("connect").onclick = connect;
+async function connect(){
+  if(!window.ethereum){ alert("No wallet found. Install MetaMask or a compatible wallet."); return; }
+  try{
+    const bp = new ethers.BrowserProvider(window.ethereum);
+    await bp.send("eth_requestAccounts", []);
+    const net = await bp.getNetwork();
+    if(Number(net.chainId) !== CHAIN_ID){
+      try { await window.ethereum.request({ method:"wallet_switchEthereumChain", params:[{chainId:CHAIN_HEX}] }); }
+      catch(e){ if(e.code === 4902) await window.ethereum.request({ method:"wallet_addEthereumChain", params:[CHAIN_PARAMS] }); }
+    }
+    signer = await new ethers.BrowserProvider(window.ethereum).getSigner();
+    account = await signer.getAddress();
+    $("wallet").innerHTML = "connected <b>" + short(account) + "</b>";
+    $("connect").textContent = "Connected";
+    loadFee();
+    if(currentTab === "mine") loadMine();
+  }catch(e){ alert("Connect failed: " + (e.message||e)); }
+}
+if(window.ethereum){ window.ethereum.on?.("accountsChanged", ()=>location.reload()); window.ethereum.on?.("chainChanged", ()=>location.reload()); }
+
+async function loadFee(){
+  try{ const fee = await readLocker().flatFeeWei();
+    $("feeNote").textContent = fee > 0n ? ("Creation fee: " + ethers.formatEther(fee) + " ETH (overpayment refunded).") : "No creation fee.";
+  }catch{}
+}
+
+// ─── tabs ──────────────────────────────────────────────────────────────────
+let currentTab = "lock";
+document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => {
+  currentTab = b.dataset.tab;
+  document.querySelectorAll(".tabs button").forEach(x => x.classList.toggle("on", x === b));
+  document.querySelectorAll("[data-panel]").forEach(p => p.style.display = p.dataset.panel === currentTab ? "" : "none");
+  if(currentTab === "mine") loadMine();
+});
+$("kind").onchange = () => {
+  const v3 = $("kind").value === "v3";
+  $("v3Fields").style.display = v3 ? "" : "none";
+  $("erc20Fields").style.display = v3 ? "none" : "";
+  $("approveBtn").textContent = v3 ? "1 · Approve NFT" : "1 · Approve";
+};
+
+// ─── lock flow ─────────────────────────────────────────────────────────────
+function requireReady(el){
+  if(!LOCKER){ msg(el,"Locker address not set. Deploy the contract, then set window.STAG_LOCKER_ADDRESS.","err"); return false; }
+  if(!signer){ msg(el,"Connect your wallet first.","err"); return false; }
+  return true;
+}
+
+$("approveBtn").onclick = async () => {
+  const el = $("lockMsg"); if(!requireReady(el)) return;
+  try{
+    if($("kind").value === "erc20"){
+      const token = $("token").value.trim(); const amtStr = $("amount").value.trim();
+      if(!ethers.isAddress(token)) return msg(el,"Enter a valid token address.","err");
+      const t = new ethers.Contract(token, ERC20_ABI, signer);
+      const dec = await t.decimals(); const amount = ethers.parseUnits(amtStr || "0", dec);
+      if(amount <= 0n) return msg(el,"Enter an amount.","err");
+      msg(el,"Approving… confirm in wallet.","info");
+      await (await t.approve(LOCKER, amount)).wait();
+      msg(el,"Approved. Now click Lock.","ok");
+    } else {
+      const id = $("tokenId").value.trim(); if(id==="") return msg(el,"Enter the position token ID.","err");
+      const nft = new ethers.Contract(POSITION_MANAGER, ERC721_ABI, signer);
+      msg(el,"Approving NFT… confirm in wallet.","info");
+      await (await nft.approve(LOCKER, id)).wait();
+      msg(el,"NFT approved. Now click Lock.","ok");
+    }
+  }catch(e){ msg(el,"Approve failed: " + (e.shortMessage||e.message||e),"err"); }
+};
+
+$("lockBtn").onclick = async () => {
+  const el = $("lockMsg"); if(!requireReady(el)) return;
+  try{
+    const c = new ethers.Contract(LOCKER, LOCKER_ABI, signer);
+    const fee = await readLocker().flatFeeWei();
+    if($("kind").value === "erc20"){
+      const token = $("token").value.trim();
+      const unlock = toUnix($("unlock1").value);
+      if(!ethers.isAddress(token)) return msg(el,"Enter a valid token address.","err");
+      if(unlock <= Math.floor(Date.now()/1000)) return msg(el,"Unlock date must be in the future.","err");
+      const t = new ethers.Contract(token, ERC20_ABI, read);
+      const dec = await t.decimals(); const amount = ethers.parseUnits($("amount").value.trim() || "0", dec);
+      if(amount <= 0n) return msg(el,"Enter an amount.","err");
+      msg(el,"Locking… confirm in wallet.","info");
+      const tx = await c.lockTokens(token, amount, unlock, { value: fee });
+      await tx.wait(); msg(el,"Locked ✓  tx " + short(tx.hash),"ok");
+    } else {
+      const id = $("tokenId").value.trim(); const unlock = toUnix($("unlock2").value);
+      if(id==="") return msg(el,"Enter the position token ID.","err");
+      if(unlock <= Math.floor(Date.now()/1000)) return msg(el,"Unlock date must be in the future.","err");
+      msg(el,"Locking LP… confirm in wallet.","info");
+      const tx = await c.lockV3Position(id, unlock, { value: fee });
+      await tx.wait(); msg(el,"LP locked ✓  tx " + short(tx.hash),"ok");
+    }
+  }catch(e){ msg(el,"Lock failed: " + (e.shortMessage||e.message||e),"err"); }
+};
+
+// ─── render a lock ─────────────────────────────────────────────────────────
+async function lockCard(id, l, { showManage }){
+  const now = Math.floor(Date.now()/1000);
+  const unlocked = Number(l.unlockTime) <= now && !l.withdrawn;
+  const isErc20 = Number(l.kind) === 0;
+  let amountLabel = "";
+  if(isErc20){
+    try{ const t = new ethers.Contract(l.asset, ERC20_ABI, read);
+      const [dec, sym] = await Promise.all([t.decimals(), t.symbol().catch(()=>"")]);
+      amountLabel = fmtAmt(ethers.formatUnits(l.amountOrId, dec)) + " " + sym;
+    }catch{ amountLabel = l.amountOrId.toString() + " (raw)"; }
+  } else amountLabel = "V3 position #" + l.amountOrId.toString();
+
+  const div = document.createElement("div"); div.className = "lock";
+  const state = l.withdrawn ? '<span class="badge open" style="color:var(--dim);border-color:var(--line);background:none">withdrawn</span>'
+    : unlocked ? '<span class="badge open">unlocked</span>' : '<span class="badge locked">locked</span>';
+  div.innerHTML = `
+    <div class="top">
+      <span class="id">#${id}</span>
+      <span class="kind">${isErc20 ? "ERC-20" : "V3 LP"}</span>
+      ${state}
+    </div>
+    <div class="grid">
+      <div><div class="k">Amount</div><div class="v">${amountLabel}</div></div>
+      <div><div class="k">Unlocks</div><div class="v">${fmtDate(l.unlockTime)}</div></div>
+      <div><div class="k">Asset</div><div class="v"><a href="${EXPLORER}/address/${l.asset}" target="_blank">${short(l.asset)}</a></div></div>
+      <div><div class="k">Owner</div><div class="v"><a href="${EXPLORER}/address/${l.owner}" target="_blank">${short(l.owner)}</a></div></div>
+    </div>`;
+  if(showManage && account && l.owner.toLowerCase() === account.toLowerCase() && !l.withdrawn){
+    const row = document.createElement("div"); row.className = "rowbtns";
+    if(unlocked){
+      const w = document.createElement("button"); w.className="primary"; w.textContent="Withdraw";
+      w.onclick = () => manage("withdraw", id); row.appendChild(w);
+    } else {
+      const ex = document.createElement("button"); ex.textContent="Extend"; ex.onclick = () => manage("extend", id, l); row.appendChild(ex);
+      if(isErc20){ const tu = document.createElement("button"); tu.textContent="Top up"; tu.onclick = () => manage("topup", id, l); row.appendChild(tu); }
+    }
+    div.appendChild(row);
+  }
+  return div;
+}
+
+async function manage(kind, id, l){
+  const el = $("mineList");
+  try{
+    const c = new ethers.Contract(LOCKER, LOCKER_ABI, signer);
+    if(kind === "withdraw"){ await (await c.withdraw(id)).wait(); }
+    else if(kind === "extend"){
+      const v = prompt("New unlock date/time (must be later than current: " + fmtDate(l.unlockTime) + ")");
+      if(!v) return; const u = toUnix(v); if(u <= Number(l.unlockTime)) return alert("Must be later than current unlock.");
+      await (await c.extendLock(id, u)).wait();
+    } else if(kind === "topup"){
+      const v = prompt("Amount to add to lock #" + id); if(!v) return;
+      const t = new ethers.Contract(l.asset, ERC20_ABI, signer); const dec = await t.decimals();
+      const amount = ethers.parseUnits(v, dec);
+      await (await t.approve(LOCKER, amount)).wait();
+      await (await c.topUp(id, amount)).wait();
+    }
+    loadMine();
+  }catch(e){ alert((e.shortMessage||e.message||e)); }
+}
+
+// ─── my locks ──────────────────────────────────────────────────────────────
+async function loadMine(){
+  const box = $("mineList");
+  if(!LOCKER){ box.innerHTML = '<div class="empty">Locker not deployed yet.</div>'; return; }
+  if(!account){ box.innerHTML = '<div class="empty">Connect your wallet to see your locks.</div>'; return; }
+  box.innerHTML = '<div class="empty">Loading…</div>';
+  try{
+    const ids = await readLocker().ownerLockIds(account);
+    if(!ids.length){ box.innerHTML = '<div class="empty">No locks yet.</div>'; return; }
+    box.innerHTML = "";
+    for(const id of ids){
+      const l = await readLocker().getLock(id);
+      if(l.owner.toLowerCase() !== account.toLowerCase()) continue; // filter transferred-away
+      box.appendChild(await lockCard(id.toString(), l, { showManage:true }));
+    }
+    if(!box.children.length) box.innerHTML = '<div class="empty">No active locks.</div>';
+  }catch(e){ box.innerHTML = '<div class="empty">Error: ' + (e.shortMessage||e.message||e) + '</div>'; }
+}
+
+// ─── verify ────────────────────────────────────────────────────────────────
+$("verifyBtn").onclick = async () => {
+  const el = $("verifyMsg"), box = $("verifyList");
+  box.innerHTML = ""; hide(el);
+  const addr = $("verifyAddr").value.trim();
+  if(!LOCKER) return msg(el,"Locker not deployed yet.","err");
+  if(!ethers.isAddress(addr)) return msg(el,"Enter a valid address.","err");
+  msg(el,"Reading chain…","info");
+  try{
+    const ids = await readLocker().assetLockIds(addr);
+    if(!ids.length){ msg(el,"No locks found for this address.","info"); return; }
+    hide(el);
+    let lockedCount = 0;
+    for(const id of ids){
+      const l = await readLocker().getLock(id);
+      if(!l.withdrawn && Number(l.unlockTime) > Math.floor(Date.now()/1000)) lockedCount++;
+      box.appendChild(await lockCard(id.toString(), l, { showManage:false }));
+    }
+    msg(el, ids.length + " lock(s) · " + lockedCount + " still locked.","ok");
+  }catch(e){ msg(el,"Error: " + (e.shortMessage||e.message||e),"err"); }
+};
+
+if(LOCKER) loadFee();
+</script>
