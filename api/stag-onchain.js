@@ -49,7 +49,9 @@ export default async function handler(req, res) {
 
   const tip = Number(big(await rpc("eth_blockNumber", [])));
   const row = await s`SELECT v FROM stag_chain_state WHERE k='last_block'`;
-  let from = row.length ? Number(row[0].v) + 1 : tip - 500;
+  // First run backfills recent history so freshly-activated mint/staking isn't missed;
+  // the stag_chain_seen dedup guarantees nothing is announced twice.
+  let from = row.length ? Number(row[0].v) + 1 : Math.max(0, tip - 60000);
   if (from > tip) return res.status(200).json({ ok: true, tip, nothing: true });
   const to = Math.min(tip, from + MAX_RANGE);
   const range = { fromBlock: "0x" + from.toString(16), toBlock: "0x" + to.toString(16) };
