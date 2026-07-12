@@ -1,5 +1,6 @@
 <title>Stag Locker — Robinhood Chain token &amp; LP locker</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/png" href="/brand/icon.png">
 <style>
   :root{
     --bg:#080b08; --panel:#111811; --panel2:#161e16; --line:#1e281e;
@@ -23,7 +24,8 @@
     padding:14px 20px;border-bottom:1px solid var(--line);
     background:linear-gradient(180deg,rgba(158,244,24,.05),transparent);
   }
-  .brand{display:flex;align-items:baseline;gap:10px}
+  .brand{display:flex;align-items:center;gap:11px}
+  .brand img{width:34px;height:34px;flex:none}
   .brand h1{font-size:15px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;margin:0}
   .brand h1 b{color:var(--acc)}
   .brand .chain{font:600 10px/1 var(--mono);letter-spacing:.18em;text-transform:uppercase;color:var(--mut);
@@ -76,7 +78,7 @@
 </style>
 
 <header>
-  <div class="brand"><h1>Stag <b>Locker</b></h1><span class="chain">Robinhood Chain · 4663</span></div>
+  <div class="brand"><img src="/brand/icon.png" alt="Stag Locker"><h1>Stag <b>Locker</b></h1><span class="chain">Robinhood Chain · 4663</span></div>
   <div class="grow"></div>
   <span id="wallet" class="wallet">not connected</span>
   <button id="connect" class="primary">Connect Wallet</button>
