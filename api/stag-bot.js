@@ -37,7 +37,7 @@ import { readFileSync } from "node:fs";
 import { STAG_REF_B64 } from "./_stagref.js";
 import { STAG_WELCOME_B64 } from "./_stagwelcome.js";
 import { TRIVIA } from "./_trivia.js";
-import { verifyStagPayment, verifyMicroDeposit, stagBalanceWhole, stagTotalSupplyWhole, rpc, STAG_TOKEN, DEAD, stakingStats, nftMintStats } from "./_rhchain.js";
+import { verifyStagPayment, verifyMicroDeposit, stagBalanceWhole, stagTotalSupplyWhole, rpc, STAG_TOKEN, DEAD, stakingStats, nftMintStats, walletStake } from "./_rhchain.js";
 
 const CONN = (process.env.DATABASE_URL || process.env.POSTGRES_URL || "").trim();
 const TOKEN = (process.env.STAG_BOT_TOKEN || "").trim();
@@ -519,7 +519,7 @@ export default async function handler(req, res) {
         "💰 *Want more?* Grab credits:\n" +
         "💳 `/buy` - pay in $STAG  ·  `/credits` - your balance\n" +
         "🔐 `/verify` - hold *1M+ $STAG* → *50% OFF*\n\n" +
-        "🔒 *NFT & Staking:* `/mints` `/staked` `/pool` - live on-chain stats\n" +
+        "🔒 *NFT & Staking:* `/mints` `/staked` `/pool` `/mystake 0x…` - live on-chain\n" +
         "🔥 *Hype:* `/fomo` `/pump` `/wagmi` `/gm` `/moon` `/hodl` `/green` `/fud`\n\n" +
         "🆓 *Free tools:* `/price` `/burn` `/holders` `/ca` `/links` - full list: `/tools`\n\n" +
         "🔓 *No wallet connection - ever.* Just send $STAG, no connect, no signing.\n" +
@@ -641,6 +641,22 @@ export default async function handler(req, res) {
         const n = await nftMintStats();
         await hypeSend(chatId, replyTo, "mints", `🦌🏹 *Hooded Twenty NFT*\n\nMinted: *${n.minted}/${n.max}*  ·  Left: *${n.remaining}*\nMint: ${n.active ? "🟢 *LIVE*" : "🔴 not open yet"}${n.price > 0 ? `  ·  ~*${n.price} ETH*` : ""}`);
       } catch { await say(chatId, replyTo, "⚠️ Couldn't read mint status - try again."); }
+      return res.status(200).json({ ok: true });
+    }
+    if (cmd === "/mystake" || cmd === "/mystaking" || cmd === "/position" || cmd === "/mypos") {
+      const w = (arg.trim().split(/\s+/)[0] || "");
+      if (!/^0x[0-9a-fA-F]{40}$/.test(w)) { await say(chatId, replyTo, "Usage: `/mystake 0x…` - your Robinhood Chain wallet."); return res.status(200).json({ ok: true }); }
+      try {
+        const p = await walletStake(w);
+        if (p.stakedStag <= 0 && p.nftsStaked <= 0) {
+          await say(chatId, replyTo, `🦌 \`${shortAddr(w)}\` isn't staking yet.\nStake $STAG or your Hooded Twenty to earn ETH. 🏹`);
+        } else {
+          const now = Math.floor(Date.now() / 1000);
+          const lock = p.locked && p.unlockAt > now ? `\n🔒 Locked until *${new Date(p.unlockAt * 1000).toISOString().slice(0, 10)}*` : "\n🔓 Unlocked";
+          const ids = p.nftIds.length ? ` (#${p.nftIds.join(", #")})` : "";
+          await say(chatId, replyTo, `🔒🦌 *Your Staking* \`${shortAddr(w)}\`\n\nStaked: *${fmt(p.stakedStag)} $STAG*\nNFTs staked: *${p.nftsStaked}*${ids}\nPending rewards: *${p.pendingEth.toFixed(6)} ETH*${lock}`);
+        }
+      } catch { await say(chatId, replyTo, "⚠️ Couldn't read that wallet's staking - check the address."); }
       return res.status(200).json({ ok: true });
     }
 

@@ -79,6 +79,32 @@ export async function nftMintStats() {
     active: _big(active) !== 0n, price: Number(_big(price)) / 1e18,
   };
 }
+// Decode StagStaking.userInfo(address) return tuple (has a dynamic nfts[] member).
+function _decodeUserInfo(hex) {
+  const d = (hex || "0x").replace(/^0x/, "");
+  const word = (i) => { const s = d.slice(i * 64, i * 64 + 64); return s ? BigInt("0x" + s) : 0n; };
+  // [4]stakedAt [5]lockTier [6]unlockAt [7]pendingEth [8]nftsOffset [9]locked
+  const unlockAt = Number(word(6)), lockTier = Number(word(5)), locked = word(9) !== 0n;
+  const off = Number(word(8)) / 32;
+  const len = off > 0 ? Number(word(off)) : 0;
+  const nfts = [];
+  for (let i = 0; i < len && i < 40; i++) nfts.push(Number(word(off + 1 + i)));
+  return { unlockAt, lockTier, locked, nfts };
+}
+// A specific wallet's staking position: $STAG staked, NFTs staked (+ids), pending ETH, unlock.
+export async function walletStake(wallet) {
+  const w = wallet.toLowerCase().replace(/^0x/, "");
+  const [staked, earned, ui] = await Promise.all([
+    _call(STAG_STAKING, "0x2123c6c6" + "0".repeat(24) + w + "0".repeat(24) + STAG_TOKEN.replace(/^0x/, "")), // stakedOf(w, $STAG)
+    _call(STAG_STAKING, "0x008cc262" + "0".repeat(24) + w), // earned(w)
+    _call(STAG_STAKING, "0x1959a002" + "0".repeat(24) + w).catch(() => "0x"), // userInfo(w)
+  ]);
+  const info = _decodeUserInfo(ui);
+  return {
+    stakedStag: _whole(_big(staked)), pendingEth: Number(_big(earned)) / 1e18,
+    nftsStaked: info.nfts.length, nftIds: info.nfts, unlockAt: info.unlockAt, locked: info.locked,
+  };
+}
 
 // Verify an ERC-20 $STAG payment: tx confirmed, transfers >= minWhole $STAG INTO `treasury`.
 // Returns { ok, from, amountWhole } or { ok:false, err }.
