@@ -94,7 +94,9 @@ export default async function handler(req, res) {
     } else if (e.kind === "stake") {
       msg = `🔒💚 *$STAG STAKED!*\n${link(e.f)} staked *${fmt(e.amt)} $STAG*. Steal the pump, feed the holders. 🦌`;
     }
-    if (msg && (await tg(msg))) posted++;
+    // Send FIRST-effect: if the Telegram post fails, drop the "seen" row so the
+    // event is retried next minute instead of being silently lost forever.
+    if (msg) { if (await tg(msg)) posted++; else await s`DELETE FROM stag_chain_seen WHERE id=${key}`; }
   }
   await s`INSERT INTO stag_chain_state (k, v) VALUES ('last_block', ${to}) ON CONFLICT (k) DO UPDATE SET v=${to}`;
   return res.status(200).json({ ok: true, from, to, tip, nft: nftLogs.length, stakeIn: stakeIn.length, posted });
