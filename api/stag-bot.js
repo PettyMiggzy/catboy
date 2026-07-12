@@ -362,7 +362,7 @@ async function sendMissCard(chatId, replyTo, caption) {
 // Hype commands: send the on-brand $STAG art card with the text as caption; fall back to text.
 async function hypeSend(chatId, replyTo, name, text) {
   let buf = null;
-  try { buf = readFileSync(`${process.cwd()}/assets/hype/${name}.jpg`); } catch {}
+  try { buf = readFileSync(`${process.cwd()}/assets/trivia/hype/${name}.jpg`); } catch {}
   if (buf) { const r = await sendPhoto(chatId, buf, text, replyTo, "Markdown", "image/jpeg", `${name}.jpg`); if (r && r.ok !== false) return; }
   await say(chatId, replyTo, text);
 }
