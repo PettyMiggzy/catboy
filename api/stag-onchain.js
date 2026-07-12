@@ -10,7 +10,7 @@ import { neon } from "@neondatabase/serverless";
 const RPC = (process.env.RHC_RPC || "https://rpc.mainnet.chain.robinhood.com").trim();
 const CONN = (process.env.DATABASE_URL || process.env.POSTGRES_URL || "").trim();
 const TOKEN = (process.env.STAG_BOT_TOKEN || "").trim();
-const CHAT = (process.env.STAG_ANNOUNCE_CHAT || "").trim();
+const CHAT = (process.env.STAG_ANNOUNCE_CHAT || "-1003369963744").trim();
 const CRON_SECRET = (process.env.CRON_SECRET || "").trim();
 const NFT = (process.env.STAG_NFT || "0x4384cB362D908d36266bDF3C31F18DB95EB127dc").toLowerCase();
 const STAKING = (process.env.STAG_STAKING || "0x2faA6672546912e7cDec4E1AaCF1eeF52bA524fF").toLowerCase();
