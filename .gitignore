@@ -9,3 +9,6 @@ mint-wallet.json
 
 # self-hosted bot secrets
 bot-server/.env
+bot-server/*.env
+bot-server/vercel.env
+.env.local
