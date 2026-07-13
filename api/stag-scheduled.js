@@ -68,7 +68,9 @@ export default async function handler(req, res) {
   await s`CREATE TABLE IF NOT EXISTS stag_sched (job TEXT PRIMARY KEY, last_at TIMESTAMPTZ, cache TEXT)`;
 
   const st = await stagStats();
-  const priceLine = st && st.price ? `\n\n💚 $STAG: *$${st.price < 0.01 ? st.price.toPrecision(3) : fmt(st.price)}*${st.mc ? `  ·  MC *$${fmt(st.mc)}*` : ""}` : "";
+  const priceStr = st && st.price ? `$${st.price < 0.01 ? st.price.toPrecision(3) : fmt(st.price)}${st.mc ? `  ·  MC $${fmt(st.mc)}` : ""}` : "";
+  const priceLine = priceStr ? `\n\n💚 $STAG: *${priceStr}*` : "";       // Markdown (video caption)
+  const priceLineH = priceStr ? `\n\n💚 $STAG: <b>${priceStr}</b>` : ""; // HTML (whale post)
 
   const jobs = [
     {
@@ -78,27 +80,26 @@ export default async function handler(req, res) {
     },
     {
       job: "whale_info", everyMs: WHALE_EVERY_MS,
+      // Short hook always visible; full perks + steps live in a tap-to-open expandable
+      // blockquote (Bot API 7.0+, HTML mode) so the post reads ~1/3 the size collapsed.
       send: () => tgJSON("sendMessage", {
-        chat_id: WHALE_INFO_CHAT, parse_mode: "Markdown", disable_web_page_preview: true,
+        chat_id: WHALE_INFO_CHAT, parse_mode: "HTML", disable_web_page_preview: true,
         text:
-          `🐋💚 *$STAG WHALE CLUB*\n\n` +
-          `🚨 *Requirements: 10,000,000 $STAG (1% of Supply)* 🚨\n\n` +
-          `*Benefits of joining the $STAG Whale Group:*\n` +
-          `🔹 *Shape the Future:* Help guide the trajectory of the $STAG ecosystem.\n` +
-          `🔹 *Elite Network:* Exclusive access to like-minded, high-net-worth investors.\n` +
-          `🔹 *Early Alpha:* First dibs on upcoming projects and market insights.\n` +
-          `🔹 *RWA Opportunities:* Access exclusive Real-World Asset (RWA) investments.\n` +
-          `🔹 *First Alerts:* Be first to know about new $STAG initiatives and developments.\n` +
-          `🔹 *Priority Access:* Tap into all RWA/UTILITY benefits before they hit the public.\n\n` +
-          `*🐋 Whale Club Verification 🐋*\n` +
-          `Prove you hold 10M+ $STAG. No wallet connect, no private keys, ever.\n\n` +
-          `1️⃣ DM me \`/whale\` to get your unique verification amount.\n` +
-          `2️⃣ From your whale wallet, send that exact tiny ETH amount to the address I give you _(that odd amount is your one-time secret - it proves the wallet is yours)_.\n` +
-          `3️⃣ Reply \`/whale <your-tx-hash>\` and my automated system checks your bag.\n` +
-          `4️⃣ Qualify and you instantly receive your exclusive one-time Whale Club invite.\n\n` +
-          `💚 *Bag split across wallets?* Repeat for each - balances add up.\n` +
-          `🔒 No Wallet Connect required. Your keys stay safe and your wallets are only checked, never stored.\n\n` +
-          `_Not quite there yet? No worries - keep accumulating, build your bag, and try again when you're ready!_ 🦌🚀${priceLine}`,
+          `🐋💚 <b>$STAG WHALE CLUB</b>\n` +
+          `🚨 Hold <b>10,000,000 $STAG (1% of supply)</b> to get in the room.\n` +
+          `DM me <code>/whale</code> to verify + join. 🦌🏹${priceLineH}\n` +
+          `<blockquote expandable><b>Perks</b>\n` +
+          `🔹 Shape the $STAG ecosystem\n` +
+          `🔹 Elite whale-only network\n` +
+          `🔹 Early alpha + first alerts\n` +
+          `🔹 Exclusive RWA / utility access before the public\n\n` +
+          `<b>How to verify</b> (no wallet connect, ever)\n` +
+          `1️⃣ DM <code>/whale</code> for your unique amount\n` +
+          `2️⃣ Send that exact tiny ETH amount to the address I give you\n` +
+          `3️⃣ Reply <code>/whale &lt;tx-hash&gt;</code>\n` +
+          `4️⃣ Qualify → instant one-time invite\n\n` +
+          `💚 Bag split across wallets? Repeat - balances add up.\n` +
+          `🔒 Keys stay safe. Wallets are only checked, never stored.</blockquote>`,
       }).then((j) => j.ok),
     },
   ];
