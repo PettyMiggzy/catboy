@@ -50,17 +50,33 @@ const _big = (h) => BigInt(h || "0x0");
 const _balData = (a) => "0x70a08231" + "0".repeat(24) + a.toLowerCase().replace(/^0x/, "");
 const _whole = (raw, dec = STAG_DECIMALS) => Number(raw / 10n ** BigInt(Math.max(0, dec - 6))) / 1e6;
 
-// Total $STAG staked, NFTs staked, ETH reward pool + emission. (Staked = held by the pool.)
+// keccak256("StakedNFT(address,uint256)") — the staking contract records NFT stakes in
+// userInfo (it does NOT escrow them via the NFT's balanceOf), so counting
+// HoodedNFT.balanceOf(staking) always reads 0. Count from the contract's own records instead.
+const STAKED_NFT_TOPIC = "0xa3a2f4924c244b65a4ecb0f6c615dc546a3510483f569d676ae4485f759d98d7";
+async function stakedNftTotal() {
+  try {
+    const tip = Number(_big(await rpc("eth_blockNumber", [])));
+    const from = "0x" + Math.max(0, tip - 1500000).toString(16);
+    const logs = await rpc("eth_getLogs", [{ address: STAG_STAKING, topics: [STAKED_NFT_TOPIC], fromBlock: from, toBlock: "latest" }]);
+    const stakers = [...new Set((logs || []).map((l) => "0x" + l.topics[1].slice(26).toLowerCase()))].slice(0, 100);
+    if (!stakers.length) return 0;
+    const infos = await Promise.all(stakers.map((w) => _call(STAG_STAKING, "0x1959a002" + "0".repeat(24) + w.replace(/^0x/, "")).catch(() => "0x")));
+    return infos.reduce((n, hex) => n + _decodeUserInfo(hex).nfts.length, 0); // current staked-NFT count per userInfo
+  } catch { return 0; }
+}
+
+// Total $STAG staked, NFTs staked, ETH reward pool + emission. (Staked = recorded by the pool.)
 export async function stakingStats() {
-  const [stag, nfts, poolWei, rate, finish] = await Promise.all([
+  const [stag, poolWei, rate, finish, nftCount] = await Promise.all([
     _call(STAG_TOKEN, _balData(STAG_STAKING)),
-    _call(HOODED_NFT, _balData(STAG_STAKING)),
     rpc("eth_getBalance", [STAG_STAKING, "latest"]),
     _call(STAG_STAKING, "0x7b0a47ee"), // rewardRate()
     _call(STAG_STAKING, "0xebe2b12b"), // periodFinish()
+    stakedNftTotal(),
   ]);
   return {
-    stagStaked: _whole(_big(stag)), nftsStaked: Number(_big(nfts)),
+    stagStaked: _whole(_big(stag)), nftsStaked: nftCount,
     poolEth: Number(_big(poolWei)) / 1e18, rewardEthPerSec: Number(_big(rate)) / 1e18,
     periodFinish: Number(_big(finish)),
   };
