@@ -1054,14 +1054,17 @@ export default async function handler(req, res) {
         const prog = await s`SELECT total FROM stag_whale_prog WHERE tid=${tid}`;
         const sofar = prog.length ? Number(prog[0].total) : 0;
         const eth = (Number(wei) / 1e18).toFixed(9);
-        await say(chatId, replyTo,
+        const cap =
           `🐋 *Join the $STAG Whale Room* - hold *${fmt(WHALE_MIN)}+ $STAG*, no wallet connect.\n\n` +
           `1️⃣ From your whale wallet, send *exactly* \`${eth}\` ETH to:\n\`${VERIFY_WALLET}\`\n` +
           "   _(that odd amount is your one-time secret - proves the wallet is yours)_\n" +
           "2️⃣ Then run \`/whale <your-tx-hash>\`\n\n" +
           (sofar > 0 ? `Tally so far: *${fmt(sofar)} / ${fmt(WHALE_MIN)} $STAG*.\n` : "") +
           "💚 *Bag split across wallets?* Repeat this for each - balances add up.\n" +
-          "🔒 Your wallets are only *checked*, never stored.");
+          "🔒 Your wallets are only *checked*, never stored.";
+        // Post the whale art with the instructions as the caption (fallback to text).
+        const r = await sendPhotoKeyed(chatId, "whale", () => readFileSync(`${process.cwd()}/assets/trivia/whale.jpg`), cap, replyTo);
+        if (!r || r.ok === false) await say(chatId, replyTo, cap);
         return res.status(200).json({ ok: true });
       }
       if (!/^0x[0-9a-f]{64}$/.test(txh)) { await say(chatId, replyTo, "Usage: `/whale` first, then `/whale 0x<txhash>`."); return res.status(200).json({ ok: true }); }
