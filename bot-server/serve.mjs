@@ -7,7 +7,7 @@ import { readFile, stat } from "node:fs/promises";
 import { join, normalize, extname, resolve } from "node:path";
 
 const ROOT = resolve(process.cwd(), "games");
-const PORT = parseInt(process.env.PORT || "8090", 10);
+const PORT = parseInt(process.env.PORT || process.env.HUNT_PORT || "8090", 10);
 const TYPES = {
   ".html":"text/html; charset=utf-8", ".js":"text/javascript; charset=utf-8",
   ".css":"text/css; charset=utf-8", ".png":"image/png", ".jpg":"image/jpeg",
