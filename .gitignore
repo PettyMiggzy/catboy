@@ -6,3 +6,6 @@ node_modules/
 *.local
 .DS_Store
 mint-wallet.json
+
+# self-hosted bot secrets
+bot-server/.env
