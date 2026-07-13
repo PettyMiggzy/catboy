@@ -276,7 +276,7 @@ async function ensure(s) {
   // Whale gate: pending micro-deposit amount, running multi-wallet tally (wallet HASHES only,
   // never raw addresses), and used-tx dedup. Progress rows are deleted once the user is let in.
   await s`CREATE TABLE IF NOT EXISTS stag_whale_req (tid TEXT PRIMARY KEY, wei TEXT, created_at TIMESTAMPTZ DEFAULT now())`;
-  await s`CREATE TABLE IF NOT EXISTS stag_whale_prog (tid TEXT PRIMARY KEY, total NUMERIC NOT NULL DEFAULT 0, wallets TEXT[] NOT NULL DEFAULT '{}', updated_at TIMESTAMPTZ DEFAULT now())`;
+  await s`CREATE TABLE IF NOT EXISTS stag_whale_prog (tid TEXT PRIMARY KEY, total NUMERIC NOT NULL DEFAULT 0, wallets JSONB NOT NULL DEFAULT '[]', updated_at TIMESTAMPTZ DEFAULT now())`;
   await s`CREATE TABLE IF NOT EXISTS stag_whale_used (txhash TEXT PRIMARY KEY, tid TEXT, at TIMESTAMPTZ DEFAULT now())`;
   await s`CREATE TABLE IF NOT EXISTS stag_cool (tid TEXT PRIMARY KEY, last_at TIMESTAMPTZ DEFAULT now())`;
   await s`CREATE TABLE IF NOT EXISTS stag_seen (uid BIGINT PRIMARY KEY, at TIMESTAMPTZ DEFAULT now())`;
@@ -1040,10 +1040,12 @@ export default async function handler(req, res) {
       const txh = (arg.trim().split(/\s+/)[0] || "").toLowerCase();
       if (!txh) {
         // Step 1: unique odd amount, unique among active whale requests (so nobody can hijack yours).
+        // Base 3e13 keeps whale amounts in a DISJOINT range from /verify (base 1e13, tops out < 2e13),
+        // so a whale amount can never collide with a pending verify amount and steal its deposit tx.
         let wei = null;
         for (let tries = 0; tries < 20; tries++) {
           const rnd = 100000 + Math.floor(Math.random() * 900000);
-          const cand = (10n ** 13n + BigInt(rnd) * 10n ** 7n).toString();
+          const cand = (3n * 10n ** 13n + BigInt(rnd) * 10n ** 7n).toString();
           const clash = await s`SELECT 1 FROM stag_whale_req WHERE wei=${cand} AND tid<>${tid} AND created_at > now() - interval '7 days'`;
           if (!clash.length) { wei = cand; break; }
         }
@@ -1077,22 +1079,41 @@ export default async function handler(req, res) {
       if (!usedIns.length) { await say(chatId, replyTo, "That tx was already counted."); return res.status(200).json({ ok: true }); }
       const held = await stagBalanceWhole(chk.from);
       const wh = whHash(chk.from); // hash, so the raw wallet is never stored
-      const progRow = await s`SELECT total, wallets FROM stag_whale_prog WHERE tid=${tid}`;
-      let total = progRow.length ? Number(progRow[0].total) : 0;
-      let wallets = progRow.length ? progRow[0].wallets : [];
-      if (wallets.includes(wh)) {
+      // Already counted this wallet? (UX pre-check; the atomic upsert below is the real guard.)
+      const dup = await s`SELECT total FROM stag_whale_prog WHERE tid=${tid} AND wallets @> to_jsonb(${wh}::text)`;
+      if (dup.length) {
         await s`DELETE FROM stag_whale_req WHERE tid=${tid}`;
-        await say(chatId, replyTo, `🐋 That wallet's already in your tally (*${fmt(total)} / ${fmt(WHALE_MIN)} $STAG*). Add a *different* wallet with \`/whale\`.`);
+        await say(chatId, replyTo, `🐋 That wallet's already in your tally (*${fmt(Number(dup[0].total))} / ${fmt(WHALE_MIN)} $STAG*). Add a *different* wallet with \`/whale\`.`);
         return res.status(200).json({ ok: true });
       }
-      total += held; wallets = [...wallets, wh];
-      await s`INSERT INTO stag_whale_prog (tid, total, wallets, updated_at) VALUES (${tid}, ${total}, ${wallets}, now()) ON CONFLICT (tid) DO UPDATE SET total=${total}, wallets=${wallets}, updated_at=now()`;
+      // Atomic add: Postgres serializes concurrent upserts on the same tid via the ON CONFLICT row
+      // lock, and the CASE dedup makes a same-wallet double-submit a no-op - so a wallet can never be
+      // counted twice, even under two simultaneous /whale <tx> requests for the same wallet.
+      const up = await s`
+        INSERT INTO stag_whale_prog (tid, total, wallets, updated_at)
+        VALUES (${tid}, ${held}, to_jsonb(ARRAY[${wh}]::text[]), now())
+        ON CONFLICT (tid) DO UPDATE SET
+          total   = CASE WHEN stag_whale_prog.wallets @> to_jsonb(${wh}::text) THEN stag_whale_prog.total ELSE stag_whale_prog.total + ${held} END,
+          wallets = CASE WHEN stag_whale_prog.wallets @> to_jsonb(${wh}::text) THEN stag_whale_prog.wallets ELSE stag_whale_prog.wallets || to_jsonb(${wh}::text) END,
+          updated_at = now()
+        RETURNING total`;
+      const total = Number(up[0].total);
       await s`DELETE FROM stag_whale_req WHERE tid=${tid}`;
       if (total < WHALE_MIN) {
         await say(chatId, replyTo, `✅ Wallet counted: *+${fmt(held)} $STAG*.\nTally: *${fmt(total)} / ${fmt(WHALE_MIN)}*.\nNot a whale *yet* - add another wallet with \`/whale\`. 🐋`);
         return res.status(200).json({ ok: true });
       }
-      // Whale! Single-use invite link that only works for them, then wipe their tally.
+      // Whale! But if they're ALREADY in the room, don't mint another link (blocks invite farming -
+      // otherwise a whale could re-verify the same bag over and over to hand out links to non-whales).
+      try {
+        const gm = await tg("getChatMember", { chat_id: WHALE_CHAT, user_id: tid });
+        if (gm && gm.ok && ["member", "administrator", "creator"].includes(gm.result.status)) {
+          await s`DELETE FROM stag_whale_prog WHERE tid=${tid}`;
+          await say(chatId, replyTo, "🐋 You're already in the Whale Room. Antlers up. 🦌");
+          return res.status(200).json({ ok: true });
+        }
+      } catch {}
+      // Single-use invite link that only works for them, then wipe their tally.
       let link = null;
       try { const r = await tg("createChatInviteLink", { chat_id: WHALE_CHAT, member_limit: 1, name: `whale-${tid}` }); if (r && r.ok) link = r.result.invite_link; } catch {}
       await s`DELETE FROM stag_whale_prog WHERE tid=${tid}`;
