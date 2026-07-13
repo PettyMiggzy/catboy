@@ -181,6 +181,25 @@ async function sendVideo(chatId, mp4Buf, caption, replyTo) {
   try { const r = await fetch(TG("sendVideo"), { method: "POST", body: fd }); return await r.json().catch(() => ({})); }
   catch { return {}; }
 }
+// Static cards (trivia/hype/menu) never change, so the first upload's Telegram file_id is
+// reusable forever. Cache key->file_id and send the tiny id string instead of re-uploading
+// the JPEG every time - the multipart upload was the main source of trivia lag.
+const _fileIds = new Map();
+async function sendPhotoKeyed(chatId, key, bufFn, caption, replyTo, parseMode = "Markdown", mime = "image/jpeg", fname = "stag.jpg") {
+  const cached = _fileIds.get(key);
+  if (cached) {
+    const r = await tg("sendPhoto", { chat_id: chatId, photo: cached, caption, parse_mode: parseMode, reply_to_message_id: replyTo, allow_sending_without_reply: true });
+    if (r && r.ok) return r;
+    _fileIds.delete(key); // id went stale - fall through and re-upload
+  }
+  let buf = null;
+  try { buf = bufFn(); } catch {}
+  if (!buf) return null;
+  const r = await sendPhoto(chatId, buf, caption, replyTo, parseMode, mime, fname);
+  try { const ph = r && r.result && r.result.photo; if (ph && ph.length) _fileIds.set(key, ph[ph.length - 1].file_id); } catch {}
+  return r;
+}
+
 // Decoded once - the embedded $STAG character, reused as the welcome image.
 let _welcomeBuf = null;
 const welcomeImg = () => (_welcomeBuf ||= Buffer.from(STAG_WELCOME_B64, "base64"));
@@ -348,29 +367,22 @@ function speedTier(ms) {
   return [4, 1, "Grazed it"];
 }
 async function sendHitCard(chatId, replyTo, zone, caption) {
-  let buf = null;
-  try { buf = readFileSync(`${process.cwd()}/assets/trivia/hit${zone}.jpg`); } catch {}
-  if (buf) return sendPhoto(chatId, buf, caption, replyTo, "Markdown", "image/jpeg", "hit.jpg");
-  await say(chatId, replyTo, caption);
+  const r = await sendPhotoKeyed(chatId, `hit${zone}`, () => readFileSync(`${process.cwd()}/assets/trivia/hit${zone}.jpg`), caption, replyTo);
+  if (!r || r.ok === false) await say(chatId, replyTo, caption);
 }
 async function sendMissCard(chatId, replyTo, caption) {
-  let buf = null;
-  try { buf = readFileSync(`${process.cwd()}/assets/trivia/miss.jpg`); } catch {}
-  if (buf) return sendPhoto(chatId, buf, caption, replyTo, "Markdown", "image/jpeg", "miss.jpg");
-  await say(chatId, replyTo, caption);
+  const r = await sendPhotoKeyed(chatId, "miss", () => readFileSync(`${process.cwd()}/assets/trivia/miss.jpg`), caption, replyTo);
+  if (!r || r.ok === false) await say(chatId, replyTo, caption);
 }
 // Hype commands: send the on-brand $STAG art card with the text as caption; fall back to text.
 async function hypeSend(chatId, replyTo, name, text) {
-  let buf = null;
-  try { buf = readFileSync(`${process.cwd()}/assets/trivia/hype/${name}.jpg`); } catch {}
-  if (buf) { const r = await sendPhoto(chatId, buf, text, replyTo, "Markdown", "image/jpeg", `${name}.jpg`); if (r && r.ok !== false) return; }
-  await say(chatId, replyTo, text);
+  const r = await sendPhotoKeyed(chatId, `hype_${name}`, () => readFileSync(`${process.cwd()}/assets/trivia/hype/${name}.jpg`), text, replyTo);
+  if (!r || r.ok === false) await say(chatId, replyTo, text);
 }
 async function sendTriviaCard(chatId, replyTo, idx, q) {
   const caption = `🦌 *${q.cat === "STAG" ? "$STAG" : "Crypto"} Trivia* — reply *A / B / C / D*. Answer fast: quicker = closer to bullseye = more points! 🏹`;
-  let buf = null;
-  try { buf = readFileSync(`${process.cwd()}/assets/trivia/t${String(idx + 1).padStart(2, "0")}.jpg`); } catch {}
-  if (buf) return sendPhoto(chatId, buf, caption, replyTo, "Markdown", "image/jpeg", "trivia.jpg");
+  const r = await sendPhotoKeyed(chatId, `t${String(idx + 1).padStart(2, "0")}`, () => readFileSync(`${process.cwd()}/assets/trivia/t${String(idx + 1).padStart(2, "0")}.jpg`), caption, replyTo);
+  if (r && r.ok !== false) return;
   // text fallback if the card file isn't bundled
   await say(chatId, replyTo, `❓ *${q.q}*\n\nA) ${q.A}\nB) ${q.B}\nC) ${q.C}\nD) ${q.D}\n\n_Reply A/B/C/D — first right wins!_`);
 }
@@ -528,7 +540,7 @@ export default async function handler(req, res) {
         "🔓 *No wallet connection - ever.* Just send $STAG, no connect, no signing.\n" +
         "_Use me in the group or DM me privately. Antlers up. 💚🦌_";
       // Standalone (no reply) so it's a clean card the community can pin.
-      const r = await sendPhoto(chatId, welcomeImg(), menu, null, "Markdown");
+      const r = await sendPhotoKeyed(chatId, "welcome", () => welcomeImg(), menu, null, "Markdown", "image/png", "stag.png");
       if (!r || r.ok === false) await say(chatId, null, menu); // text fallback
       return res.status(200).json({ ok: true });
     }
