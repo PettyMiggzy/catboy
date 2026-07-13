@@ -34,6 +34,7 @@
 
 import { neon } from "@neondatabase/serverless";
 import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { STAG_REF_B64 } from "./_stagref.js";
 import { STAG_WELCOME_B64 } from "./_stagwelcome.js";
 import { TRIVIA } from "./_trivia.js";
@@ -44,6 +45,11 @@ const TOKEN = (process.env.STAG_BOT_TOKEN || "").trim();
 const HOOK_SECRET = (process.env.STAG_BOT_SECRET || "").trim();
 const TREASURY = (process.env.STAG_TREASURY || "").trim();
 const VERIFY_WALLET = (process.env.STAG_VERIFY_WALLET || TREASURY).trim();
+// Whale-gated group: prove you hold WHALE_MIN+ $STAG (across one or more wallets) via the
+// same no-connect micro-deposit, then get a single-use invite link to the whale chat.
+const WHALE_CHAT = (process.env.STAG_WHALE_CHAT || "-1004422525466").trim();
+const WHALE_MIN = parseFloat(process.env.STAG_WHALE_MIN || "10000000"); // 10M $STAG
+const whHash = (w) => createHash("sha256").update(w.toLowerCase()).digest("hex"); // dedup wallets WITHOUT storing them
 
 // Fast edit model (~14s) - pro-edit (~39s) blows Vercel's 60s function limit and
 // never delivers the image. nano-banana-2 still holds identity + the style lock.
@@ -267,6 +273,11 @@ async function ensure(s) {
   await s`CREATE UNIQUE INDEX IF NOT EXISTS stag_verified_wallet ON stag_verified(wallet)`; // one wallet -> one account (atomic)
   await s`CREATE TABLE IF NOT EXISTS stag_verify_req (tid TEXT PRIMARY KEY, wei TEXT, created_at TIMESTAMPTZ DEFAULT now())`;
   await s`CREATE TABLE IF NOT EXISTS stag_verify_used (txhash TEXT PRIMARY KEY, tid TEXT, at TIMESTAMPTZ DEFAULT now())`;
+  // Whale gate: pending micro-deposit amount, running multi-wallet tally (wallet HASHES only,
+  // never raw addresses), and used-tx dedup. Progress rows are deleted once the user is let in.
+  await s`CREATE TABLE IF NOT EXISTS stag_whale_req (tid TEXT PRIMARY KEY, wei TEXT, created_at TIMESTAMPTZ DEFAULT now())`;
+  await s`CREATE TABLE IF NOT EXISTS stag_whale_prog (tid TEXT PRIMARY KEY, total NUMERIC NOT NULL DEFAULT 0, wallets TEXT[] NOT NULL DEFAULT '{}', updated_at TIMESTAMPTZ DEFAULT now())`;
+  await s`CREATE TABLE IF NOT EXISTS stag_whale_used (txhash TEXT PRIMARY KEY, tid TEXT, at TIMESTAMPTZ DEFAULT now())`;
   await s`CREATE TABLE IF NOT EXISTS stag_cool (tid TEXT PRIMARY KEY, last_at TIMESTAMPTZ DEFAULT now())`;
   await s`CREATE TABLE IF NOT EXISTS stag_seen (uid BIGINT PRIMARY KEY, at TIMESTAMPTZ DEFAULT now())`;
   // Async video renders: queued here, delivered/refunded by the /api/stag-video-cron poller.
@@ -535,6 +546,7 @@ export default async function handler(req, res) {
         "💳 `/buy` - pay in $STAG  ·  `/credits` - your balance\n" +
         "🔐 `/verify` - hold *1M+ $STAG* → *50% OFF*\n\n" +
         "🔒 *NFT & Staking:* `/mints` `/staked` `/pool` `/mystake 0x…` `/topstakers` - live\n" +
+        "🐋 `/whale` - join the *Whale Room* (hold 10M+ $STAG, no connect)\n" +
         "🔥 *Hype:* `/fomo` `/pump` `/wagmi` `/gm` `/moon` `/hodl` `/green` `/fud`\n\n" +
         "🆓 *Free tools:* `/price` `/burn` `/holders` `/ca` `/links` - full list: `/tools`\n\n" +
         "🔓 *No wallet connection - ever.* Just send $STAG, no connect, no signing.\n" +
@@ -1018,6 +1030,75 @@ export default async function handler(req, res) {
       }
       await s`DELETE FROM stag_verify_req WHERE tid=${tid}`;
       await say(chatId, replyTo, `✅ *Verified holder!* ${fmt(held)} $STAG. You now get *50% off* all credits. 🏹💚\n/buy to stock up cheap.`);
+      return res.status(200).json({ ok: true });
+    }
+
+    // ---------- whale gate (prove WHALE_MIN+ $STAG across wallets -> single-use invite) ----------
+    if (cmd === "/whale") {
+      if (!isPrivate) { await say(chatId, replyTo, `🐋 DM me to join the whale room privately → @${BOT_USERNAME}`); return res.status(200).json({ ok: true }); }
+      if (!VERIFY_WALLET || !WHALE_CHAT) { await say(chatId, replyTo, "🛠️ The whale room opens shortly."); return res.status(200).json({ ok: true }); }
+      const txh = (arg.trim().split(/\s+/)[0] || "").toLowerCase();
+      if (!txh) {
+        // Step 1: unique odd amount, unique among active whale requests (so nobody can hijack yours).
+        let wei = null;
+        for (let tries = 0; tries < 20; tries++) {
+          const rnd = 100000 + Math.floor(Math.random() * 900000);
+          const cand = (10n ** 13n + BigInt(rnd) * 10n ** 7n).toString();
+          const clash = await s`SELECT 1 FROM stag_whale_req WHERE wei=${cand} AND tid<>${tid} AND created_at > now() - interval '7 days'`;
+          if (!clash.length) { wei = cand; break; }
+        }
+        if (wei == null) { await say(chatId, replyTo, "🛠️ Busy right now - try `/whale` again in a minute."); return res.status(200).json({ ok: true }); }
+        await s`INSERT INTO stag_whale_req (tid, wei, created_at) VALUES (${tid}, ${wei}, now()) ON CONFLICT (tid) DO UPDATE SET wei=${wei}, created_at=now()`;
+        const prog = await s`SELECT total FROM stag_whale_prog WHERE tid=${tid}`;
+        const sofar = prog.length ? Number(prog[0].total) : 0;
+        const eth = (Number(wei) / 1e18).toFixed(9);
+        await say(chatId, replyTo,
+          `🐋 *Join the $STAG Whale Room* - hold *${fmt(WHALE_MIN)}+ $STAG*, no wallet connect.\n\n` +
+          `1️⃣ From your whale wallet, send *exactly* \`${eth}\` ETH to:\n\`${VERIFY_WALLET}\`\n` +
+          "   _(that odd amount is your one-time secret - proves the wallet is yours)_\n" +
+          "2️⃣ Then run \`/whale <your-tx-hash>\`\n\n" +
+          (sofar > 0 ? `Tally so far: *${fmt(sofar)} / ${fmt(WHALE_MIN)} $STAG*.\n` : "") +
+          "💚 *Bag split across wallets?* Repeat this for each - balances add up.\n" +
+          "🔒 Your wallets are only *checked*, never stored.");
+        return res.status(200).json({ ok: true });
+      }
+      if (!/^0x[0-9a-f]{64}$/.test(txh)) { await say(chatId, replyTo, "Usage: `/whale` first, then `/whale 0x<txhash>`."); return res.status(200).json({ ok: true }); }
+      if ((await s`SELECT 1 FROM stag_whale_used WHERE txhash=${txh}`).length) { await say(chatId, replyTo, "That tx was already counted. Run `/whale` for a fresh amount."); return res.status(200).json({ ok: true }); }
+      const reqRow = await s`SELECT wei, created_at FROM stag_whale_req WHERE tid=${tid}`;
+      if (!reqRow.length) { await say(chatId, replyTo, "Run `/whale` first to get your unique amount."); return res.status(200).json({ ok: true }); }
+      if (Date.now() - new Date(reqRow[0].created_at).getTime() > REQ_TTL) { await say(chatId, replyTo, "That request expired - run `/whale` again."); return res.status(200).json({ ok: true }); }
+      let chk;
+      try { chk = await verifyMicroDeposit(txh, VERIFY_WALLET, reqRow[0].wei); }
+      catch { await say(chatId, replyTo, "⚠️ Network hiccup reading the chain - paste the hash again in a moment."); return res.status(200).json({ ok: true }); }
+      if (!chk.ok) { await say(chatId, replyTo, `⚠️ Couldn't match that (${chk.err}). Send the *exact* amount, then paste the confirmed tx hash.`); return res.status(200).json({ ok: true }); }
+      if (!chk.blockTime) { await say(chatId, replyTo, "⚠️ Couldn't confirm that deposit's block yet - wait a few seconds and paste the hash again."); return res.status(200).json({ ok: true }); }
+      if (chk.blockTime * 1000 < new Date(reqRow[0].created_at).getTime() - 120000) { await say(chatId, replyTo, "⚠️ That deposit predates your request. Run `/whale` for a fresh amount, send it, then paste the hash."); return res.status(200).json({ ok: true }); }
+      const usedIns = await s`INSERT INTO stag_whale_used (txhash, tid) VALUES (${txh}, ${tid}) ON CONFLICT (txhash) DO NOTHING RETURNING txhash`;
+      if (!usedIns.length) { await say(chatId, replyTo, "That tx was already counted."); return res.status(200).json({ ok: true }); }
+      const held = await stagBalanceWhole(chk.from);
+      const wh = whHash(chk.from); // hash, so the raw wallet is never stored
+      const progRow = await s`SELECT total, wallets FROM stag_whale_prog WHERE tid=${tid}`;
+      let total = progRow.length ? Number(progRow[0].total) : 0;
+      let wallets = progRow.length ? progRow[0].wallets : [];
+      if (wallets.includes(wh)) {
+        await s`DELETE FROM stag_whale_req WHERE tid=${tid}`;
+        await say(chatId, replyTo, `🐋 That wallet's already in your tally (*${fmt(total)} / ${fmt(WHALE_MIN)} $STAG*). Add a *different* wallet with \`/whale\`.`);
+        return res.status(200).json({ ok: true });
+      }
+      total += held; wallets = [...wallets, wh];
+      await s`INSERT INTO stag_whale_prog (tid, total, wallets, updated_at) VALUES (${tid}, ${total}, ${wallets}, now()) ON CONFLICT (tid) DO UPDATE SET total=${total}, wallets=${wallets}, updated_at=now()`;
+      await s`DELETE FROM stag_whale_req WHERE tid=${tid}`;
+      if (total < WHALE_MIN) {
+        await say(chatId, replyTo, `✅ Wallet counted: *+${fmt(held)} $STAG*.\nTally: *${fmt(total)} / ${fmt(WHALE_MIN)}*.\nNot a whale *yet* - add another wallet with \`/whale\`. 🐋`);
+        return res.status(200).json({ ok: true });
+      }
+      // Whale! Single-use invite link that only works for them, then wipe their tally.
+      let link = null;
+      try { const r = await tg("createChatInviteLink", { chat_id: WHALE_CHAT, member_limit: 1, name: `whale-${tid}` }); if (r && r.ok) link = r.result.invite_link; } catch {}
+      await s`DELETE FROM stag_whale_prog WHERE tid=${tid}`;
+      if (!link) { await say(chatId, replyTo, "🐋 You qualify! But I couldn't mint your invite - make sure I'm an admin in the whale room with invite permission, then run `/whale` again."); return res.status(200).json({ ok: true }); }
+      await say(chatId, replyTo, `🐋💚 *WELCOME, WHALE.* Verified *${fmt(total)} $STAG*.\nYour *one-time* invite below works once, only for you. Antlers up. 🦌🏹`);
+      await tg("sendMessage", { chat_id: chatId, text: link });
       return res.status(200).json({ ok: true });
     }
 
