@@ -47,7 +47,7 @@ const TREASURY = (process.env.STAG_TREASURY || "").trim();
 const VERIFY_WALLET = (process.env.STAG_VERIFY_WALLET || TREASURY).trim();
 // Whale-gated group: prove you hold WHALE_MIN+ $STAG (across one or more wallets) via the
 // same no-connect micro-deposit, then get a single-use invite link to the whale chat.
-const WHALE_CHAT = (process.env.STAG_WHALE_CHAT || "-1004422525466").trim();
+const WHALE_CHAT = (process.env.STAG_WHALE_CHAT || "-1004295600427").trim();
 const WHALE_MIN = parseFloat(process.env.STAG_WHALE_MIN || "10000000"); // 10M $STAG
 const whHash = (w) => createHash("sha256").update(w.toLowerCase()).digest("hex"); // dedup wallets WITHOUT storing them
 
