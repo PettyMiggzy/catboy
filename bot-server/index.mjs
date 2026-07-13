@@ -45,6 +45,7 @@ async function maybeStartCrons() {
   };
   await tick("../api/stag-onchain.js", "onchain");
   await tick("../api/stag-video-cron.js", "video");
+  await tick("../api/stag-scheduled.js", "scheduled"); // promo video 4h + whale-club info 3h
 }
 
 async function main() {
