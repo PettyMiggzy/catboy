@@ -38,7 +38,7 @@ import { createHash } from "node:crypto";
 import { STAG_REF_B64 } from "./_stagref.js";
 import { STAG_WELCOME_B64 } from "./_stagwelcome.js";
 import { TRIVIA } from "./_trivia.js";
-import { bjCommand, bjCallback } from "./_blackjack.js";
+import { bjCommand, bjCallback, bjLeaderboard } from "./_blackjack.js";
 import { verifyStagPayment, verifyMicroDeposit, stagBalanceWhole, stagTotalSupplyWhole, rpc, STAG_TOKEN, DEAD, stakingStats, nftMintStats, walletStake, topStakers } from "./_rhchain.js";
 
 const CONN = (process.env.DATABASE_URL || process.env.POSTGRES_URL || "").trim();
@@ -198,7 +198,9 @@ async function bjEditPhoto(chatId, msgId, img, caption, keyboard) {
   fd.append("photo", new Blob([img.buf], { type: img.mime }), "bj." + img.ext);
   try { const r = await fetch(TG("editMessageMedia"), { method: "POST", body: fd }); return await r.json().catch(() => ({})); } catch { return {}; }
 }
-const bjCtx = { tg, sendCards: bjSendCards, editPhoto: bjEditPhoto };
+// Blackjack is played in DMs; winners + the leaderboard get announced in the main group.
+const BJ_ANNOUNCE = (process.env.STAG_ANNOUNCE_CHAT || "-1003369963744").trim();
+const bjCtx = { tg, sendCards: bjSendCards, editPhoto: bjEditPhoto, announceChat: BJ_ANNOUNCE, botUser: BOT_USERNAME };
 async function sendVideo(chatId, mp4Buf, caption, replyTo) {
   const fd = new FormData();
   fd.append("chat_id", String(chatId));
@@ -568,7 +570,7 @@ export default async function handler(req, res) {
         "🖼️ `/image <scene>` - drop the stag into *any* scene you want\n" +
         "🎥 `/vid <scene>` - a 5s animated $STAG clip\n" +
         "🏹 `/trivia` - play trivia, win $STAG credits  ·  `/triviatop`\n" +
-        "🃏 `/bj <bet>` - play *Blackjack* with your credits *(1000 FREE to start!)*\n\n" +
+        "🃏 `/bj <bet>` - play *Blackjack* in my DMs *(1000 FREE to start!)*  ·  `/bjtop` leaders\n\n" +
         "💰 *Want more?* Grab credits:\n" +
         "💳 `/buy` - pay in $STAG  ·  `/credits` - your balance\n" +
         "🔐 `/verify` - hold *1M+ $STAG* → *50% OFF*\n\n" +
@@ -584,9 +586,15 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
 
-    // ---------- BLACKJACK (bets credits; everyone gets a one-time 1000-credit grant) ----------
+    // ---------- BLACKJACK (DM-only play; wins + leaders announced in the group) ----------
     if (cmd === "/bj" || cmd === "/blackjack" || cmd === "/21") {
-      await bjCommand(s, bjCtx, { chatId, tid, replyTo, arg });
+      await bjCommand(s, bjCtx, { chatId, tid, uname, replyTo, arg, isPrivate });
+      return res.status(200).json({ ok: true });
+    }
+    if (cmd === "/bjtop" || cmd === "/bjleaders" || cmd === "/blackjacktop" || cmd === "/21top") {
+      // From the group: post the board right here. From a DM: push it to the group so leaders show publicly.
+      await bjLeaderboard(s, bjCtx, { chatId, toGroup: isPrivate });
+      if (isPrivate) await say(chatId, replyTo, "🏆 Posted the blackjack leaderboard to the group. 🦌");
       return res.status(200).json({ ok: true });
     }
 
