@@ -38,6 +38,7 @@ import { createHash } from "node:crypto";
 import { STAG_REF_B64 } from "./_stagref.js";
 import { STAG_WELCOME_B64 } from "./_stagwelcome.js";
 import { TRIVIA } from "./_trivia.js";
+import { bjCommand, bjCallback } from "./_blackjack.js";
 import { verifyStagPayment, verifyMicroDeposit, stagBalanceWhole, stagTotalSupplyWhole, rpc, STAG_TOKEN, DEAD, stakingStats, nftMintStats, walletStake, topStakers } from "./_rhchain.js";
 
 const CONN = (process.env.DATABASE_URL || process.env.POSTGRES_URL || "").trim();
@@ -440,6 +441,11 @@ export default async function handler(req, res) {
   if (req.headers["x-telegram-bot-api-secret-token"] !== HOOK_SECRET) return res.status(401).end();
 
   const update = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
+  // Inline-button taps (Blackjack Hit/Stand/Double) arrive as callback queries, not messages.
+  if (update.callback_query) {
+    try { const sc = neon(CONN); await bjCallback(sc, tg, update.callback_query); } catch (e) {}
+    return res.status(200).json({ ok: true });
+  }
   const msg = update.message || update.edited_message;
   const text = (msg && msg.text) || "";
   if (!msg || !msg.from || !msg.from.id || !msg.chat) return res.status(200).json({ ok: true });
@@ -541,7 +547,8 @@ export default async function handler(req, res) {
         "🎨 `/pfp cyber samurai` - add any theme\n" +
         "🖼️ `/image <scene>` - drop the stag into *any* scene you want\n" +
         "🎥 `/vid <scene>` - a 5s animated $STAG clip\n" +
-        "🏹 `/trivia` - play trivia, win $STAG credits  ·  `/triviatop`\n\n" +
+        "🏹 `/trivia` - play trivia, win $STAG credits  ·  `/triviatop`\n" +
+        "🃏 `/bj <bet>` - play *Blackjack* with your credits *(1000 FREE to start!)*\n\n" +
         "💰 *Want more?* Grab credits:\n" +
         "💳 `/buy` - pay in $STAG  ·  `/credits` - your balance\n" +
         "🔐 `/verify` - hold *1M+ $STAG* → *50% OFF*\n\n" +
@@ -554,6 +561,12 @@ export default async function handler(req, res) {
       // Standalone (no reply) so it's a clean card the community can pin.
       const r = await sendPhotoKeyed(chatId, "welcome", () => welcomeImg(), menu, null, "Markdown", "image/png", "stag.png");
       if (!r || r.ok === false) await say(chatId, null, menu); // text fallback
+      return res.status(200).json({ ok: true });
+    }
+
+    // ---------- BLACKJACK (bets credits; everyone gets a one-time 1000-credit grant) ----------
+    if (cmd === "/bj" || cmd === "/blackjack" || cmd === "/21") {
+      await bjCommand(s, tg, { chatId, tid, replyTo, arg });
       return res.status(200).json({ ok: true });
     }
 

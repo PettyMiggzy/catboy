@@ -52,7 +52,7 @@ async function main() {
   try { const w = await tgJSON("deleteWebhook"); console.log("webhook cleared -> polling mode", w && w.ok ? "" : JSON.stringify(w)); } catch (e) { console.error("deleteWebhook", e && e.message); }
   await maybeStartCrons();
   let offset = 0;
-  const allowed = encodeURIComponent(JSON.stringify(["message", "edited_message"]));
+  const allowed = encodeURIComponent(JSON.stringify(["message", "edited_message", "callback_query"]));
   console.log(`STAG bot online — long-polling as @${(process.env.STAG_BOT_USERNAME || "STAGZBOT").replace(/^@/, "")}. Ctrl-C to stop.`);
   for (;;) {
     try {
