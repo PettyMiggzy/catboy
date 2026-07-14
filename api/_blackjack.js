@@ -1,8 +1,11 @@
 // Blackjack for the STAG bot. Bets the shared credit balance (stag_bal). Everyone gets a
 // one-time 1000-credit grant to play. Inline Hit / Stand / Double buttons (callback queries).
 // Rules: dealer stands on all 17, blackjack pays 3:2, double on first two cards.
+// The hand renders as a real card-table IMAGE (badass Venice felt + card sprites); if the
+// renderer/assets are unavailable it falls back to text cards. ctx supplies TG send helpers.
+import { renderHand, canRenderImage } from "./_bjrender.js";
 const RANKS = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A"];
-const SUITS = ["♠", "♥", "♦", "♣"]; // spade heart diamond club
+const SUITS = ["♠", "♥", "♦", "♣"];
 const GRANT = 1000, MINBET = 10, MAXBET = 2000, DEFBET = 100;
 
 function freshDeck() {
@@ -39,17 +42,22 @@ const kb = (canDouble) => {
   if (canDouble) row.push({ text: "⏫ Double", callback_data: "bj:double" });
   return { inline_keyboard: [row] };
 };
+const grantBanner = () => `🎁 *Welcome bonus:* +${GRANT} credits to play Blackjack!\n\n`;
+// caption for image mode (numbers only - the image shows the cards)
+function caption(g, opts = {}) {
+  const hide = opts.hideDealer !== false;
+  const t = `🃏 *Blackjack*  ·  bet *${g.bet}* credits\n🎩 Dealer: *${hide ? "?" : handValue(g.dealer)}*    🦌 You: *${handValue(g.player)}*`;
+  return t + (opts.result ? `\n\n${opts.result}` : "") + (opts.balance != null ? `\n💳 Balance: *${opts.balance}*  ·  /bj to play again` : "");
+}
+// full text (fallback when image rendering is unavailable)
 function tableText(g, opts = {}) {
-  const hide = opts.hideDealer !== false; // default true (dealer hole card hidden mid-hand)
-  const pv = handValue(g.player);
+  const hide = opts.hideDealer !== false;
   const dealer = hide ? `${cardStr(g.dealer[0])} 🂠` : handStr(g.dealer);
   let t = `🃏 *Blackjack* - bet *${g.bet}* credits\n\n`;
   t += `🎩 Dealer: ${dealer}${hide ? "" : `  (*${handValue(g.dealer)}*)`}\n`;
-  t += `🦌 You: ${handStr(g.player)}  (*${pv}*)`;
-  if (opts.result) t += `\n\n${opts.result}`;
-  return t;
+  t += `🦌 You: ${handStr(g.player)}  (*${handValue(g.player)}*)`;
+  return t + (opts.result ? `\n\n${opts.result}` : "");
 }
-const grantBanner = () => `🎁 *Welcome bonus:* +${GRANT} credits to play Blackjack!\n\n`;
 
 function playDealer(g) { while (handValue(g.dealer) < 17) g.dealer.push(g.deck.pop()); }
 function outcome(g) {
@@ -76,69 +84,76 @@ function resultLine(o, bet, payout) {
     default: return "";
   }
 }
-async function finish(s, tg, g, target, banner) {
-  // dealer only draws if the player is still standing (not bust, not a natural)
+// send/edit the hand as an image (preferred) or text (fallback)
+async function showHand(ctx, g, { chatId, replyTo, edit, msg, keyboard, banner = "", hideDealer = true, result, balance }) {
+  if (canRenderImage()) {
+    const img = renderHand(g.dealer, g.player, hideDealer);
+    if (img && img.buf) {
+      const cap = banner + caption(g, { hideDealer, result, balance });
+      if (edit) return ctx.editPhoto(chatId, msg, img, cap, keyboard || { inline_keyboard: [] });
+      return ctx.sendCards(chatId, img, cap, keyboard, replyTo);
+    }
+  }
+  const text = banner + tableText(g, { hideDealer, result }) + (balance != null ? `\n\n💳 Balance: *${balance}*  ·  /bj to play again` : "");
+  if (edit) return ctx.tg("editMessageText", { chat_id: chatId, message_id: msg, parse_mode: "Markdown", text, reply_markup: keyboard || { inline_keyboard: [] } });
+  return ctx.tg("sendMessage", { chat_id: chatId, reply_to_message_id: replyTo, allow_sending_without_reply: true, parse_mode: "Markdown", text, reply_markup: keyboard });
+}
+async function finish(s, ctx, g, target, banner) {
   if (handValue(g.player) <= 21 && !isBJ(g.player)) playDealer(g);
   const o = outcome(g);
   const payout = Math.round(g.bet * o.mult);
   if (payout > 0) await addC(s, g.tid, payout);
   await s`DELETE FROM stag_bj WHERE tid=${g.tid}`;
   const bal = await balOf(s, g.tid);
-  const text = (banner || "") + tableText(g, { hideDealer: false, result: resultLine(o, g.bet, payout) }) +
-    `\n\n💳 Balance: *${bal}* credits  ·  /bj to play again`;
-  if (target.edit) await tg("editMessageText", { chat_id: target.chat, message_id: target.msg, parse_mode: "Markdown", text, reply_markup: { inline_keyboard: [] } });
-  else await tg("sendMessage", { chat_id: target.chat, reply_to_message_id: target.replyTo, allow_sending_without_reply: true, parse_mode: "Markdown", text });
+  await showHand(ctx, g, { ...target, hideDealer: false, result: resultLine(o, g.bet, payout), balance: bal, keyboard: { inline_keyboard: [] }, banner });
 }
 
 // /bj [bet]
-async function bjCommand(s, tg, { chatId, tid, replyTo, arg }) {
+async function bjCommand(s, ctx, { chatId, tid, replyTo, arg }) {
   await bjTables(s);
   const gotGrant = await grantIfNew(s, tid);
   const ex = await s`SELECT * FROM stag_bj WHERE tid=${tid}`;
   if (ex.length) {
-    const g = ex[0];
-    await tg("sendMessage", { chat_id: chatId, reply_to_message_id: replyTo, allow_sending_without_reply: true, parse_mode: "Markdown", text: tableText(g) + "\n\n_Finish this hand first (Hit / Stand above)._", reply_markup: kb(false) });
+    await showHand(ctx, ex[0], { chatId, replyTo, keyboard: kb(false), banner: "", result: "_Finish this hand first._" });
     return;
   }
   let bet = parseInt(arg, 10); if (!Number.isFinite(bet)) bet = DEFBET;
   bet = Math.max(MINBET, Math.min(MAXBET, bet));
-  const bal = await balOf(s, tid);
-  if (bal < bet) { await tg("sendMessage", { chat_id: chatId, reply_to_message_id: replyTo, allow_sending_without_reply: true, parse_mode: "Markdown", text: `💳 You have *${bal}* credits - not enough for a *${bet}* bet. Try a smaller bet or /buy more.` }); return; }
+  const bal0 = await balOf(s, tid);
+  if (bal0 < bet) { await ctx.tg("sendMessage", { chat_id: chatId, reply_to_message_id: replyTo, allow_sending_without_reply: true, parse_mode: "Markdown", text: `💳 You have *${bal0}* credits - not enough for a *${bet}* bet. Try a smaller bet or /buy more.` }); return; }
   await spend(s, tid, bet);
   const deck = freshDeck();
   const player = [deck.pop(), deck.pop()], dealer = [deck.pop(), deck.pop()];
   const g = { tid, chat_id: String(chatId), bet, deck, player, dealer };
   const banner = gotGrant ? grantBanner() : "";
-  if (isBJ(player) || isBJ(dealer)) { await finish(s, tg, g, { chat: chatId, replyTo }, banner); return; }
-  const canDouble = (bal - bet) >= bet;
-  const sent = await tg("sendMessage", { chat_id: chatId, reply_to_message_id: replyTo, allow_sending_without_reply: true, parse_mode: "Markdown", text: banner + tableText(g), reply_markup: kb(canDouble) });
+  if (isBJ(player) || isBJ(dealer)) { await finish(s, ctx, g, { chatId, replyTo }, banner); return; }
+  const sent = await showHand(ctx, g, { chatId, replyTo, keyboard: kb((bal0 - bet) >= bet), banner });
   const mid = sent && sent.result && sent.result.message_id;
   await s`INSERT INTO stag_bj (tid, chat_id, msg_id, deck, player, dealer, bet)
           VALUES (${tid}, ${String(chatId)}, ${mid || null}, ${JSON.stringify(deck)}::jsonb, ${JSON.stringify(player)}::jsonb, ${JSON.stringify(dealer)}::jsonb, ${bet})`;
 }
 
-async function bjCallback(s, tg, cbq) {
+async function bjCallback(s, ctx, cbq) {
   const data = cbq.data || ""; if (!data.startsWith("bj:")) return;
   await bjTables(s);
   const action = data.slice(3);
   const tid = String(cbq.from.id);
-  const ack = (t) => tg("answerCallbackQuery", { callback_query_id: cbq.id, text: t || "" });
-  const chat = cbq.message && cbq.message.chat && cbq.message.chat.id;
+  const ack = (t) => ctx.tg("answerCallbackQuery", { callback_query_id: cbq.id, text: t || "" });
+  const chatId = cbq.message && cbq.message.chat && cbq.message.chat.id;
   const msg = cbq.message && cbq.message.message_id;
   const ex = await s`SELECT * FROM stag_bj WHERE tid=${tid}`;
   if (!ex.length) { await ack("No active hand - tap /bj to deal."); return; }
   const g = ex[0];
-  // A player can only act on their OWN hand's message (not someone else's buttons).
   if (g.msg_id != null && String(g.msg_id) !== String(msg)) { await ack("That's not your hand - /bj to play your own."); return; }
-  const edit = { edit: true, chat, msg };
+  const target = { chatId, msg, edit: true };
   if (action === "hit") {
     g.player.push(g.deck.pop());
-    if (handValue(g.player) > 21) { await ack("Bust!"); await finish(s, tg, g, edit); return; }
+    if (handValue(g.player) > 21) { await ack("Bust!"); await finish(s, ctx, g, target); return; }
     await s`UPDATE stag_bj SET deck=${JSON.stringify(g.deck)}::jsonb, player=${JSON.stringify(g.player)}::jsonb WHERE tid=${tid}`;
-    await tg("editMessageText", { chat_id: chat, message_id: msg, parse_mode: "Markdown", text: tableText(g), reply_markup: kb(false) });
+    await showHand(ctx, g, { ...target, keyboard: kb(false) });
     await ack();
   } else if (action === "stand") {
-    await ack(); await finish(s, tg, g, edit);
+    await ack(); await finish(s, ctx, g, target);
   } else if (action === "double") {
     if (g.player.length !== 2) { await ack("Can only double on your first two cards."); return; }
     const bal = await balOf(s, tid);
@@ -146,7 +161,7 @@ async function bjCallback(s, tg, cbq) {
     await spend(s, tid, g.bet); g.bet = g.bet * 2;
     g.player.push(g.deck.pop());
     await ack("Doubled - one card, then stand.");
-    await finish(s, tg, g, edit);
+    await finish(s, ctx, g, target);
   } else { await ack(); }
 }
 

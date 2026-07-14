@@ -179,6 +179,26 @@ async function sendPhoto(chatId, pngBuf, caption, replyTo, parseMode, mime = "im
   try { const r = await fetch(TG("sendPhoto"), { method: "POST", body: fd }); return await r.json().catch(() => ({})); }
   catch { return {}; }
 }
+// Blackjack helpers: send a photo WITH an inline keyboard, and swap a photo in place (editMessageMedia).
+async function bjSendCards(chatId, img, caption, keyboard, replyTo) {
+  const fd = new FormData();
+  fd.append("chat_id", String(chatId));
+  if (caption) { fd.append("caption", caption); fd.append("parse_mode", "Markdown"); }
+  if (replyTo) { fd.append("reply_to_message_id", String(replyTo)); fd.append("allow_sending_without_reply", "true"); }
+  if (keyboard) fd.append("reply_markup", JSON.stringify(keyboard));
+  fd.append("photo", new Blob([img.buf], { type: img.mime }), "bj." + img.ext);
+  try { const r = await fetch(TG("sendPhoto"), { method: "POST", body: fd }); return await r.json().catch(() => ({})); } catch { return {}; }
+}
+async function bjEditPhoto(chatId, msgId, img, caption, keyboard) {
+  const fd = new FormData();
+  fd.append("chat_id", String(chatId));
+  fd.append("message_id", String(msgId));
+  fd.append("media", JSON.stringify({ type: "photo", media: "attach://photo", caption, parse_mode: "Markdown" }));
+  if (keyboard) fd.append("reply_markup", JSON.stringify(keyboard));
+  fd.append("photo", new Blob([img.buf], { type: img.mime }), "bj." + img.ext);
+  try { const r = await fetch(TG("editMessageMedia"), { method: "POST", body: fd }); return await r.json().catch(() => ({})); } catch { return {}; }
+}
+const bjCtx = { tg, sendCards: bjSendCards, editPhoto: bjEditPhoto };
 async function sendVideo(chatId, mp4Buf, caption, replyTo) {
   const fd = new FormData();
   fd.append("chat_id", String(chatId));
@@ -443,7 +463,7 @@ export default async function handler(req, res) {
   const update = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
   // Inline-button taps (Blackjack Hit/Stand/Double) arrive as callback queries, not messages.
   if (update.callback_query) {
-    try { const sc = neon(CONN); await bjCallback(sc, tg, update.callback_query); } catch (e) {}
+    try { const sc = neon(CONN); await bjCallback(sc, bjCtx, update.callback_query); } catch (e) {}
     return res.status(200).json({ ok: true });
   }
   const msg = update.message || update.edited_message;
@@ -566,7 +586,7 @@ export default async function handler(req, res) {
 
     // ---------- BLACKJACK (bets credits; everyone gets a one-time 1000-credit grant) ----------
     if (cmd === "/bj" || cmd === "/blackjack" || cmd === "/21") {
-      await bjCommand(s, tg, { chatId, tid, replyTo, arg });
+      await bjCommand(s, bjCtx, { chatId, tid, replyTo, arg });
       return res.status(200).json({ ok: true });
     }
 

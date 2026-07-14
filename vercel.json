@@ -11,7 +11,7 @@
     { "path": "/api/stag-bot", "schedule": "* * * * *" }
   ],
   "functions": {
-    "api/stag-bot.js": { "includeFiles": "assets/trivia/**" },
+    "api/stag-bot.js": { "includeFiles": "assets/{trivia,blackjack}/**" },
     "api/stag-scheduled.js": { "includeFiles": "assets/stag-money-printer.mp4" }
   },
   "headers": [
