@@ -1,0 +1,8 @@
+{
+ "spex":      {"name":"SPEX","crime":"FOR DEALING THE KINGS GREEN","reward":"6,000 $STAG","rarity":"MYTHIC"},
+ "oleman":    {"name":"OLE MAN","crime":"FOR STRONG-ARM ROBBERY","reward":"6,000 $STAG","rarity":"MYTHIC"},
+ "dude":      {"name":"THE DUDE","crime":"FOR ABIDING TOO HARD","reward":"6,000 $STAG","rarity":"MYTHIC"},
+ "nacho":     {"name":"NACHO","crime":"FOR INSIDER ALPHA","reward":"6,000 $STAG","rarity":"MYTHIC"},
+ "craigmack": {"name":"CRAIG MACK","crime":"FOR COUNTERFEIT GOLD","reward":"6,000 $STAG","rarity":"MYTHIC"},
+ "blackputin":{"name":"BLACK PUTIN","crime":"FOR SEIZING THE THRONE","reward":"6,000 $STAG","rarity":"MYTHIC"}
+}
