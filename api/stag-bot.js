@@ -1027,8 +1027,8 @@ export default async function handler(req, res) {
         const eth = (Number(wei) / 1e18).toFixed(9);
         await say(chatId, replyTo,
           "🔐 *Verify you hold 1M+ $STAG - no wallet connect.*\n\n" +
-          `1️⃣ From your wallet, send *exactly* \`${eth}\` ETH to:\n\`${VERIFY_WALLET}\`\n` +
-          "   _(that exact odd amount is your one-time secret)_\n" +
+          `1️⃣ From your wallet, send *exactly* \`${eth}\` ETH *on Robinhood Chain* to:\n\`${VERIFY_WALLET}\`\n` +
+          "   _(⚠️ Robinhood Chain ONLY - not Ethereum mainnet. That exact odd amount is your one-time secret.)_\n" +
           "2️⃣ Then run \`/verify <your-tx-hash>\`\n\n" +
           "Just a normal send - no connect, no approval. Unlocks *50% off* all credits. 🦌");
         return res.status(200).json({ ok: true });
@@ -1042,7 +1042,7 @@ export default async function handler(req, res) {
       let chk;
       try { chk = await verifyMicroDeposit(txh, VERIFY_WALLET, reqRow[0].wei); }
       catch { await say(chatId, replyTo, "⚠️ Network hiccup reading the chain - try /verify <txhash> again in a moment."); return res.status(200).json({ ok: true }); }
-      if (!chk.ok) { await say(chatId, replyTo, `⚠️ Couldn't match that (${chk.err}). Send the *exact* amount, then paste the confirmed tx hash.`); return res.status(200).json({ ok: true }); }
+      if (!chk.ok) { const hint = chk.err === "tx_not_found" ? " Make sure you sent it *on Robinhood Chain* (not Ethereum mainnet) and that it's confirmed." : ""; await say(chatId, replyTo, `⚠️ Couldn't match that (${chk.err}).${hint} Send the *exact* amount *on Robinhood Chain*, then paste the confirmed tx hash.`); return res.status(200).json({ ok: true }); }
       // Deposit must be confirmed and NEWER than the verify request. Fail CLOSED if the
       // block time can't be read (retryable) - never verify without proving freshness.
       if (!chk.blockTime) {
@@ -1097,8 +1097,8 @@ export default async function handler(req, res) {
         const eth = (Number(wei) / 1e18).toFixed(9);
         const cap =
           `🐋 *Join the $STAG Whale Room* - hold *${fmt(WHALE_MIN)}+ $STAG*, no wallet connect.\n\n` +
-          `1️⃣ From your whale wallet, send *exactly* \`${eth}\` ETH to:\n\`${VERIFY_WALLET}\`\n` +
-          "   _(that odd amount is your one-time secret - proves the wallet is yours)_\n" +
+          `1️⃣ From your whale wallet, send *exactly* \`${eth}\` ETH *on Robinhood Chain* to:\n\`${VERIFY_WALLET}\`\n` +
+          "   _(⚠️ Robinhood Chain ONLY - not Ethereum mainnet. That odd amount is your one-time secret, proves the wallet is yours.)_\n" +
           "2️⃣ Then run \`/whale <your-tx-hash>\`\n\n" +
           (sofar > 0 ? `Tally so far: *${fmt(sofar)} / ${fmt(WHALE_MIN)} $STAG*.\n` : "") +
           "💚 *Bag split across wallets?* Repeat this for each - balances add up.\n" +
@@ -1116,7 +1116,7 @@ export default async function handler(req, res) {
       let chk;
       try { chk = await verifyMicroDeposit(txh, VERIFY_WALLET, reqRow[0].wei); }
       catch { await say(chatId, replyTo, "⚠️ Network hiccup reading the chain - paste the hash again in a moment."); return res.status(200).json({ ok: true }); }
-      if (!chk.ok) { await say(chatId, replyTo, `⚠️ Couldn't match that (${chk.err}). Send the *exact* amount, then paste the confirmed tx hash.`); return res.status(200).json({ ok: true }); }
+      if (!chk.ok) { const hint = chk.err === "tx_not_found" ? " Make sure you sent it *on Robinhood Chain* (not Ethereum mainnet) and that it's confirmed." : ""; await say(chatId, replyTo, `⚠️ Couldn't match that (${chk.err}).${hint} Send the *exact* amount *on Robinhood Chain*, then paste the confirmed tx hash.`); return res.status(200).json({ ok: true }); }
       if (!chk.blockTime) { await say(chatId, replyTo, "⚠️ Couldn't confirm that deposit's block yet - wait a few seconds and paste the hash again."); return res.status(200).json({ ok: true }); }
       if (chk.blockTime * 1000 < new Date(reqRow[0].created_at).getTime() - 120000) { await say(chatId, replyTo, "⚠️ That deposit predates your request. Run `/whale` for a fresh amount, send it, then paste the hash."); return res.status(200).json({ ok: true }); }
       const usedIns = await s`INSERT INTO stag_whale_used (txhash, tid) VALUES (${txh}, ${tid}) ON CONFLICT (txhash) DO NOTHING RETURNING txhash`;
