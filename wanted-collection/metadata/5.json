@@ -1,0 +1,29 @@
+{
+ "name": "WANTED #5 - CRAIG MACK",
+ "description": "CRAIG MACK - For Counterfeit Gold. A 1-of-1 animated WANTED poster from Outlaws of Sherwood. Bounty 6,000 $STAG, claimable on-chain.",
+ "animation_url": "ipfs://REPLACE/5.mp4",
+ "image": "ipfs://REPLACE/5.png",
+ "tokenId": 5,
+ "attributes": [
+  {
+   "trait_type": "Rarity",
+   "value": "Mythic"
+  },
+  {
+   "trait_type": "Crime",
+   "value": "Counterfeit Gold"
+  },
+  {
+   "trait_type": "Reward ($STAG)",
+   "value": 6000
+  },
+  {
+   "trait_type": "Weapon",
+   "value": "Gold Fists"
+  },
+  {
+   "trait_type": "Class",
+   "value": "Whale"
+  }
+ ]
+}

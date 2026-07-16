@@ -1,0 +1,29 @@
+{
+ "name": "WANTED #1 - SPEX",
+ "description": "SPEX - For Dealing The Kings Green. A 1-of-1 animated WANTED poster from Outlaws of Sherwood. Bounty 6,000 $STAG, claimable on-chain.",
+ "animation_url": "ipfs://REPLACE/1.mp4",
+ "image": "ipfs://REPLACE/1.png",
+ "tokenId": 1,
+ "attributes": [
+  {
+   "trait_type": "Rarity",
+   "value": "Mythic"
+  },
+  {
+   "trait_type": "Crime",
+   "value": "Dealing The Kings Green"
+  },
+  {
+   "trait_type": "Reward ($STAG)",
+   "value": 6000
+  },
+  {
+   "trait_type": "Weapon",
+   "value": "Glowing Arrow"
+  },
+  {
+   "trait_type": "Class",
+   "value": "Whale"
+  }
+ ]
+}

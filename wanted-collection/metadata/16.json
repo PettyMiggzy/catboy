@@ -1,0 +1,29 @@
+{
+ "name": "WANTED #16 - FROSTPOINT",
+ "description": "FROSTPOINT - For Raiding The Caravan. A 1-of-1 animated WANTED poster from Outlaws of Sherwood. Bounty 3,000 $STAG, claimable on-chain.",
+ "animation_url": "ipfs://REPLACE/16.mp4",
+ "image": "ipfs://REPLACE/16.png",
+ "tokenId": 16,
+ "attributes": [
+  {
+   "trait_type": "Rarity",
+   "value": "Epic"
+  },
+  {
+   "trait_type": "Crime",
+   "value": "Raiding The Caravan"
+  },
+  {
+   "trait_type": "Reward ($STAG)",
+   "value": 3000
+  },
+  {
+   "trait_type": "Weapon",
+   "value": "Ice Arrow"
+  },
+  {
+   "trait_type": "Class",
+   "value": "Outlaw"
+  }
+ ]
+}

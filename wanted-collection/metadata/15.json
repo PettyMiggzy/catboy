@@ -1,0 +1,29 @@
+{
+ "name": "WANTED #15 - COINREAVER",
+ "description": "COINREAVER - For Highway Robbery. A 1-of-1 animated WANTED poster from Outlaws of Sherwood. Bounty 3,000 $STAG, claimable on-chain.",
+ "animation_url": "ipfs://REPLACE/15.mp4",
+ "image": "ipfs://REPLACE/15.png",
+ "tokenId": 15,
+ "attributes": [
+  {
+   "trait_type": "Rarity",
+   "value": "Epic"
+  },
+  {
+   "trait_type": "Crime",
+   "value": "Highway Robbery"
+  },
+  {
+   "trait_type": "Reward ($STAG)",
+   "value": 3000
+  },
+  {
+   "trait_type": "Weapon",
+   "value": "Sack of Gold"
+  },
+  {
+   "trait_type": "Class",
+   "value": "Outlaw"
+  }
+ ]
+}

@@ -1,0 +1,29 @@
+{
+ "name": "WANTED #6 - BLACK PUTIN",
+ "description": "BLACK PUTIN - For Seizing The Throne. A 1-of-1 animated WANTED poster from Outlaws of Sherwood. Bounty 6,000 $STAG, claimable on-chain.",
+ "animation_url": "ipfs://REPLACE/6.mp4",
+ "image": "ipfs://REPLACE/6.png",
+ "tokenId": 6,
+ "attributes": [
+  {
+   "trait_type": "Rarity",
+   "value": "Mythic"
+  },
+  {
+   "trait_type": "Crime",
+   "value": "Seizing The Throne"
+  },
+  {
+   "trait_type": "Reward ($STAG)",
+   "value": 6000
+  },
+  {
+   "trait_type": "Weapon",
+   "value": "Longbow"
+  },
+  {
+   "trait_type": "Class",
+   "value": "Whale"
+  }
+ ]
+}
