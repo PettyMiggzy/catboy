@@ -1,0 +1,29 @@
+{
+ "name": "WANTED #11 - IRONANTLER",
+ "description": "IRONANTLER - For Treason Vs The Crown. A 1-of-1 animated WANTED poster from Outlaws of Sherwood. Bounty 5,000 $STAG, claimable on-chain.",
+ "animation_url": "ipfs://REPLACE/11.mp4",
+ "image": "ipfs://REPLACE/11.png",
+ "tokenId": 11,
+ "attributes": [
+  {
+   "trait_type": "Rarity",
+   "value": "Legendary"
+  },
+  {
+   "trait_type": "Crime",
+   "value": "Treason Vs The Crown"
+  },
+  {
+   "trait_type": "Reward ($STAG)",
+   "value": 5000
+  },
+  {
+   "trait_type": "Weapon",
+   "value": "Iron Warbow"
+  },
+  {
+   "trait_type": "Class",
+   "value": "Outlaw"
+  }
+ ]
+}

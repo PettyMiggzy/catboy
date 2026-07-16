@@ -1,0 +1,29 @@
+{
+ "name": "WANTED #13 - EMBER FLETCHER",
+ "description": "EMBER FLETCHER - For Arson At The Abbey. A 1-of-1 animated WANTED poster from Outlaws of Sherwood. Bounty 3,000 $STAG, claimable on-chain.",
+ "animation_url": "ipfs://REPLACE/13.mp4",
+ "image": "ipfs://REPLACE/13.png",
+ "tokenId": 13,
+ "attributes": [
+  {
+   "trait_type": "Rarity",
+   "value": "Epic"
+  },
+  {
+   "trait_type": "Crime",
+   "value": "Arson At The Abbey"
+  },
+  {
+   "trait_type": "Reward ($STAG)",
+   "value": 3000
+  },
+  {
+   "trait_type": "Weapon",
+   "value": "Flaming Bow"
+  },
+  {
+   "trait_type": "Class",
+   "value": "Outlaw"
+  }
+ ]
+}

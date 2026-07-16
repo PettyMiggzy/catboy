@@ -1,0 +1,29 @@
+{
+ "name": "WANTED #4 - NACHO",
+ "description": "NACHO - For Insider Alpha. A 1-of-1 animated WANTED poster from Outlaws of Sherwood. Bounty 6,000 $STAG, claimable on-chain.",
+ "animation_url": "ipfs://REPLACE/4.mp4",
+ "image": "ipfs://REPLACE/4.png",
+ "tokenId": 4,
+ "attributes": [
+  {
+   "trait_type": "Rarity",
+   "value": "Mythic"
+  },
+  {
+   "trait_type": "Crime",
+   "value": "Insider Alpha"
+  },
+  {
+   "trait_type": "Reward ($STAG)",
+   "value": 6000
+  },
+  {
+   "trait_type": "Weapon",
+   "value": "Longbow"
+  },
+  {
+   "trait_type": "Class",
+   "value": "Whale"
+  }
+ ]
+}

@@ -1,0 +1,29 @@
+{
+ "name": "WANTED #17 - HEDGE RUNNER",
+ "description": "HEDGE RUNNER - For Evading The Sheriff. A 1-of-1 animated WANTED poster from Outlaws of Sherwood. Bounty 2,000 $STAG, claimable on-chain.",
+ "animation_url": "ipfs://REPLACE/17.mp4",
+ "image": "ipfs://REPLACE/17.png",
+ "tokenId": 17,
+ "attributes": [
+  {
+   "trait_type": "Rarity",
+   "value": "Rare"
+  },
+  {
+   "trait_type": "Crime",
+   "value": "Evading The Sheriff"
+  },
+  {
+   "trait_type": "Reward ($STAG)",
+   "value": 2000
+  },
+  {
+   "trait_type": "Weapon",
+   "value": "Longbow"
+  },
+  {
+   "trait_type": "Class",
+   "value": "Outlaw"
+  }
+ ]
+}

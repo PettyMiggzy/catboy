@@ -1,0 +1,29 @@
+{
+ "name": "WANTED #3 - THE DUDE",
+ "description": "THE DUDE - For Abiding Too Hard. A 1-of-1 animated WANTED poster from Outlaws of Sherwood. Bounty 6,000 $STAG, claimable on-chain.",
+ "animation_url": "ipfs://REPLACE/3.mp4",
+ "image": "ipfs://REPLACE/3.png",
+ "tokenId": 3,
+ "attributes": [
+  {
+   "trait_type": "Rarity",
+   "value": "Mythic"
+  },
+  {
+   "trait_type": "Crime",
+   "value": "Abiding Too Hard"
+  },
+  {
+   "trait_type": "Reward ($STAG)",
+   "value": 6000
+  },
+  {
+   "trait_type": "Weapon",
+   "value": "Longbow"
+  },
+  {
+   "trait_type": "Class",
+   "value": "Whale"
+  }
+ ]
+}

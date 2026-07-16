@@ -1,0 +1,29 @@
+{
+ "name": "WANTED #14 - THE POACHER",
+ "description": "THE POACHER - For Poaching The Kings Deer. A 1-of-1 animated WANTED poster from Outlaws of Sherwood. Bounty 3,000 $STAG, claimable on-chain.",
+ "animation_url": "ipfs://REPLACE/14.mp4",
+ "image": "ipfs://REPLACE/14.png",
+ "tokenId": 14,
+ "attributes": [
+  {
+   "trait_type": "Rarity",
+   "value": "Epic"
+  },
+  {
+   "trait_type": "Crime",
+   "value": "Poaching The Kings Deer"
+  },
+  {
+   "trait_type": "Reward ($STAG)",
+   "value": 3000
+  },
+  {
+   "trait_type": "Weapon",
+   "value": "Longbow"
+  },
+  {
+   "trait_type": "Class",
+   "value": "Outlaw"
+  }
+ ]
+}

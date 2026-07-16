@@ -1,0 +1,29 @@
+{
+ "name": "WANTED #20 - COPPER ARROW",
+ "description": "COPPER ARROW - For Contempt Of Sheriff. A 1-of-1 animated WANTED poster from Outlaws of Sherwood. Bounty 2,000 $STAG, claimable on-chain.",
+ "animation_url": "ipfs://REPLACE/20.mp4",
+ "image": "ipfs://REPLACE/20.png",
+ "tokenId": 20,
+ "attributes": [
+  {
+   "trait_type": "Rarity",
+   "value": "Rare"
+  },
+  {
+   "trait_type": "Crime",
+   "value": "Contempt Of Sheriff"
+  },
+  {
+   "trait_type": "Reward ($STAG)",
+   "value": 2000
+  },
+  {
+   "trait_type": "Weapon",
+   "value": "Longbow"
+  },
+  {
+   "trait_type": "Class",
+   "value": "Outlaw"
+  }
+ ]
+}
