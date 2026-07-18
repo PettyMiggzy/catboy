@@ -1,0 +1,29 @@
+name: dex-paid
+on:
+  schedule:
+    - cron: '*/5 * * * *'   # every 5 min — catch paid/boost signals early
+  workflow_dispatch: {}
+permissions:
+  contents: read
+concurrency:
+  group: dex-paid
+  cancel-in-progress: false
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: restore seen list
+        uses: actions/cache@v4
+        with:
+          path: dex-paid/.seen.json
+          key: dexpaid-${{ github.run_id }}
+          restore-keys: dexpaid-
+      - name: watch & alert
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          CHAT_ID: '6820752140'
+          STATE_FILE: dex-paid/.seen.json
+        run: node dex-paid/index.mjs
