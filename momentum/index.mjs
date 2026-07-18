@@ -34,22 +34,22 @@ const MAX_LP_ETH = Number(process.env.MAX_LP_ETH || "5000");  // skip ultra-deep
 const TOP_LIQ = Number(process.env.TOP_LIQ || "20");          // watch this many deep-enough pools
 const TOP_HOLDER_MAX = Number(process.env.TOP_HOLDER_MAX || "8");
 
-// --- entry: momentum (buy strength, not dips) ---
-const MOM_PCT = Number(process.env.MOM_PCT || "2");           // up >=2% ...
-const MOM_MIN = Number(process.env.MOM_MIN || "10");          // ...over ~10 min
-const MAX_EXT = Number(process.env.MAX_EXT || "12");          // skip if already up >12% (chasing too late)
+// --- entry: STRONG momentum only (1% fees kill round-trips; only big trends pay) ---
+const MOM_PCT = Number(process.env.MOM_PCT || "4");           // up >=4% ...
+const MOM_MIN = Number(process.env.MOM_MIN || "15");          // ...over ~15 min (real strength, not noise)
+const MAX_EXT = Number(process.env.MAX_EXT || "20");          // skip only if already blown off (>20%)
 
-// --- exit: ride it ---
-const TRAIL_PCT = Number(process.env.TRAIL_PCT || "6");       // give back 6% from the high => exit
-const SL_PCT = Number(process.env.SL_PCT || "5");             // hard stop
-const MAX_HOLD_H = Number(process.env.MAX_HOLD_H || "12");
+// --- exit: RIDE the trend (pay the 1% fee once, capture a big move) ---
+const TRAIL_PCT = Number(process.env.TRAIL_PCT || "25");      // give back 25% from the high => exit (let it run)
+const SL_PCT = Number(process.env.SL_PCT || "10");            // wide hard stop
+const MAX_HOLD_H = Number(process.env.MAX_HOLD_H || "24");
 
 // --- cost (ETH) ---
-const FEE_BPS = Number(process.env.FEE_BPS || "30");
+const FEE_BPS = Number(process.env.FEE_BPS || "100");        // real Robinhood Chain fee tier is 1% — not 0.3%
 const GAS_ETH = Number(process.env.GAS_ETH || "0.000015");
 const IMPACT_K = Number(process.env.IMPACT_K || "1.0");
 const SLIP_CAP = Number(process.env.SLIP_CAP || "5");
-const MAX_COST_PCT = Number(process.env.MAX_COST_PCT || "2");
+const MAX_COST_PCT = Number(process.env.MAX_COST_PCT || "3.5"); // allow real ~2.9% round-trip, block extra slippage
 
 if (!BOT) { console.error("BOT_TOKEN required"); process.exit(1); }
 const feeFrac = FEE_BPS / 10000;
