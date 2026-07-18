@@ -13,10 +13,10 @@ const SWAP = "0xc42079f94a6350d7e6235f29174924f928cc2ac818eb64fed8004e115fbcca67
 const BOT = (process.env.BOT_TOKEN || "").trim(), CHAT = (process.env.CHAT_ID || "6820752140").trim();
 const STATE = process.env.STATE_FILE || "launch-sniper/.alerted.json";
 const WINDOW = Number(process.env.WINDOW_BLOCKS || "12000");   // ~20 min of new pools to consider
-const MIN_LP_ETH = Number(process.env.MIN_LP_ETH || "0.05");   // real liquidity floor
-const MIN_BUYS = Number(process.env.MIN_BUYS || "8");
-const BUY_RATIO = Number(process.env.BUY_RATIO || "2");
-const MIN_BUYVOL_ETH = Number(process.env.MIN_BUYVOL_ETH || "0.1");
+const MIN_LP_ETH = Number(process.env.MIN_LP_ETH || "0.2");    // real liquidity floor
+const MIN_BUYS = Number(process.env.MIN_BUYS || "12");
+const BUY_RATIO = Number(process.env.BUY_RATIO || "2.5");
+const MIN_BUYVOL_ETH = Number(process.env.MIN_BUYVOL_ETH || "0.25");
 const EVAL_CAP = Number(process.env.EVAL_CAP || "160");
 if (!BOT) { console.error("BOT_TOKEN required"); process.exit(1); }
 
