@@ -7,7 +7,7 @@ import { readFileSync, writeFileSync, existsSync } from "node:fs";
 const RPC = process.env.RPC_URL || "https://rpc.mainnet.chain.robinhood.com";
 const POOL = (process.env.POOL || "0x8874bd3c8a9cb1baeee6014bd2d3598d4741e075").toLowerCase();
 const TOKEN = (process.env.TOKEN || "0xCDdB2d9838b7eDab2F04aF4943a6EFE42C2f9F49").toLowerCase();
-const STAG_DEX = process.env.TOKEN; // for USD display
+const STAG_DEX = TOKEN; // for USD display
 const BOT = (process.env.BOT_TOKEN || "").trim();
 const CHAT = (process.env.CHAT_ID || "6820752140").trim();
 const STATE = process.env.STATE_FILE || "treasury-bot/.paper_state.json";
