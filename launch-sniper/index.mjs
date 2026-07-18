@@ -18,6 +18,11 @@ const MIN_BUYS = Number(process.env.MIN_BUYS || "12");
 const BUY_RATIO = Number(process.env.BUY_RATIO || "2.5");
 const MIN_BUYVOL_ETH = Number(process.env.MIN_BUYVOL_ETH || "0.25");
 const EVAL_CAP = Number(process.env.EVAL_CAP || "160");
+// --- anti-bot: fake-buy inflation guards ---
+const MIN_AVG_BUY = Number(process.env.MIN_AVG_BUY || "0.004"); // reject tiny bot-spam buys
+const UNIQ_SAMPLE = Number(process.env.UNIQ_SAMPLE || "30");    // # of buy txs to sample for real wallets
+const UNIQ_MIN = Number(process.env.UNIQ_MIN || "10");          // need >=10 distinct real buyers
+const UNIQ_RATIO = Number(process.env.UNIQ_RATIO || "0.5");     // ...and >=50% of buys from distinct wallets
 if (!BOT) { console.error("BOT_TOKEN required"); process.exit(1); }
 
 const rpc = async (m, p) => { const r = await fetch(RPC, { method: "POST", headers: { "Content-Type": "application/json", "User-Agent": "Mozilla/5.0" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: m, params: p }) }); return (await r.json()).result; };
@@ -44,20 +49,33 @@ async function main() {
     const lp = await lpEth(p.pool);
     if (lp < MIN_LP_ETH) continue;                       // cheap reject: no real liquidity yet
     const sw = await rpc("eth_getLogs", [{ address: p.pool, topics: [SWAP], fromBlock: "0x" + p.blk.toString(16), toBlock: "0x" + tip.toString(16) }]) || [];
-    let buys = 0, sells = 0, buyVol = 0;
+    let buys = 0, sells = 0, buyVol = 0; const buyTxs = [];
     for (const s of sw) {
       const d = s.data.slice(2); const a0 = s256(d.slice(0, 64)), a1 = s256(d.slice(64, 128));
       const wethDelta = p.wethIsT0 ? a0 : a1, tokDelta = p.wethIsT0 ? a1 : a0;
-      if (tokDelta < 0n) { buys++; buyVol += Number(wethDelta > 0n ? wethDelta : -wethDelta) / 1e18; } // token left pool = BUY
+      if (tokDelta < 0n) { buys++; buyVol += Number(wethDelta > 0n ? wethDelta : -wethDelta) / 1e18; buyTxs.push(s.transactionHash); } // token left pool = BUY
       else if (tokDelta > 0n) sells++;
     }
     if (buys < MIN_BUYS || buys < sells * BUY_RATIO || buyVol < MIN_BUYVOL_ETH) continue;
+    // --- anti-bot: reject fake buy inflation ---
+    // 1) tiny average buy = spam bot padding the count with dust
+    const avgBuy = buyVol / buys;
+    if (avgBuy < MIN_AVG_BUY) { console.log(`skip ${p.pool} avgBuy ${avgBuy.toFixed(5)} < ${MIN_AVG_BUY} (dust spam)`); continue; }
+    // 2) many buys from few wallets = one bot faking demand. Sample real senders (tx.from).
+    const sampleTxs = buyTxs.slice(0, UNIQ_SAMPLE);
+    const froms = await Promise.all(sampleTxs.map(async (h) => { try { const tx = await rpc("eth_getTransactionByHash", [h]); return (tx && tx.from || "").toLowerCase(); } catch { return ""; } }));
+    const sampled = froms.filter(Boolean).length;
+    const uniqBuyers = new Set(froms.filter(Boolean)).size;
+    if (sampled && (uniqBuyers < UNIQ_MIN || uniqBuyers < sampled * UNIQ_RATIO)) {
+      console.log(`skip ${p.pool} uniq ${uniqBuyers}/${sampled} buyers (bot-inflated)`); continue;
+    }
     st[p.pool] = nowS; alerted++;
     const sym = (await strCall(p.token, "0x95d89b41")) || "?", name = (await strCall(p.token, "0x06fdde03")) || "";
     const ageMin = Math.max(1, Math.round((tip - p.blk) * 0.1 / 60)); // ~0.1s/block
     await tg(
       `⚡ *EARLY: $${sym}*${name ? ` — ${name}` : ""}  (~${ageMin}m old)\n` +
       `🟢 *${buys} buys* / ${sells} sells · bought *${buyVol.toFixed(2)} ETH*\n` +
+      `👛 *${uniqBuyers}/${sampled}* real wallets · avg *${avgBuy.toFixed(4)} ETH*/buy\n` +
       `💧 LP *${lp.toFixed(2)} ETH*\n\`${p.token}\`\n` +
       `[Explorer](https://robinhoodchain.blockscout.com/token/${p.token}) · [Chart](https://dexscreener.com/robinhood/${p.token})\n` +
       `⚠️ _Minute-1 launch. Casino — small size, take profits fast._`
