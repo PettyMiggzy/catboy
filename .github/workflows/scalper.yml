@@ -1,0 +1,30 @@
+name: scalper
+on:
+  schedule:
+    - cron: '*/5 * * * *'   # every 5 min — manage exits + hunt dips
+  workflow_dispatch: {}
+permissions:
+  contents: read
+concurrency:
+  group: scalper
+  cancel-in-progress: false
+jobs:
+  trade:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: restore bankroll + positions
+        uses: actions/cache@v4
+        with:
+          path: scalper/.state.json
+          key: scalper-${{ github.run_id }}
+          restore-keys: scalper-
+      - name: run scalper
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          CHAT_ID: '6820752140'
+          DRY_RUN: '1'            # PAPER. Set to '0' only after a verified router+quoter+burner is wired.
+          STATE_FILE: scalper/.state.json
+        run: node scalper/index.mjs
