@@ -1,0 +1,26 @@
+name: launch-sniper
+on:
+  schedule:
+    - cron: '*/5 * * * *'   # every 5 min — catch launches while they're minutes old
+  workflow_dispatch: {}
+permissions:
+  contents: read
+concurrency: { group: launch-sniper, cancel-in-progress: false }
+jobs:
+  snipe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: restore alerted-set
+        uses: actions/cache@v4
+        with:
+          path: launch-sniper/.alerted.json
+          key: sniper-${{ github.run_id }}
+          restore-keys: sniper-
+      - name: snipe launches
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          CHAT_ID: '6820752140'
+        run: node launch-sniper/index.mjs
