@@ -1,0 +1,26 @@
+name: scanner
+on:
+  schedule:
+    - cron: '*/30 * * * *'   # scan every 30 min
+  workflow_dispatch: {}
+permissions:
+  contents: read
+concurrency: { group: scanner, cancel-in-progress: false }
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: restore seen-list
+        uses: actions/cache@v4
+        with:
+          path: scanner/.seen.json
+          key: scanner-${{ github.run_id }}
+          restore-keys: scanner-
+      - name: scan & alert
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          CHAT_ID: '6820752140'
+        run: node scanner/index.mjs
