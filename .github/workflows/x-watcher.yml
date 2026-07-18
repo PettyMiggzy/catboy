@@ -1,0 +1,30 @@
+name: x-watcher
+on:
+  schedule:
+    - cron: '*/10 * * * *'   # every 10 min (GitHub cron min is 5; may be delayed under load)
+  workflow_dispatch: {}        # lets you run it manually from the Actions tab
+permissions:
+  contents: read
+concurrency:
+  group: x-watcher
+  cancel-in-progress: false
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: restore last-seen id
+        uses: actions/cache@v4
+        with:
+          path: x-watcher/.last_id
+          key: xwatch-${{ github.run_id }}
+          restore-keys: xwatch-
+      - name: poll & notify
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          CHAT_ID: '6820752140'
+          X_USERNAME: vladtenev
+          STATE_FILE: x-watcher/.last_id
+        run: node x-watcher/nitter-watch.mjs
