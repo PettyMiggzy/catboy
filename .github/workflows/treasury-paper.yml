@@ -1,0 +1,26 @@
+name: treasury-paper
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch: {}
+permissions:
+  contents: read
+concurrency: { group: treasury-paper, cancel-in-progress: false }
+jobs:
+  trade:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: restore paper state
+        uses: actions/cache@v4
+        with:
+          path: treasury-bot/.paper_state.json
+          key: paper-${{ github.run_id }}
+          restore-keys: paper-
+      - name: run paper trader
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          CHAT_ID: '6820752140'
+        run: node treasury-bot/paper-actions.mjs
