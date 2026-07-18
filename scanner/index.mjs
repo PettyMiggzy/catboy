@@ -14,6 +14,8 @@ const BS = "https://robinhoodchain.blockscout.com/api/v2";
 const POOLISH = /pool|pair|lp/i;
 const LIQ_MIN = Number(process.env.LIQ_MIN || "10000");
 const VOL_MIN = Number(process.env.VOL_MIN || "25000");
+const HOT_VOL = Number(process.env.HOT_VOL || "150000");    // high-churn tier: where swing trading works
+const SCALP_DIP = Number(process.env.SCALP_DIP || "4");     // intraday pullback on a hot token = buyable dip
 const DIP_MIN = Number(process.env.DIP_MIN || "8");
 const PUMP_ALERT = Number(process.env.PUMP_ALERT || "20");   // >=20% / 24h => pump alert
 const PUMP_FAST = Number(process.env.PUMP_FAST || "15");     // ...or >=15% / 1h
@@ -59,6 +61,7 @@ async function main() {
     const sym = p.baseToken?.symbol || "?";
     const rec = st[addr] || (st[addr] = { high: 0, a: {} });
     const realVol = liq >= LIQ_MIN && vol >= VOL_MIN && buys + sells >= MIN_TXNS && buys >= MIN_SIDE && sells >= MIN_SIDE;
+    const hotVol = realVol && vol >= HOT_VOL;                 // enough churn to scalp in and out
 
     // track high; first sighting just records it (no ATH spam)
     const firstSeen = !rec.high;
@@ -70,6 +73,10 @@ async function main() {
     if (realVol && ch24 <= -DIP_MIN && ch1 > 0 && fresh(rec, "bounce")) {
       kind = "bounce";
       msg = `🎯 *Bounce setup: $${sym}*\ndipped *${ch24.toFixed(1)}%* /24h, turning *+${ch1.toFixed(1)}%* /1h\n💧 ${usd(liq)} liq · 📊 ${usd(vol)} vol · 🔁 ${buys}/${sells}`;
+    } else if (hotVol && ch1 <= -SCALP_DIP && ch24 > -DIP_MIN && fresh(rec, "hot")) {
+      // high-volume token pulling back intraday but not in a 24h dump = buyable dip to scalp
+      kind = "hot";
+      msg = `💰 *Hot dip: $${sym}*  (high volume)\nintraday pullback *${ch1.toFixed(1)}%* /1h · 24h *${ch24 >= 0 ? "+" : ""}${ch24.toFixed(1)}%*\n💧 ${usd(liq)} liq · 📊 *${usd(vol)}* vol · 🔁 ${buys}/${sells}\n_Liquid + churning — buy the dip, sell into green._`;
     } else if (realVol && (ch24 >= PUMP_ALERT || ch1 >= PUMP_FAST) && fresh(rec, "pump")) {
       kind = "pump";
       msg = `📈 *Pumping: $${sym}*  *+${Math.max(ch24, ch1).toFixed(1)}%*\n24h *${ch24.toFixed(1)}%* · 1h *${ch1.toFixed(1)}%*\n💧 ${usd(liq)} liq · 📊 ${usd(vol)} vol`;
