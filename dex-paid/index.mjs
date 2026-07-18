@@ -13,6 +13,10 @@ const POOLISH = /pool|pair|lp/i;
 const MIN_LIQ = Number(process.env.MIN_LIQ || "5000");        // avoid dead/rug listings
 const TOP_HOLDER_MAX = Number(process.env.TOP_HOLDER_MAX || "15");
 const BOOST_BUMP = Number(process.env.BOOST_BUMP || "50");    // re-alert if boosts jump this much more
+// research finding: paying DEX only works on FRESH tokens; big boosts on OLD bleeding tokens = dump traps
+const FRESH_H = Number(process.env.FRESH_H || "12");          // <12h old = the real signal
+const MAX_AGE_H = Number(process.env.MAX_AGE_H || "48");      // >48h + dumping = exit-liquidity trap, skip
+const MIN_VOL1H = Number(process.env.MIN_VOL1H || "2000");    // needs real buying, not a dead boost
 if (!BOT) { console.error("BOT_TOKEN required"); process.exit(1); }
 
 const jget = async (u) => { try { const r = await fetch(u, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(20000) }); return r.ok ? r.json() : null; } catch { return null; } };
@@ -59,23 +63,28 @@ async function main() {
     const pairs = await jget(`https://api.dexscreener.com/tokens/v1/robinhood/${addr}`);
     const p = Array.isArray(pairs) ? pairs.sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0] : null;
     if (!p) { st[addr] = { boost: t.boost, t: nowS }; continue; }
-    const liq = p.liquidity?.usd || 0, vol = p.volume?.h24 || 0, mc = p.marketCap || p.fdv || 0;
-    const sym = p.baseToken?.symbol || "?", ch1 = p.priceChange?.h1 ?? 0, ch24 = p.priceChange?.h24 ?? 0;
-    if (liq < MIN_LIQ) { st[addr] = { boost: t.boost, t: nowS }; continue; }        // too thin, skip
+    const liq = p.liquidity?.usd || 0, vol = p.volume?.h24 || 0, v1 = p.volume?.h1 || 0, mc = p.marketCap || p.fdv || 0;
+    const sym = p.baseToken?.symbol || "?", ch1 = p.priceChange?.h1 ?? 0, ch6 = p.priceChange?.h6 ?? 0, ch24 = p.priceChange?.h24 ?? 0;
+    const ageH = p.pairCreatedAt ? (Date.now() - p.pairCreatedAt) / 3.6e6 : 999;
+    const rec = () => { st[addr] = { boost: t.boost, t: nowS }; };
+    if (liq < MIN_LIQ) { rec(); continue; }                                          // too thin
+    if (ageH > MAX_AGE_H && ch24 < 0) { rec(); console.log(`skip ${sym}: old(${ageH.toFixed(0)}h)+dumping = trap`); continue; } // exit-liquidity trap
+    if (v1 < MIN_VOL1H) { rec(); console.log(`skip ${sym}: no real volume (dead boost)`); continue; }     // no buyers actually coming
     const top = await holderTop(addr);
-    if (top > TOP_HOLDER_MAX) { st[addr] = { boost: t.boost, t: nowS }; console.log(`skip ${sym}: whale ${top.toFixed(1)}%`); continue; }
+    if (top > TOP_HOLDER_MAX) { rec(); console.log(`skip ${sym}: whale ${top.toFixed(1)}%`); continue; }
 
-    st[addr] = { boost: t.boost, t: nowS }; alerts++;
+    rec(); alerts++;
+    const fresh = ageH < FRESH_H;
     const tag = t.profile && t.boost ? `💸 DEX Paid + ⚡${t.boost} boost` : t.profile ? `💸 DEX Paid badge` : `⚡ Boosted ×${t.boost}`;
     await tg(
-      `🅿️ *DEX PAID: $${sym}* ${boostJump ? "_(boost bump)_" : ""}\n` +
-      `${tag} — _team is paying for eyeballs, buyers incoming_\n` +
-      `💧 ${usd(liq)} liq · 📊 ${usd(vol)} vol/24h${mc ? ` · 🏷 ${usd(mc)} MC` : ""}\n` +
-      `📈 1h ${ch1 >= 0 ? "+" : ""}${ch1.toFixed(1)}% · 24h ${ch24 >= 0 ? "+" : ""}${ch24.toFixed(1)}% · 👥 top ${top.toFixed(0)}%\n` +
+      `${fresh ? "🔥 *FRESH DEX PAID*" : "🅿️ *DEX PAID*"}: $${sym} ${boostJump ? "_(boost bump)_" : ""}\n` +
+      `${tag}${fresh ? `  ·  🐣 *${ageH.toFixed(0)}h old*` : `  ·  ${ageH.toFixed(0)}h old`}\n` +
+      `💧 ${usd(liq)} liq · 📊 ${usd(v1)} vol/1h · 🏷 ${mc ? usd(mc) : "?"} MC\n` +
+      `📈 1h ${ch1 >= 0 ? "+" : ""}${ch1.toFixed(0)}% · 6h ${ch6 >= 0 ? "+" : ""}${ch6.toFixed(0)}% · 👥 top ${top.toFixed(0)}%\n` +
       `\`${addr}\`\n[💱 Buy on DEX](${p.url}?trade=1) · [📊 Chart](${p.url})\n` +
-      `⚠️ _Paid ≠ good. Marketing signal only — small size, take profits, watch for the dump after the pump._`
+      `${fresh ? "⚡ _Fresh + paid + moving = the real setup. Small size, take profits into the pump._" : "⚠️ _Older token — paid to draw eyeballs. Riskier, could be exit liquidity. Tight._"}`
     );
-    console.log(`PAID ${sym} boost ${t.boost} profile ${t.profile} liq ${Math.round(liq)}`);
+    console.log(`PAID ${sym} boost ${t.boost} age ${ageH.toFixed(0)}h v1 ${Math.round(v1)} fresh ${fresh}`);
   }
   writeFileSync(STATE, JSON.stringify(st));
   console.log(`tracked ${tokens.size} paid RH tokens, ${alerts} alerts`);
