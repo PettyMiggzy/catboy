@@ -229,19 +229,25 @@ async function main() {
   const wr = S.trades ? (S.wins / S.trades * 100).toFixed(0) : "0";
   // prune stale price history for tokens we no longer track/see to keep state small
   for (const k of Object.keys(S.hist)) { const h = S.hist[k]; while (h.length && nowH - h[0][0] > 24) h.shift(); if (!h.length) delete S.hist[k]; }
-  writeFileSync(STATE, JSON.stringify(S));
 
-  if (fills.length) {
+  // send on any fill, OR an hourly heartbeat so you always have live stats without spam
+  const HEARTBEAT_H = Number(process.env.HEARTBEAT_H || "1");
+  const beatDue = nowH - (S.lastBeat || 0) >= HEARTBEAT_H;
+  if (fills.length || beatDue) {
+    S.lastBeat = nowH;
     const ethUsd = Number((await jget(`https://api.dexscreener.com/tokens/v1/robinhood/${WETH}`))?.[0]?.priceUsd || 0);
     const usd = (e) => ethUsd ? ` (~$${(e * ethUsd).toFixed(2)})` : "";
-    await tg(
-      `${DRY_RUN ? "📝 *PAPER*" : "💸 *LIVE*"} scalper\n` +
-      fills.join("\n") + "\n\n" +
+    const stats =
       `💼 Equity *${equity.toFixed(5)} ETH*${usd(equity)}  (${equity >= START_BANK ? "+" : ""}${((equity / START_BANK - 1) * 100).toFixed(1)}%)\n` +
       `💵 cash ${S.cash.toFixed(5)} ETH · 📊 ${S.trades} trades · win *${wr}%* · realized *${S.realized >= 0 ? "+" : ""}${S.realized.toFixed(5)} ETH*\n` +
-      (lines.length ? `📌 open:\n${lines.join("\n")}` : `📌 no open positions`)
+      (lines.length ? `📌 open:\n${lines.join("\n")}` : `📌 no open positions`);
+    await tg(
+      fills.length
+        ? `${DRY_RUN ? "📝 *PAPER*" : "💸 *LIVE*"} scalper\n${fills.join("\n")}\n\n${stats}`
+        : `${DRY_RUN ? "📝 *PAPER*" : "💸 *LIVE*"} scalper · hourly check\n${stats}`
     );
   }
+  writeFileSync(STATE, JSON.stringify(S));
   console.log(`span ${span} swaps ${logs.length} active ${active.length} | equity ${equity.toFixed(5)} cash ${S.cash.toFixed(5)} open ${Object.keys(S.positions).length} trades ${S.trades}/${S.wins} realized ${S.realized.toFixed(5)} fills ${fills.length}`);
 }
 main().catch((e) => { console.error(e); process.exit(1); });
