@@ -30,7 +30,8 @@ const MIN_TRADE = Number(process.env.MIN_TRADE_ETH || "0.003");
 const WINDOW_BLOCKS = Number(process.env.WINDOW_BLOCKS || "2500");
 const MIN_SWAPS = Number(process.env.MIN_SWAPS || "10");      // must be actively trading
 const MIN_LP_ETH = Number(process.env.MIN_LP_ETH || "40");    // deep pool floor (~$250k+ liq) — the whole point
-const TOP_LIQ = Number(process.env.TOP_LIQ || "10");          // only trade the N deepest
+const MAX_LP_ETH = Number(process.env.MAX_LP_ETH || "5000");  // skip ultra-deep pegs/megapools that never move
+const TOP_LIQ = Number(process.env.TOP_LIQ || "20");          // watch this many deep-enough pools
 const TOP_HOLDER_MAX = Number(process.env.TOP_HOLDER_MAX || "8");
 
 // --- entry: momentum (buy strength, not dips) ---
@@ -95,7 +96,7 @@ async function main() {
     let meta = S.pools[pool];
     if (!meta) { const t0 = await addrCall(pool, "0x0dfe1681"), t1 = await addrCall(pool, "0xd21220a7"); if (!t0 || !t1) continue; const wethIsT0 = t0 === WETH, token = wethIsT0 ? t1 : t0; if (token === WETH || !/^0x[0-9a-f]{40}$/.test(token)) continue; const sym = (await strCall(token, "0x95d89b41")) || "?"; meta = S.pools[pool] = { token, wethIsT0, sym }; }
     const lp = await lpEth(pool);
-    if (lp < MIN_LP_ETH) continue;                       // <-- HIGH LIQUIDITY filter (the whole point)
+    if (lp < MIN_LP_ETH || lp > MAX_LP_ETH) continue;    // deep enough to trade cheap, not a dead megapool/peg
     let buys = 0, sells = 0;
     for (const l of logs) { if (l.address.toLowerCase() !== pool) continue; const d = l.data.slice(2); const a1 = s256(d.slice(64, 128)), a0 = s256(d.slice(0, 64)); const tokDelta = meta.wethIsT0 ? a1 : a0; if (tokDelta < 0n) buys++; else if (tokDelta > 0n) sells++; }
     active.push({ pool, ...meta, n: a.n, buys, sells, lp, firstP: priceFromSwap(a.first.data, meta.wethIsT0), lastP: priceFromSwap(a.last.data, meta.wethIsT0) });
@@ -138,7 +139,7 @@ async function main() {
       .filter((p) => !S.positions[p.token] && p.lastP > 0 && p.buys > p.sells)     // net buying
       .map((p) => { const m = chMin(p.token, MOM_MIN); const mom = m != null ? m : (p.firstP > 0 ? (p.lastP / p.firstP - 1) * 100 : 0); return { ...p, mom }; })
       .filter((p) => p.mom >= MOM_PCT && p.mom <= MAX_EXT)                          // rising, but not already blown off
-      .sort((a, b) => b.lp - a.lp);                                                // deepest first
+      .sort((a, b) => b.mom - a.mom);                                              // strongest trend first
     let slots = MAX_POS - openN;
     for (const c of cands) {
       if (slots <= 0 || S.cash < MIN_TRADE) break;
