@@ -1,0 +1,26 @@
+name: launch-radar
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch: {}
+permissions:
+  contents: read
+concurrency: { group: launch-radar, cancel-in-progress: false }
+jobs:
+  radar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: restore seen
+        uses: actions/cache@v4
+        with:
+          path: launch-radar/.seen.json
+          key: launch-${{ github.run_id }}
+          restore-keys: launch-
+      - name: scan launches
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          CHAT_ID: '6820752140'
+        run: node launch-radar/index.mjs
