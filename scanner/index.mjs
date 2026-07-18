@@ -68,7 +68,7 @@ async function main() {
     let newHigh = false;
     if (price > 0) { if (price > rec.high * (1 + ATH_BUF) && !firstSeen) newHigh = true; if (price > rec.high) rec.high = price; }
 
-    const link = `[Chart](${p.url})`, tag = `\`${addr}\``;
+    const link = `[📊 Chart](${p.url}) · [💱 Buy on DEX](${p.url}?trade=1)`, tag = `\`${addr}\``;
     let kind = null, msg = null;
     if (realVol && ch24 <= -DIP_MIN && ch1 > 0 && fresh(rec, "bounce")) {
       kind = "bounce";
