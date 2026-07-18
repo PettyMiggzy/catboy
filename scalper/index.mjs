@@ -37,8 +37,9 @@ const MIN_LP_ETH = Number(process.env.MIN_LP_ETH || "0.3");        // WETH depth
 const MIN_BUYS_WIN = Number(process.env.MIN_BUYS_WIN || "4");      // buyers stepping in (dip turning)
 const TOP_HOLDER_MAX = Number(process.env.TOP_HOLDER_MAX || "5");
 
-// --- entry: buyable dip, not a knife ---
-const ENTRY_DIP = Number(process.env.ENTRY_DIP || "4");   // need <= -4% (1h if known, else window)
+// --- entry: dip + confirmed turn (buy the bounce, not the knife) ---
+const ENTRY_DIP = Number(process.env.ENTRY_DIP || "4");       // dipped >=4% in-window
+const CONFIRM_PCT = Number(process.env.CONFIRM_PCT || "1.5"); // ...then turned back up >=1.5% off the low
 const MAX_DUMP24 = Number(process.env.MAX_DUMP24 || "10"); // skip if 24h worse than -10%
 const KNIFE = Number(process.env.KNIFE || "25");           // skip if window move < -25% (crashing)
 
@@ -137,16 +138,18 @@ async function main() {
     }
     // second pass over this pool's swaps to sign volume/buys (cheap: re-read from logs)
     let buys = 0, sells = 0, buyVol = 0, sellVol = 0;
+    let minP = Infinity, maxP = 0;
     for (const l of logs) {
       if (l.address.toLowerCase() !== pool) continue;
       const d = l.data.slice(2); const a0 = s256(d.slice(0, 64)), a1 = s256(d.slice(64, 128));
       const wethDelta = meta.wethIsT0 ? a0 : a1, tokDelta = meta.wethIsT0 ? a1 : a0;
       const vol = Number(wethDelta < 0n ? -wethDelta : wethDelta) / 1e18;
       if (tokDelta < 0n) { buys++; buyVol += vol; } else if (tokDelta > 0n) { sells++; sellVol += vol; }
+      const pr = priceFromSwap(l.data, meta.wethIsT0); if (pr > 0) { if (pr < minP) minP = pr; if (pr > maxP) maxP = pr; }
     }
     const firstP = priceFromSwap(a.first.data, meta.wethIsT0);
     const lastP = priceFromSwap(a.last.data, meta.wethIsT0);
-    active.push({ pool, ...meta, n: a.n, buys, sells, buyVol, sellVol, vol: buyVol + sellVol, firstP, lastP });
+    active.push({ pool, ...meta, n: a.n, buys, sells, buyVol, sellVol, vol: buyVol + sellVol, firstP, lastP, minP, maxP });
   }
 
   // update rolling price history (for real 1h / 24h deltas over time)
@@ -191,10 +194,15 @@ async function main() {
   // ---------- 2) LOOK FOR ENTRIES ----------
   const openN = Object.keys(S.positions).length;
   if (openN < MAX_POS && S.cash >= MIN_TRADE && active.length) {
+    // ENTRY = dip + CONFIRMED TURN (don't catch the knife). Backtest on real MC>=300k tokens:
+    // "buy the dip" was a coin flip (CI spans 0); "buy after it turns up off the low" was +0.89%/trade.
     const cands = active
-      .filter((p) => !S.positions[p.token] && p.vol >= MIN_VOL_ETH && p.buys >= MIN_BUYS_WIN && p.lastP > 0)
-      .map((p) => { const win = (p.lastP / p.firstP - 1) * 100; const ch1 = chSince(p.token, 1); const dip = ch1 != null ? ch1 : win; return { ...p, win, ch1, ch24: chSince(p.token, 24), dip }; })
-      .filter((p) => p.dip <= -ENTRY_DIP && p.win > -KNIFE && (p.ch24 == null || p.ch24 > -MAX_DUMP24))
+      .filter((p) => !S.positions[p.token] && p.vol >= MIN_VOL_ETH && p.buys >= MIN_BUYS_WIN && p.lastP > 0 && p.maxP > 0 && p.minP < Infinity)
+      .map((p) => ({ ...p, dipMag: (p.maxP - p.minP) / p.maxP * 100, offLow: (p.lastP / p.minP - 1) * 100, ch24: chSince(p.token, 24) }))
+      .filter((p) => p.dipMag >= ENTRY_DIP           // it dipped at least ENTRY_DIP% in-window
+        && p.offLow >= CONFIRM_PCT                   // ...and has TURNED back up off the low (the bounce started)
+        && p.lastP < p.maxP * 0.995                  // ...but isn't already fully recovered (room to run)
+        && (p.ch24 == null || p.ch24 > -MAX_DUMP24)) // ...and not in a 24h dump
       .sort((a, b) => b.vol - a.vol); // most-traded (cheapest to scalp) first
 
     let slots = MAX_POS - openN;
@@ -212,7 +220,7 @@ async function main() {
       const entryCost = sizeEth * (feeFrac + Math.min(SLIP_CAP, (sizeEth / Math.max(lp, 1e-9)) * 100 * IMPACT_K) / 100) + GAS_ETH;
       S.cash -= (sizeEth + entryCost);
       S.positions[c.token] = { sym: c.sym, entry: price, high: price, cost: sizeEth, entryCost, lp, pool: c.pool, openedH: nowH };
-      fills.push(`🛒 BOUGHT *$${c.sym}*  ${sizeEth.toFixed(5)} ETH\n   dip *${c.dip.toFixed(1)}%* · vol ${c.vol.toFixed(2)} ETH · ${c.buys}b/${c.sells}s · cost *${costPct.toFixed(2)}%* · TP +${TP_PCT}%/SL -${SL_PCT}%`);
+      fills.push(`🛒 BOUGHT *$${c.sym}*  ${sizeEth.toFixed(5)} ETH\n   dip *-${c.dipMag.toFixed(1)}%* then *+${c.offLow.toFixed(1)}%* turn · vol ${c.vol.toFixed(2)} ETH · ${c.buys}b/${c.sells}s · cost *${costPct.toFixed(2)}%* · TP +${TP_PCT}%/SL -${SL_PCT}%`);
       slots--;
     }
   }
