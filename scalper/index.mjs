@@ -42,10 +42,12 @@ const ENTRY_DIP = Number(process.env.ENTRY_DIP || "4");   // need <= -4% (1h if 
 const MAX_DUMP24 = Number(process.env.MAX_DUMP24 || "10"); // skip if 24h worse than -10%
 const KNIFE = Number(process.env.KNIFE || "25");           // skip if window move < -25% (crashing)
 
-// --- exits ---
-const TP_PCT = Number(process.env.TP_PCT || "6");
-const SL_PCT = Number(process.env.SL_PCT || "6");
-const TRAIL_PCT = Number(process.env.TRAIL_PCT || "3");
+// --- exits (asymmetric: cut losers fast, let winners run — sim-tuned) ---
+// Symmetric TP=SL needs a ~67% win rate just to beat cost; a ~3:1 winner profits near ~45%.
+const TP_PCT = Number(process.env.TP_PCT || "12");          // let a real bounce run
+const SL_PCT = Number(process.env.SL_PCT || "4");           // cut the knife fast
+const TRAIL_PCT = Number(process.env.TRAIL_PCT || "6");     // give back 6% from high...
+const TRAIL_AFTER = Number(process.env.TRAIL_AFTER || "5"); // ...only once up >=5% (protect a winner, don't choke it)
 const MAX_HOLD_H = Number(process.env.MAX_HOLD_H || "12");
 
 // --- cost model (ETH) ---
@@ -53,7 +55,7 @@ const FEE_BPS = Number(process.env.FEE_BPS || "30");      // 0.30% per side
 const GAS_ETH = Number(process.env.GAS_ETH || "0.000015"); // L2 gas per swap (measured ~0.000014)
 const IMPACT_K = Number(process.env.IMPACT_K || "1.0");
 const SLIP_CAP = Number(process.env.SLIP_CAP || "5");
-const MAX_COST_FRAC = Number(process.env.MAX_COST_FRAC || "0.5"); // cost must be < 50% of TP
+const MAX_COST_PCT = Number(process.env.MAX_COST_PCT || "2.5"); // absolute round-trip cost cap %
 
 if (!BOT) { console.error("BOT_TOKEN required"); process.exit(1); }
 const feeFrac = FEE_BPS / 10000;
@@ -171,7 +173,7 @@ async function main() {
     let reason = null;
     if (gainPct <= -SL_PCT) reason = "🛑 stop";
     else if (gainPct >= TP_PCT) reason = "✅ take-profit";
-    else if (gainPct > 1 && ddFromHigh >= TRAIL_PCT) reason = "🔒 trail";
+    else if (gainPct >= TRAIL_AFTER && ddFromHigh >= TRAIL_PCT) reason = "🔒 trail";
     else if (ageH >= MAX_HOLD_H) reason = "⌛ time";
     if (!reason) continue;
     const lp = pos.lp || MIN_LP_ETH;
@@ -203,7 +205,7 @@ async function main() {
       const sizeEth = Math.min(S.cash * RISK_FRAC, S.cash);
       if (sizeEth < MIN_TRADE) break;
       const costPct = costPctFor(sizeEth, lp);
-      if (costPct > TP_PCT * MAX_COST_FRAC) { console.log(`skip $${c.sym}: cost ${costPct.toFixed(2)}% > budget`); continue; }
+      if (costPct > MAX_COST_PCT) { console.log(`skip $${c.sym}: cost ${costPct.toFixed(2)}% > ${MAX_COST_PCT}% cap`); continue; }
       const top = await holderTop(c.token);
       if (top > TOP_HOLDER_MAX) { console.log(`skip $${c.sym}: whale ${top.toFixed(1)}%`); continue; }
       const price = await executeTrade("buy", c.lastP);
