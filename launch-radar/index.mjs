@@ -66,7 +66,7 @@ async function main() {
       `⏱ ${ageH.toFixed(1)}h old  ·  *+${c1.toFixed(1)}%* /1h, *+${c6.toFixed(1)}%* /6h\n` +
       `🟢 ${buys} buys / ${sells} sells (1h)  ·  📊 ${usd(v1)} vol/1h\n` +
       `💧 ${usd(liq)} liq  ·  👥 top wallet *${top.toFixed(1)}%*\n` +
-      `\`${addr}\`\n[Chart](${p.url})\n` +
+      `\`${addr}\`\n[💱 Buy on DEX](${p.url}?trade=1) · [📊 Chart](${p.url})\n` +
       `⚠️ _Fresh launch = casino. Small size, take profits._`
     );
     console.log(`LAUNCH ${sym} age ${ageH.toFixed(1)}h c1 ${c1} buys ${buys}/${sells} top ${top.toFixed(1)}%`);

@@ -77,7 +77,7 @@ async function main() {
       `🟢 *${buys} buys* / ${sells} sells · bought *${buyVol.toFixed(2)} ETH*\n` +
       `👛 *${uniqBuyers}/${sampled}* real wallets · avg *${avgBuy.toFixed(4)} ETH*/buy\n` +
       `💧 LP *${lp.toFixed(2)} ETH*\n\`${p.token}\`\n` +
-      `[Explorer](https://robinhoodchain.blockscout.com/token/${p.token}) · [Chart](https://dexscreener.com/robinhood/${p.token})\n` +
+      `[💱 Buy on DEX](https://dexscreener.com/robinhood/${p.pool}?trade=1) · [📊 Chart](https://dexscreener.com/robinhood/${p.pool}) · [🔎 Explorer](https://robinhoodchain.blockscout.com/token/${p.token})\n` +
       `⚠️ _Minute-1 launch. Casino — small size, take profits fast._`
     );
     console.log(`SNIPE ${sym} buys ${buys}/${sells} buyVol ${buyVol.toFixed(2)} lp ${lp.toFixed(2)}`);
