@@ -1,8 +1,9 @@
 name: x-watcher
 on:
-  schedule:
-    - cron: '*/10 * * * *'   # every 10 min (GitHub cron min is 5; may be delayed under load)
-  workflow_dispatch: {}        # lets you run it manually from the Actions tab
+  # schedule paused until a real X key is wired (nitter too flaky). Re-add to resume:
+  #   schedule:
+  #     - cron: '*/10 * * * *'
+  workflow_dispatch: {}        # still runnable on-demand from the Actions tab
 permissions:
   contents: read
 concurrency:
