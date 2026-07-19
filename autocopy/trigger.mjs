@@ -8,8 +8,10 @@ import { createWalletClient, createPublicClient, http, webSocket, parseEther, fo
 import { privateKeyToAccount } from "viem/accounts";
 
 // ---------- config ----------
-const RPC = process.env.RPC_URL || "https://rpc.mainnet.chain.robinhood.com";
-const RPC_WSS = (process.env.RPC_WSS || "").trim();   // optional: Alchemy WSS for instant block push (faster)
+// HYBRID: scan on the FREE public RPC, trade on Alchemy. Alchemy is only hit when we buy/sell.
+const SCAN_RPC = process.env.SCAN_RPC || "https://rpc.mainnet.chain.robinhood.com"; // free public — all scanning/reads
+const TRADE_RPC = (process.env.RPC_URL || SCAN_RPC).trim();                          // Alchemy (RPC_URL) — trades only
+const TRADE_WSS = (process.env.RPC_WSS || "").trim();                                // Alchemy WSS — used for trade-side reads if set
 const ROUTER = "0xcaf681a66d020601342297493863e78c959e5cb2";              // verified SwapRouter02
 const WETH = "0x0bd7d308f8e1639fab988df18a8011f41eacad73".toLowerCase();
 const V3 = (process.env.V3_FACTORY || "0x1f7d7550b1b028f7571e69a784071f0205fd2efa").toLowerCase();
@@ -48,11 +50,11 @@ const FEE_BPS = 100, GAS_ETH = 0.000015;                                 // 1% p
 if (!DRY_RUN && !PK) { console.error("PRIVATE_KEY required for live"); process.exit(1); }
 
 // ---------- clients ----------
-const chain = { id: 4663, name: "robinhood", nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 }, rpcUrls: { default: { http: [RPC] } } };
+const chain = { id: 4663, name: "robinhood", nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 }, rpcUrls: { default: { http: [SCAN_RPC] } } };
 const account = PK ? privateKeyToAccount(PK.startsWith("0x") ? PK : "0x" + PK) : null;
-// reads/subscriptions over WSS when provided (instant block push); tx submission stays on HTTP (reliable)
-const pub = createPublicClient({ chain, transport: RPC_WSS ? webSocket(RPC_WSS) : http(RPC) });
-const wallet = account ? createWalletClient({ account, chain, transport: http(RPC) }) : null;
+const pub = createPublicClient({ chain, transport: http(SCAN_RPC) });                                   // scanning — free public
+const pubT = createPublicClient({ chain, transport: TRADE_WSS ? webSocket(TRADE_WSS) : http(TRADE_RPC) }); // trade-side reads — Alchemy
+const wallet = account ? createWalletClient({ account, chain, transport: http(TRADE_RPC) }) : null;      // tx submission — Alchemy
 
 const ERC20 = [{ name: "balanceOf", type: "function", stateMutability: "view", inputs: [{ type: "address" }], outputs: [{ type: "uint256" }] }, { name: "approve", type: "function", stateMutability: "nonpayable", inputs: [{ type: "address" }, { type: "uint256" }], outputs: [{ type: "bool" }] }, { name: "allowance", type: "function", stateMutability: "view", inputs: [{ type: "address" }, { type: "address" }], outputs: [{ type: "uint256" }] }];
 const WETH_ABI = [{ name: "withdraw", type: "function", stateMutability: "nonpayable", inputs: [{ type: "uint256" }], outputs: [] }, { name: "balanceOf", type: "function", stateMutability: "view", inputs: [{ type: "address" }], outputs: [{ type: "uint256" }] }];
@@ -61,7 +63,7 @@ const POOL_ABI = [{ name: "slot0", type: "function", stateMutability: "view", in
 
 // ---------- helpers ----------
 const tg = (t) => BOT ? fetch(`https://api.telegram.org/bot${BOT}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: CHAT, text: t, parse_mode: "Markdown", disable_web_page_preview: true }) }).catch(() => {}) : null;
-const rawGet = async (m, p) => { try { const r = await fetch(RPC, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: m, params: p }) }); return (await r.json()).result; } catch { return null; } };
+const rawGet = async (m, p) => { try { const r = await fetch(SCAN_RPC, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: m, params: p }) }); return (await r.json()).result; } catch { return null; } }; // scanning stays on the free public RPC
 const s256 = (h) => { const v = BigInt("0x" + h); return v >= (1n << 255n) ? v - (1n << 256n) : v; };
 const metaCache = {};
 async function meta(pool) { if (metaCache[pool] !== undefined) return metaCache[pool]; try { const t0 = (await pub.readContract({ address: pool, abi: POOL_ABI, functionName: "token0" })).toLowerCase(); const fee = await pub.readContract({ address: pool, abi: POOL_ABI, functionName: "fee" }); const wethIsT0 = t0 === WETH; const other = wethIsT0 ? null : t0; return metaCache[pool] = other ? { token: other, wethIsT0, fee } : null; } catch { return metaCache[pool] = null; } }
@@ -77,28 +79,28 @@ async function buy(token, pool, fee, wethIsT0) {
   const expOut = BigInt(Math.floor(Number(COPY_ETH) * (1 / pEth) * 1e18));   // raw token units (decimal-agnostic)
   const minOut = expOut * BigInt(Math.floor((1 - SLIP) * 1000)) / 1000n;
   const params = { tokenIn: WETH, tokenOut: token, fee, recipient: account.address, amountIn: amtIn, amountOutMinimum: minOut, sqrtPriceLimitX96: 0n };
-  await pub.simulateContract({ address: ROUTER, abi: ROUTER_ABI, functionName: "exactInputSingle", args: [params], value: amtIn, account });
+  await pubT.simulateContract({ address: ROUTER, abi: ROUTER_ABI, functionName: "exactInputSingle", args: [params], value: amtIn, account }); // trade-side → Alchemy
   const h = await wallet.writeContract({ address: ROUTER, abi: ROUTER_ABI, functionName: "exactInputSingle", args: [params], value: amtIn });
-  await pub.waitForTransactionReceipt({ hash: h });
+  await pubT.waitForTransactionReceipt({ hash: h });
   // F2: only thing that must succeed is the confirmed buy. Get balance and return so the caller
   // records the position IMMEDIATELY — approve + sellability are handled by sell()/manage() later,
   // so a hiccup there can never orphan a bag we already paid for.
-  const bal = await pub.readContract({ address: token, abi: ERC20, functionName: "balanceOf", args: [account.address] });
+  const bal = await pubT.readContract({ address: token, abi: ERC20, functionName: "balanceOf", args: [account.address] });
   if (bal === 0n) throw new Error("no tokens received");
   return { hash: h, bal: bal.toString(), entry: pEth };
 }
 // F4: reclaim native ETH from WETH (sells return WETH) so the burner never runs dry on gas
 async function unwrapWeth() {
-  try { const wb = await pub.readContract({ address: WETH, abi: WETH_ABI, functionName: "balanceOf", args: [account.address] }); if (wb > 0n) { const h = await wallet.writeContract({ address: WETH, abi: WETH_ABI, functionName: "withdraw", args: [wb] }); await pub.waitForTransactionReceipt({ hash: h }); } } catch {}
+  try { const wb = await pubT.readContract({ address: WETH, abi: WETH_ABI, functionName: "balanceOf", args: [account.address] }); if (wb > 0n) { const h = await wallet.writeContract({ address: WETH, abi: WETH_ABI, functionName: "withdraw", args: [wb] }); await pubT.waitForTransactionReceipt({ hash: h }); } } catch {}
 }
 async function sell(token, fee, balStr) {
   const bal = BigInt(balStr);
-  const allow = await pub.readContract({ address: token, abi: ERC20, functionName: "allowance", args: [account.address, ROUTER] });
-  if (allow < bal) { const ah = await wallet.writeContract({ address: token, abi: ERC20, functionName: "approve", args: [ROUTER, bal] }); await pub.waitForTransactionReceipt({ hash: ah }); }
+  const allow = await pubT.readContract({ address: token, abi: ERC20, functionName: "allowance", args: [account.address, ROUTER] });
+  if (allow < bal) { const ah = await wallet.writeContract({ address: token, abi: ERC20, functionName: "approve", args: [ROUTER, bal] }); await pubT.waitForTransactionReceipt({ hash: ah }); }
   const params = { tokenIn: token, tokenOut: WETH, fee, recipient: account.address, amountIn: bal, amountOutMinimum: 0n, sqrtPriceLimitX96: 0n };
-  await pub.simulateContract({ address: ROUTER, abi: ROUTER_ABI, functionName: "exactInputSingle", args: [params], account });
+  await pubT.simulateContract({ address: ROUTER, abi: ROUTER_ABI, functionName: "exactInputSingle", args: [params], account });
   const h = await wallet.writeContract({ address: ROUTER, abi: ROUTER_ABI, functionName: "exactInputSingle", args: [params] });
-  await pub.waitForTransactionReceipt({ hash: h });
+  await pubT.waitForTransactionReceipt({ hash: h });
   return h;
 }
 
@@ -193,18 +195,17 @@ async function tick() {
   busy = false;
 }
 
-// SAFETY: refuse to run on the wrong chain (e.g. an Alchemy app pointed at ETH/Base/Solana)
-const cid = await pub.getChainId().catch(() => 0);
-if (cid !== chain.id) { const msg = `❌ RPC is chain *${cid || "unreachable"}*, expected *${chain.id}* (Robinhood Chain). Fix RPC_URL — NOT trading.`; console.error(msg); await tg(msg); process.exit(1); }
+// SAFETY: verify BOTH endpoints are Robinhood Chain. The trade client (Alchemy) sends money — if it's
+// on the wrong chain (an Alchemy app pointed at ETH/Base/Solana), refuse to run.
+const scanCid = await pub.getChainId().catch(() => 0);
+const tradeCid = !DRY_RUN ? await pubT.getChainId().catch(() => 0) : chain.id;
+if (scanCid !== chain.id) { const msg = `❌ scan RPC is chain *${scanCid || "unreachable"}*, need *${chain.id}*. Not trading.`; console.error(msg); await tg(msg); process.exit(1); }
+if (tradeCid !== chain.id) { const msg = `❌ *trade RPC (Alchemy) is chain ${tradeCid || "unreachable"}*, need ${chain.id} (Robinhood Chain). Fix RPC_URL — NOT trading.`; console.error(msg); await tg(msg); process.exit(1); }
 
-console.log(`trigger bot | ${DRY_RUN ? "PAPER" : "LIVE 💸"} | chain ${cid} | ${RPC_WSS ? "WSS push" : `poll ${POLL_MS}ms`} | copy ${COPY_ETH} ETH`);
+console.log(`trigger bot | ${DRY_RUN ? "PAPER" : "LIVE 💸"} | hybrid: scan=public(${scanCid}) trade=alchemy(${tradeCid}) | copy ${COPY_ETH} ETH | scan ${MIN_TICK_MS}ms`);
 if (account) console.log("burner:", account.address);
 if (account && !DRY_RUN) await unwrapWeth();   // F4: reclaim any WETH left from a prior run
-await tg(`🚀 trigger strategy ${DRY_RUN ? "*PAPER*" : "*LIVE*"} started · chain ${cid} · ${RPC_WSS ? "WSS" : "poll"} · ${COPY_ETH} ETH/entry`);
+await tg(`🚀 trigger ${DRY_RUN ? "*PAPER*" : "*LIVE*"} started · hybrid (scan=public, trade=alchemy) · ${COPY_ETH} ETH/entry`);
 
-if (RPC_WSS) {
-  pub.watchBlockNumber({ emitOnBegin: true, onBlockNumber: () => tick(), onError: (e) => console.error("wss err:", e.message) }); // instant push
-  setInterval(tick, 8000);   // backup heartbeat in case the socket drops
-} else {
-  (async function poll() { await tick(); setTimeout(poll, POLL_MS); })();
-}
+// block detection on the free public RPC (scanning never touches Alchemy)
+(async function poll() { await tick(); setTimeout(poll, POLL_MS); })();
