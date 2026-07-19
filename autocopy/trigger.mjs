@@ -26,14 +26,20 @@ const MAX_POS = Number(process.env.MAX_POS || "3");
 const MAX_TOTAL_ETH = Number(process.env.MAX_TOTAL_ETH || "0.012");      // hard cap on total deployed
 const SLIP = Number(process.env.SLIP || "12") / 100;                     // slippage cap (fresh pools = thin)
 
-// entry trigger (the reverse-engineered play)
-const MAX_AGE_MIN = Number(process.env.MAX_AGE_MIN || "3");              // only brand-new launches
+// entry trigger (the reverse-engineered play) — now with anti-rug survival gates
+const MIN_AGE_MIN = Number(process.env.MIN_AGE_MIN || "3");              // SURVIVED-LAUNCH: skip minute-1 (that's where instant -84% rugs live)
+const MAX_AGE_MIN = Number(process.env.MAX_AGE_MIN || "12");             // but still young enough to have room to run
 const MIN_UNIQ = Number(process.env.MIN_UNIQ || "15");                   // >=15 distinct real buyers
 const MIN_BUYS = Number(process.env.MIN_BUYS || "20");
 const BUY_RATIO = Number(process.env.BUY_RATIO || "2.5");                // buys >= 2.5x sells
 const UNIQ_RATIO = Number(process.env.UNIQ_RATIO || "0.55");             // >=55% of sampled buys distinct (anti-bot)
 const MIN_LP_ETH = Number(process.env.MIN_LP_ETH || "0.3");
 const TOP_HOLDER_MAX = Number(process.env.TOP_HOLDER_MAX || "20");
+// anti-rug gates
+const LP_KEEP = Number(process.env.LP_KEEP || "0.85");                   // liquidity must stay >=85% of its peak, else LP is being pulled = rug
+const REQUIRE_SOCIALS = (process.env.REQUIRE_SOCIALS ?? "1") !== "0";    // must have website/socials set on DexScreener (legitimacy)
+const SAME_BLOCK_MAX = Number(process.env.SAME_BLOCK_MAX || "0.5");      // no single block may hold > this fraction of the buys (anti-bundle)
+const MIN_BLOCKS = Number(process.env.MIN_BLOCKS || "4");                // buys must span >= this many blocks (organic demand, not one bundled rug)
 
 // exits (bank before the crowd)
 const TAKE_PROFIT = Number(process.env.TAKE_PROFIT || "50") / 100;
@@ -74,6 +80,17 @@ async function priceEth(pool, wethIsT0) { const [sq] = await pub.readContract({ 
 async function lpEth(pool) { try { const b = await pub.readContract({ address: WETH, abi: ERC20, functionName: "balanceOf", args: [pool] }); return Number(b) / 1e18; } catch { return 0; } }
 async function holderTopPct(token) { try { const r = await fetch(`https://robinhoodchain.blockscout.com/api/v2/tokens/${token}/holders`, { headers: { "User-Agent": "Mozilla/5.0" } }); const m = await fetch(`https://robinhoodchain.blockscout.com/api/v2/tokens/${token}`, { headers: { "User-Agent": "Mozilla/5.0" } }); const h = await r.json(), meta = await m.json(); const dec = Number(meta.decimals || 18), supply = Number(meta.total_supply || "0") / 10 ** dec; if (!supply || !h.items) return 100; let top = 0; for (const it of h.items) { const a = it.address || {}; if (a.is_contract || /pool|pair|lp|dead|0x0000/i.test((a.name || "") + (a.hash || ""))) continue; const v = Number(it.value || "0") / 10 ** dec; if (v > top) top = v; } return top / supply * 100; } catch { return 100; } }
 const costPct = (sizeEth, lp) => (FEE_BPS / 10000) * 100 * 2 + Math.min(5, (sizeEth / Math.max(lp, 1e-9)) * 100) * 2 + (GAS_ETH / Math.max(sizeEth, 1e-9)) * 100 * 2;
+// legitimacy gate: does the team bother to set a website/socials on DexScreener? Rug deployers almost never do.
+async function hasSocials(token) {
+  try {
+    const r = await fetch(`https://api.dexscreener.com/tokens/v1/robinhood/${token}`, { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(12000) });
+    if (!r.ok) return false;
+    const pairs = await r.json();
+    if (!Array.isArray(pairs)) return false;
+    for (const p of pairs) { const info = p.info || {}; if ((info.websites || []).length + (info.socials || []).length > 0) return true; }
+    return false;
+  } catch { return false; }
+}
 
 // ---------- executor (proven in swaptest.mjs) ----------
 async function buy(token, pool, fee, wethIsT0) {
@@ -131,12 +148,23 @@ async function evaluate(pool, tip) {
   const ageMin = (Date.now() - w.t) / 60000;
   if (ageMin > MAX_AGE_MIN) { delete S.watch[pool]; S.done[pool] = Date.now(); return; }   // missed the window
   const lp = await lpEth(pool);
+  w.lpMax = Math.max(w.lpMax || 0, lp);                                                     // track the peak liquidity we've seen
   if (lp < MIN_LP_ETH) return;                                                              // not enough liquidity yet
+  // RUG GUARD #1: liquidity draining off its peak = LP being pulled → rug in progress, abandon it
+  if (w.lpMax >= MIN_LP_ETH && lp < w.lpMax * LP_KEEP) { delete S.watch[pool]; S.done[pool] = Date.now(); return; }
+  // SURVIVED-LAUNCH: don't touch minute-1 launches — that's where the instant -84% dumps happen. Wait it out.
+  if (ageMin < MIN_AGE_MIN) return;                                                         // seasoning; keep watching
   const sw = await rawGet("eth_getLogs", [{ address: pool, topics: [SWAP_TOPIC], fromBlock: "0x" + w.blk.toString(16), toBlock: "0x" + tip.toString(16) }]) || [];
   const m = await meta(pool); if (!m) { delete S.watch[pool]; return; }
-  let buys = 0, sells = 0; const buyTxs = [];
-  for (const s of sw) { const d = s.data.slice(2); const a0 = s256(d.slice(0, 64)), a1 = s256(d.slice(64, 128)); const tokDelta = m.wethIsT0 ? a1 : a0; if (tokDelta < 0n) { buys++; buyTxs.push(s.transactionHash); } else if (tokDelta > 0n) sells++; }
+  let buys = 0, sells = 0; const buyTxs = [], buyBlocks = [];
+  for (const s of sw) { const d = s.data.slice(2); const a0 = s256(d.slice(0, 64)), a1 = s256(d.slice(64, 128)); const tokDelta = m.wethIsT0 ? a1 : a0; if (tokDelta < 0n) { buys++; buyTxs.push(s.transactionHash); buyBlocks.push(parseInt(s.blockNumber, 16)); } else if (tokDelta > 0n) sells++; }
   if (buys < MIN_BUYS || buys < sells * BUY_RATIO) return;
+  // RUG GUARD #2 (anti-bundle / same-block): real demand trickles in across many blocks. A coordinated rug
+  // bundles its "buys" into one/few blocks to fake momentum. Reject if buys concentrate in a single block
+  // or span too few blocks. Keep watching (return) — organic buys across more blocks can still qualify later.
+  const blkCount = {}; for (const b of buyBlocks) blkCount[b] = (blkCount[b] || 0) + 1;
+  const maxInBlock = Math.max(0, ...Object.values(blkCount)), distinctBlocks = Object.keys(blkCount).length;
+  if (maxInBlock > buys * SAME_BLOCK_MAX || distinctBlocks < MIN_BLOCKS) return;            // bundled = coordinated setup
   // anti-bot: sample distinct real senders
   const sample = buyTxs.slice(0, 30);
   const froms = await Promise.all(sample.map(async (h) => { const tx = await rawGet("eth_getTransactionByHash", [h]); return (tx && tx.from || "").toLowerCase(); }));
@@ -149,9 +177,12 @@ async function evaluate(pool, tip) {
   if (costPct(Number(COPY_ETH), lp) > MAX_COST_PCT) { delete S.watch[pool]; S.done[pool] = Date.now(); return; }
   const top = await holderTopPct(m.token);
   if (top > TOP_HOLDER_MAX) { delete S.watch[pool]; S.done[pool] = Date.now(); return; }
+  // LEGITIMACY: require the team set a website/socials on DexScreener. Keep watching if not — socials can be
+  // added within our window; don't burn the pool. Rug deployers almost never bother, so this filters them out.
+  if (REQUIRE_SOCIALS && !(await hasSocials(m.token))) return;
 
   delete S.watch[pool]; S.done[pool] = Date.now();
-  await tg(`⚡ *TRIGGER* $${m.token.slice(0, 8)} — fresh (${ageMin.toFixed(1)}m) · *${uniq} real buyers* · ${buys}b/${sells}s · LP ${lp.toFixed(2)}Ξ\n${DRY_RUN ? "📝 would buy" : "🟢 buying"} ${COPY_ETH} ETH`);
+  await tg(`⚡ *TRIGGER* $${m.token.slice(0, 8)} — survived *${ageMin.toFixed(1)}m* · *${uniq} real buyers* / ${distinctBlocks} blocks · ${buys}b/${sells}s · LP ${lp.toFixed(2)}Ξ · ✓socials\n${DRY_RUN ? "📝 would buy" : "🟢 buying"} ${COPY_ETH} ETH`);
   if (DRY_RUN) { S.positions[m.token] = { pool, fee: m.fee, cost: COPY_ETH, entry: await priceEth(pool, m.wethIsT0), high: 0, paper: true, t: Date.now() }; return; }
   try { const r = await buy(m.token, pool, m.fee, m.wethIsT0); S.positions[m.token] = { pool, fee: m.fee, cost: COPY_ETH, bal: r.bal, entry: r.entry, high: r.entry, t: Date.now() }; await tg(`✅ *BOUGHT* $${m.token.slice(0, 8)}\n[tx](https://robinhoodchain.blockscout.com/tx/${r.hash})`); }
   catch (e) { await tg(`❌ buy failed $${m.token.slice(0, 8)}: ${(e.shortMessage || e.message || "").slice(0, 80)}`); }
