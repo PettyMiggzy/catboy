@@ -81,9 +81,9 @@ if (!DRY_RUN && !PK) { console.error("PRIVATE_KEY required for live"); process.e
 // ---------- clients ----------
 const chain = { id: 4663, name: "robinhood", nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 }, rpcUrls: { default: { http: [SCAN_RPC] } } };
 const account = PK ? privateKeyToAccount(PK.startsWith("0x") ? PK : "0x" + PK) : null;
-const pub = createPublicClient({ chain, transport: http(SCAN_RPC) });                                   // scanning — free public
-const pubT = createPublicClient({ chain, transport: TRADE_WSS ? webSocket(TRADE_WSS) : http(TRADE_RPC) }); // trade-side reads — Alchemy
-const wallet = account ? createWalletClient({ account, chain, transport: http(TRADE_RPC) }) : null;      // tx submission — Alchemy
+const pub = createPublicClient({ chain, transport: http(SCAN_RPC, { timeout: 12000, retryCount: 2 }) });                                   // scanning — free public
+const pubT = createPublicClient({ chain, transport: TRADE_WSS ? webSocket(TRADE_WSS) : http(TRADE_RPC, { timeout: 12000, retryCount: 2 }) }); // trade-side reads — Alchemy
+const wallet = account ? createWalletClient({ account, chain, transport: http(TRADE_RPC, { timeout: 20000, retryCount: 2 }) }) : null;      // tx submission — Alchemy
 
 const ERC20 = [{ name: "balanceOf", type: "function", stateMutability: "view", inputs: [{ type: "address" }], outputs: [{ type: "uint256" }] }, { name: "approve", type: "function", stateMutability: "nonpayable", inputs: [{ type: "address" }, { type: "uint256" }], outputs: [{ type: "bool" }] }, { name: "allowance", type: "function", stateMutability: "view", inputs: [{ type: "address" }, { type: "address" }], outputs: [{ type: "uint256" }] }];
 const WETH_ABI = [{ name: "withdraw", type: "function", stateMutability: "nonpayable", inputs: [{ type: "uint256" }], outputs: [] }, { name: "balanceOf", type: "function", stateMutability: "view", inputs: [{ type: "address" }], outputs: [{ type: "uint256" }] }];
@@ -92,7 +92,7 @@ const POOL_ABI = [{ name: "slot0", type: "function", stateMutability: "view", in
 
 // ---------- helpers ----------
 const tg = (t) => BOT ? fetch(`https://api.telegram.org/bot${BOT}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: CHAT, text: t, parse_mode: "Markdown", disable_web_page_preview: true }) }).catch(() => {}) : null;
-const rawGet = async (m, p) => { try { const r = await fetch(SCAN_RPC, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: m, params: p }) }); return (await r.json()).result; } catch { return null; } }; // scanning stays on the free public RPC
+const rawGet = async (m, p) => { try { const r = await fetch(SCAN_RPC, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: m, params: p }), signal: AbortSignal.timeout(12000) }); return (await r.json()).result; } catch { return null; } }; // scanning stays on the free public RPC; timeout so a hung RPC call can't freeze the whole bot
 const s256 = (h) => { const v = BigInt("0x" + h); return v >= (1n << 255n) ? v - (1n << 256n) : v; };
 const metaCache = {};
 async function meta(pool) { if (metaCache[pool] !== undefined) return metaCache[pool]; try { const t0 = (await pub.readContract({ address: pool, abi: POOL_ABI, functionName: "token0" })).toLowerCase(); const fee = await pub.readContract({ address: pool, abi: POOL_ABI, functionName: "fee" }); const wethIsT0 = t0 === WETH; const other = wethIsT0 ? null : t0; return metaCache[pool] = other ? { token: other, wethIsT0, fee } : null; } catch { return metaCache[pool] = null; } }
@@ -325,10 +325,13 @@ async function manage() {
 }
 
 // ---------- loop ----------
-let busy = false, lastTick = 0;   // busy = no overlap; lastTick = rate-limit even under WSS block-push
+let busy = false, lastTick = 0, tickStart = 0;   // busy = no overlap; lastTick = rate-limit; tickStart = watchdog
 async function tick() {
+  // watchdog: if a previous tick has been "busy" far longer than any bounded set of RPC calls should take,
+  // assume it wedged and force-recover so the bot can never go permanently silent again.
+  if (busy && Date.now() - tickStart > 120000) { console.error("watchdog: tick wedged, forcing recovery"); busy = false; }
   if (busy || Date.now() - lastTick < MIN_TICK_MS) return;   // coalesce ~10 blocks/sec into 1 scan / MIN_TICK_MS
-  lastTick = Date.now(); busy = true;
+  lastTick = Date.now(); tickStart = Date.now(); busy = true;
   try {
     const tip = Number(await pub.getBlockNumber());
     if (!S.lastBlock) S.lastBlock = tip - WINDOW_BLOCKS;
@@ -347,7 +350,7 @@ async function tick() {
       for (const k in diag) delete diag[k];
     }
   } catch (e) { console.error("tick err:", e.shortMessage || e.message); }
-  busy = false;
+  finally { busy = false; }   // always release, even if an await rejected — never leave the loop wedged
 }
 
 // SAFETY: verify BOTH endpoints are Robinhood Chain. The trade client (Alchemy) sends money — if it's
