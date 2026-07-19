@@ -37,7 +37,7 @@ const MIN_LP_ETH = Number(process.env.MIN_LP_ETH || "0.3");
 const TOP_HOLDER_MAX = Number(process.env.TOP_HOLDER_MAX || "20");
 // anti-rug gates
 const LP_KEEP = Number(process.env.LP_KEEP || "0.85");                   // liquidity must stay >=85% of its peak, else LP is being pulled = rug
-const REQUIRE_SOCIALS = (process.env.REQUIRE_SOCIALS ?? "1") !== "0";    // must have website/socials set on DexScreener (legitimacy)
+const REQUIRE_SOCIALS = (process.env.REQUIRE_SOCIALS ?? "0") !== "0";    // off: DexScreener socials only appear after a paid profile, so fresh legit launches don't have them yet
 const SAME_BLOCK_MAX = Number(process.env.SAME_BLOCK_MAX || "0.5");      // no single block may hold > this fraction of the buys (anti-bundle)
 const MIN_BLOCKS = Number(process.env.MIN_BLOCKS || "4");                // buys must span >= this many blocks (organic demand, not one bundled rug)
 
