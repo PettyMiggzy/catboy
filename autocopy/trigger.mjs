@@ -41,11 +41,22 @@ const REQUIRE_SOCIALS = (process.env.REQUIRE_SOCIALS ?? "0") !== "0";    // off:
 const SAME_BLOCK_MAX = Number(process.env.SAME_BLOCK_MAX || "0.5");      // no single block may hold > this fraction of the buys (anti-bundle)
 const MIN_BLOCKS = Number(process.env.MIN_BLOCKS || "4");                // buys must span >= this many blocks (organic demand, not one bundled rug)
 
-// exits (bank before the crowd)
-const TAKE_PROFIT = Number(process.env.TAKE_PROFIT || "50") / 100;
-const TRAIL_PCT = Number(process.env.TRAIL_PCT || "25") / 100;
-const HARD_STOP = Number(process.env.HARD_STOP || "35") / 100;
-const MAX_HOLD_MIN = Number(process.env.MAX_HOLD_MIN || "30");
+// ===== MC-TRIGGER (validated strategy) =====
+// Backtested + out-of-sample proven (5 windows / 36h / ~1500 tokens, costs+rug-gap stressed):
+// enter when a token GROWS INTO the $8-20k market-cap band (survived launch + real demand),
+// exit TP+40% / stop-35%. ~70% win, +33% median. See scratchpad sims. "burst" = old buyer-burst play.
+const TRIGGER_MODE = (process.env.TRIGGER_MODE || "mc").toLowerCase();   // "mc" = proven MC-crossing | "burst" = legacy
+const MC_LO = Number(process.env.MC_LO || "8000");                       // enter when MC first climbs to >= this (USD)
+const MC_HI = Number(process.env.MC_HI || "20000");                      // ...and still <= this (in the band)
+const MC_HI_HARD = Number(process.env.MC_HI_HARD || String(MC_HI * 1.5)); // if it already blew past this, we missed it — drop
+const MC_MAX_AGE_MIN = Number(process.env.MC_MAX_AGE_MIN || "60");       // watch a pool up to this long for the crossing
+const ETH_USD_FALLBACK = Number(process.env.ETH_USD || "1865");          // used if the live price fetch fails
+
+// exits — defaults are the sim-validated TP+40% / stop-35% (trail is a loose backstop only)
+const TAKE_PROFIT = Number(process.env.TAKE_PROFIT || "40") / 100;       // proven: bank at +40%
+const TRAIL_PCT = Number(process.env.TRAIL_PCT || "45") / 100;           // loose so TP+40 stays the primary exit; still catches a faded runner
+const HARD_STOP = Number(process.env.HARD_STOP || "35") / 100;           // proven: cut at -35%
+const MAX_HOLD_MIN = Number(process.env.MAX_HOLD_MIN || "60");           // ~forward window used in the backtests
 const MAX_COST_PCT = Number(process.env.MAX_COST_PCT || "4");            // reject if est round-trip cost too high
 
 const POLL_MS = Number(process.env.POLL_MS || "2500");
@@ -80,6 +91,17 @@ async function priceEth(pool, wethIsT0) { const [sq] = await pub.readContract({ 
 async function lpEth(pool) { try { const b = await pub.readContract({ address: WETH, abi: ERC20, functionName: "balanceOf", args: [pool] }); return Number(b) / 1e18; } catch { return 0; } }
 async function holderTopPct(token) { try { const r = await fetch(`https://robinhoodchain.blockscout.com/api/v2/tokens/${token}/holders`, { headers: { "User-Agent": "Mozilla/5.0" } }); const m = await fetch(`https://robinhoodchain.blockscout.com/api/v2/tokens/${token}`, { headers: { "User-Agent": "Mozilla/5.0" } }); const h = await r.json(), meta = await m.json(); const dec = Number(meta.decimals || 18), supply = Number(meta.total_supply || "0") / 10 ** dec; if (!supply || !h.items) return 100; let top = 0; for (const it of h.items) { const a = it.address || {}; if (a.is_contract || /pool|pair|lp|dead|0x0000/i.test((a.name || "") + (a.hash || ""))) continue; const v = Number(it.value || "0") / 10 ** dec; if (v > top) top = v; } return top / supply * 100; } catch { return 100; } }
 const costPct = (sizeEth, lp) => (FEE_BPS / 10000) * 100 * 2 + Math.min(5, (sizeEth / Math.max(lp, 1e-9)) * 100) * 2 + (GAS_ETH / Math.max(sizeEth, 1e-9)) * 100 * 2;
+// live ETH price (10-min cache) so the $ market-cap band is accurate; falls back to ETH_USD_FALLBACK
+let ethUsd = ETH_USD_FALLBACK, ethUsdAt = 0;
+async function ethPrice() {
+  if (Date.now() - ethUsdAt < 600000) return ethUsd;
+  try { const r = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd", { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(8000) }); const j = await r.json(); const p = Number(j?.ethereum?.usd); if (p > 0) { ethUsd = p; ethUsdAt = Date.now(); } } catch {}
+  return ethUsd;
+}
+// totalSupply in whole tokens (cached). MC_ETH = priceEthRaw * (supplyRaw/1e18) — token decimals cancel out.
+const SUPPLY_ABI = [{ name: "totalSupply", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] }];
+const supplyCache = {};
+async function totalSupply(token) { if (supplyCache[token] !== undefined) return supplyCache[token]; try { const r = await pub.readContract({ address: token, abi: SUPPLY_ABI, functionName: "totalSupply" }); return supplyCache[token] = Number(r) / 1e18; } catch { return supplyCache[token] = 0; } }
 // legitimacy gate: does the team bother to set a website/socials on DexScreener? Rug deployers almost never do.
 async function hasSocials(token) {
   try {
@@ -191,6 +213,37 @@ async function evaluate(pool, tip) {
   try { const r = await buy(m.token, pool, m.fee, m.wethIsT0); S.positions[m.token] = { pool, fee: m.fee, cost: COPY_ETH, bal: r.bal, entry: r.entry, high: r.entry, t: Date.now() }; await tg(`✅ *BOUGHT* $${m.token.slice(0, 8)}\n[tx](https://robinhoodchain.blockscout.com/tx/${r.hash})`); }
   catch (e) { await tg(`❌ buy failed $${m.token.slice(0, 8)}: ${(e.shortMessage || e.message || "").slice(0, 80)}`); }
 }
+// VALIDATED STRATEGY: enter when a token grows INTO the $MC_LO-$MC_HI market-cap band (survived launch +
+// real demand), then exit TP+40%/stop-35% via manage(). Proven +EV out-of-sample. Reads stay on the free RPC.
+async function evaluateMC(pool, tip) {
+  const w = S.watch[pool];
+  const ageMin = (Date.now() - w.t) / 60000;
+  if (ageMin > MC_MAX_AGE_MIN) { dbump("aged"); delete S.watch[pool]; S.done[pool] = Date.now(); return; }
+  const lp = await lpEth(pool);
+  w.lpMax = Math.max(w.lpMax || 0, lp);
+  if (lp < MIN_LP_ETH) { if (ageMin > 5) { dbump("deadLaunch"); delete S.watch[pool]; S.done[pool] = Date.now(); } else dbump("lpThin"); return; } // prune dead launches fast to keep the watch set small
+  if (w.lpMax >= MIN_LP_ETH && lp < w.lpMax * LP_KEEP) { dbump("lpDrain"); delete S.watch[pool]; S.done[pool] = Date.now(); return; } // LP being pulled = rug
+  const m = await meta(pool); if (!m) { delete S.watch[pool]; return; }
+  const supply = await totalSupply(m.token); if (!supply) { dbump("noSupply"); return; }
+  const pe = await priceEth(pool, m.wethIsT0);
+  const mc = pe * supply * (await ethPrice());
+  if (mc < MC_LO) { w.mcBelow = true; dbump("belowBand"); return; }           // still under the band — keep watching (this proves it GREW into it)
+  if (mc > MC_HI_HARD) { dbump("ranPast"); delete S.watch[pool]; S.done[pool] = Date.now(); return; } // already mooned past our band, missed
+  if (mc > MC_HI) { dbump("aboveBand"); return; }                             // between HI and hard cap — wait for a pullback into band
+  if (!w.mcBelow) { dbump("bornInBand"); return; }                            // must have grown in from below, not launched at this MC
+  // in-band + grew into it → ENTER. exposure/cost/whale gates first.
+  const activePos = Object.values(S.positions).filter((p) => !p.stuck);
+  if (activePos.length >= MAX_POS || activePos.reduce((a, p) => a + Number(p.cost || 0), 0) + Number(COPY_ETH) > MAX_TOTAL_ETH) { dbump("full"); return; }
+  if (costPct(Number(COPY_ETH), lp) > MAX_COST_PCT) { dbump("cost"); return; }
+  const top = await holderTopPct(m.token);
+  if (top > TOP_HOLDER_MAX) { dbump("whale"); delete S.watch[pool]; S.done[pool] = Date.now(); return; }
+  dbump("PASS");
+  delete S.watch[pool]; S.done[pool] = Date.now();
+  await tg(`⚡ *MC TRIGGER* $${m.token.slice(0, 8)} — grew into *$${(mc / 1000).toFixed(1)}k MC* · LP ${lp.toFixed(2)}Ξ · top ${top.toFixed(0)}%\n${DRY_RUN ? "📝 would buy" : "🟢 buying"} ${COPY_ETH} ETH · exit TP+${(TAKE_PROFIT * 100).toFixed(0)}%/stop-${(HARD_STOP * 100).toFixed(0)}%`);
+  if (DRY_RUN) { S.positions[m.token] = { pool, fee: m.fee, cost: COPY_ETH, entry: pe, high: 0, paper: true, t: Date.now(), mc }; return; }
+  try { const r = await buy(m.token, pool, m.fee, m.wethIsT0); S.positions[m.token] = { pool, fee: m.fee, cost: COPY_ETH, bal: r.bal, entry: r.entry, high: r.entry, t: Date.now(), mc }; await tg(`✅ *BOUGHT* $${m.token.slice(0, 8)}\n[tx](https://robinhoodchain.blockscout.com/tx/${r.hash})`); }
+  catch (e) { await tg(`❌ buy failed $${m.token.slice(0, 8)}: ${(e.shortMessage || e.message || "").slice(0, 80)}`); }
+}
 async function manage() {
   for (const token of Object.keys(S.positions)) {
     const pos = S.positions[token]; if (!pos.entry || pos.stuck) continue;   // F3: skip written-off bags
@@ -225,16 +278,17 @@ async function tick() {
     const tip = Number(await pub.getBlockNumber());
     if (!S.lastBlock) S.lastBlock = tip - WINDOW_BLOCKS;
     await scanNewPools(S.lastBlock + 1, tip); S.lastBlock = tip;
-    for (const pool of Object.keys(S.watch)) await evaluate(pool, tip);
+    const evalFn = TRIGGER_MODE === "mc" ? evaluateMC : evaluate;
+    for (const pool of Object.keys(S.watch)) await evalFn(pool, tip);
     await manage();
     for (const k in S.done) if (Date.now() - S.done[k] > 3600000) delete S.done[k];
     save();
     // heartbeat: every ~30 min, DM what's in the funnel + why nothing passed, so we can tune the gates from data
     if (Date.now() - lastBeat > 1800000) {
       lastBeat = Date.now();
-      const order = ["PASS", "seasoning", "lpThin", "lpDrain", "fewBuys", "bundled", "botty", "whale", "cost", "noSocials", "full"];
+      const order = ["PASS", "belowBand", "aboveBand", "ranPast", "bornInBand", "deadLaunch", "lpThin", "lpDrain", "noSupply", "whale", "cost", "full", "aged", "seasoning", "fewBuys", "bundled", "botty", "noSocials"];
       const line = order.filter((k) => diag[k]).map((k) => `${k} ${diag[k]}`).join(" · ") || "no candidates yet";
-      await tg(`💓 *watch ${Object.keys(S.watch).length}* · rejects(30m): ${line}`);
+      await tg(`💓 *${TRIGGER_MODE}* · watch ${Object.keys(S.watch).length} · ETH $${ethUsd.toFixed(0)} · rejects(30m): ${line}`);
       for (const k in diag) delete diag[k];
     }
   } catch (e) { console.error("tick err:", e.shortMessage || e.message); }
@@ -248,10 +302,12 @@ const tradeCid = !DRY_RUN ? await pubT.getChainId().catch(() => 0) : chain.id;
 if (scanCid !== chain.id) { const msg = `❌ scan RPC is chain *${scanCid || "unreachable"}*, need *${chain.id}*. Not trading.`; console.error(msg); await tg(msg); process.exit(1); }
 if (tradeCid !== chain.id) { const msg = `❌ *trade RPC (Alchemy) is chain ${tradeCid || "unreachable"}*, need ${chain.id} (Robinhood Chain). Fix RPC_URL — NOT trading.`; console.error(msg); await tg(msg); process.exit(1); }
 
-console.log(`trigger bot | ${DRY_RUN ? "PAPER" : "LIVE 💸"} | hybrid: scan=public(${scanCid}) trade=alchemy(${tradeCid}) | copy ${COPY_ETH} ETH | scan ${MIN_TICK_MS}ms`);
+const modeDesc = TRIGGER_MODE === "mc" ? `MC-trigger $${MC_LO / 1000}-${MC_HI / 1000}k → TP+${(TAKE_PROFIT * 100).toFixed(0)}%/stop-${(HARD_STOP * 100).toFixed(0)}%` : "buyer-burst (legacy)";
+console.log(`trigger bot | ${DRY_RUN ? "PAPER" : "LIVE 💸"} | ${modeDesc} | hybrid scan=public(${scanCid}) trade=alchemy(${tradeCid}) | ${COPY_ETH} ETH/entry`);
 if (account) console.log("burner:", account.address);
 if (account && !DRY_RUN) await unwrapWeth();   // F4: reclaim any WETH left from a prior run
-await tg(`🚀 trigger ${DRY_RUN ? "*PAPER*" : "*LIVE*"} started · hybrid (scan=public, trade=alchemy) · ${COPY_ETH} ETH/entry`);
+if (TRIGGER_MODE === "mc") await ethPrice();    // warm the ETH price before the first scan
+await tg(`🚀 trigger ${DRY_RUN ? "*PAPER*" : "*LIVE*"} started · ${modeDesc} · ${COPY_ETH} ETH/entry`);
 
 // block detection on the free public RPC (scanning never touches Alchemy)
 (async function poll() { await tick(); setTimeout(poll, POLL_MS); })();
