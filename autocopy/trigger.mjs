@@ -62,6 +62,9 @@ const NF_MIN_ETH = Number(process.env.NF_MIN_ETH || "0.2");            // net WE
 const NF_WIN_BLK = Number(process.env.NF_WIN_BLK || "1800");           // rolling window ~3min — persists long enough for 2.5s polling to catch it live
 const NF_MC_MIN = Number(process.env.NF_MC_MIN || "3000");             // sanity floor (skip dust)
 const NF_MC_MAX = Number(process.env.NF_MC_MAX || "60000");            // sanity ceiling (skip already-huge)
+// EMERGENCY BRAKE: default HALTED. While on, the bot detects + manages/sells existing positions but
+// opens NO new real buys. Flip HALT_BUYS=0 only after the anti-rug screen is verified working.
+const HALT_BUYS = (process.env.HALT_BUYS ?? "1") !== "0";
 const MIN_SELLS = Number(process.env.MIN_SELLS || "2");                // honeypot screen: require >= this many real SELLS in the window (live proof selling works)
 const PANIC_KEEP = Number(process.env.PANIC_KEEP || "0.5");            // LP-drain panic: dump a held position if its pool LP falls below this fraction of its peak. 0.5 = half the liquidity yanked = rug (not normal selling, which craters price into the stop first)
 
@@ -305,6 +308,8 @@ async function evaluateNetFlow(pool, tip) {
   if (costPct(Number(COPY_ETH), lp) > MAX_COST_PCT) { dbump("cost"); return; }
   const top = await holderTopPct(m.token);
   if (top > TOP_HOLDER_MAX) { dbump("whale"); delete S.watch[pool]; S.done[pool] = Date.now(); return; }
+  // EMERGENCY BRAKE: on live, do not open new positions while HALT_BUYS is set (stop the bleed).
+  if (HALT_BUYS && !DRY_RUN) { dbump("halted"); delete S.watch[pool]; S.done[pool] = Date.now(); return; }
   dbump("PASS");
   delete S.watch[pool]; S.done[pool] = Date.now();
   await tg(`⚡ *NETFLOW* $${m.token.slice(0, 8)} — *+${netWeth.toFixed(2)}Ξ* net buys/${(NF_WIN_BLK / 10).toFixed(0)}s · $${(mc / 1000).toFixed(1)}k MC · LP ${lp.toFixed(2)}Ξ · top ${top.toFixed(0)}%\n${DRY_RUN ? "📝 would buy" : "🟢 buying"} ${COPY_ETH} ETH · exit TP+${(TAKE_PROFIT * 100).toFixed(0)}%/stop-${(HARD_STOP * 100).toFixed(0)}%`);
@@ -366,7 +371,7 @@ async function tick() {
     // heartbeat: a frequent alive-pulse + funnel, so silence always means "hung" (never "just quiet")
     if (Date.now() - lastBeat > HEARTBEAT_MS) {
       const mins = Math.round((Date.now() - lastBeat) / 60000); lastBeat = Date.now();
-      const order = ["PASS", "weakFlow", "falling", "noSells", "mcRange", "noFlow", "belowBand", "aboveBand", "ranPast", "deadLaunch", "lpThin", "lpErr", "lpDrain", "noSupply", "whale", "cost", "full", "aged", "seasoning", "fewBuys", "bundled", "botty", "noSocials"];
+      const order = ["PASS", "halted", "weakFlow", "falling", "noSells", "mcRange", "noFlow", "belowBand", "aboveBand", "ranPast", "deadLaunch", "lpThin", "lpErr", "lpDrain", "noSupply", "whale", "cost", "full", "aged", "seasoning", "fewBuys", "bundled", "botty", "noSocials"];
       const line = order.filter((k) => diag[k]).map((k) => `${k} ${diag[k]}`).join(" · ") || "no candidates yet";
       const hb = `💓 *${TRIGGER_MODE}* · watch ${Object.keys(S.watch).length} · ETH $${ethUsd.toFixed(0)} · maxLP ${diagMaxLp.toFixed(2)}Ξ · liq≥thr ${diagLiqSeen} · rejects(${mins}m): ${line}`;
       console.log(hb.replace(/\*/g, "")); await tg(hb);
