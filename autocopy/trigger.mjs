@@ -52,6 +52,7 @@ const pub = createPublicClient({ chain, transport: http(RPC) });
 const wallet = account ? createWalletClient({ account, chain, transport: http(RPC) }) : null;
 
 const ERC20 = [{ name: "balanceOf", type: "function", stateMutability: "view", inputs: [{ type: "address" }], outputs: [{ type: "uint256" }] }, { name: "approve", type: "function", stateMutability: "nonpayable", inputs: [{ type: "address" }, { type: "uint256" }], outputs: [{ type: "bool" }] }, { name: "allowance", type: "function", stateMutability: "view", inputs: [{ type: "address" }, { type: "address" }], outputs: [{ type: "uint256" }] }];
+const WETH_ABI = [{ name: "withdraw", type: "function", stateMutability: "nonpayable", inputs: [{ type: "uint256" }], outputs: [] }, { name: "balanceOf", type: "function", stateMutability: "view", inputs: [{ type: "address" }], outputs: [{ type: "uint256" }] }];
 const ROUTER_ABI = [{ name: "exactInputSingle", type: "function", stateMutability: "payable", inputs: [{ type: "tuple", components: [{ name: "tokenIn", type: "address" }, { name: "tokenOut", type: "address" }, { name: "fee", type: "uint24" }, { name: "recipient", type: "address" }, { name: "amountIn", type: "uint256" }, { name: "amountOutMinimum", type: "uint256" }, { name: "sqrtPriceLimitX96", type: "uint160" }] }], outputs: [{ name: "amountOut", type: "uint256" }] }];
 const POOL_ABI = [{ name: "slot0", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint160" }, { type: "int24" }, { type: "uint16" }, { type: "uint16" }, { type: "uint16" }, { type: "uint8" }, { type: "bool" }] }, { name: "token0", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "address" }] }, { name: "fee", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint24" }] }];
 
@@ -76,14 +77,16 @@ async function buy(token, pool, fee, wethIsT0) {
   await pub.simulateContract({ address: ROUTER, abi: ROUTER_ABI, functionName: "exactInputSingle", args: [params], value: amtIn, account });
   const h = await wallet.writeContract({ address: ROUTER, abi: ROUTER_ABI, functionName: "exactInputSingle", args: [params], value: amtIn });
   await pub.waitForTransactionReceipt({ hash: h });
+  // F2: only thing that must succeed is the confirmed buy. Get balance and return so the caller
+  // records the position IMMEDIATELY — approve + sellability are handled by sell()/manage() later,
+  // so a hiccup there can never orphan a bag we already paid for.
   const bal = await pub.readContract({ address: token, abi: ERC20, functionName: "balanceOf", args: [account.address] });
   if (bal === 0n) throw new Error("no tokens received");
-  // approve + honeypot verify (can we sell?)
-  const allow = await pub.readContract({ address: token, abi: ERC20, functionName: "allowance", args: [account.address, ROUTER] });
-  if (allow < bal) { const ah = await wallet.writeContract({ address: token, abi: ERC20, functionName: "approve", args: [ROUTER, bal] }); await pub.waitForTransactionReceipt({ hash: ah }); }
-  try { await pub.simulateContract({ address: ROUTER, abi: ROUTER_ABI, functionName: "exactInputSingle", args: [{ tokenIn: token, tokenOut: WETH, fee, recipient: account.address, amountIn: bal, amountOutMinimum: 0n, sqrtPriceLimitX96: 0n }], account }); }
-  catch { await tg(`🍯 *HONEYPOT* $${token.slice(0, 8)} — bought but can't sell. ${COPY_ETH} ETH stuck (size-capped).`); }
   return { hash: h, bal: bal.toString(), entry: pEth };
+}
+// F4: reclaim native ETH from WETH (sells return WETH) so the burner never runs dry on gas
+async function unwrapWeth() {
+  try { const wb = await pub.readContract({ address: WETH, abi: WETH_ABI, functionName: "balanceOf", args: [account.address] }); if (wb > 0n) { const h = await wallet.writeContract({ address: WETH, abi: WETH_ABI, functionName: "withdraw", args: [wb] }); await pub.waitForTransactionReceipt({ hash: h }); } } catch {}
 }
 async function sell(token, fee, balStr) {
   const bal = BigInt(balStr);
@@ -97,7 +100,9 @@ async function sell(token, fee, balStr) {
 }
 
 // ---------- state ----------
-const S = existsSync(STATE) ? JSON.parse(readFileSync(STATE, "utf8")) : { lastBlock: 0, watch: {}, positions: {}, done: {} };
+let S; // F5: never crash-loop on a corrupt/truncated state file
+try { S = existsSync(STATE) ? JSON.parse(readFileSync(STATE, "utf8")) : null; } catch { console.error("state file unreadable — starting fresh"); S = null; }
+if (!S || typeof S !== "object") S = { lastBlock: 0, watch: {}, positions: {}, done: {} };
 S.watch = S.watch || {}; S.positions = S.positions || {}; S.done = S.done || {};
 const save = () => writeFileSync(STATE, JSON.stringify(S));
 
@@ -130,7 +135,8 @@ async function evaluate(pool, tip) {
   const valid = froms.filter(Boolean); const uniq = new Set(valid).size;
   if (uniq < MIN_UNIQ || uniq < valid.length * UNIQ_RATIO) return;                          // bot-inflated, skip
   // exposure + cost + holder gates
-  const openN = Object.keys(S.positions).length, deployed = Object.values(S.positions).reduce((a, p) => a + Number(p.cost || 0), 0);
+  const activePos = Object.values(S.positions).filter((p) => !p.stuck); // F3: stuck honeypots don't block new trades
+  const openN = activePos.length, deployed = activePos.reduce((a, p) => a + Number(p.cost || 0), 0);
   if (openN >= MAX_POS || deployed + Number(COPY_ETH) > MAX_TOTAL_ETH) return;
   if (costPct(Number(COPY_ETH), lp) > MAX_COST_PCT) { delete S.watch[pool]; S.done[pool] = Date.now(); return; }
   const top = await holderTopPct(m.token);
@@ -144,7 +150,7 @@ async function evaluate(pool, tip) {
 }
 async function manage() {
   for (const token of Object.keys(S.positions)) {
-    const pos = S.positions[token]; if (!pos.entry) continue;
+    const pos = S.positions[token]; if (!pos.entry || pos.stuck) continue;   // F3: skip written-off bags
     let cur; try { cur = await priceEth(pos.pool, metaCache[pos.pool]?.wethIsT0 ?? true); } catch { continue; }
     pos.high = Math.max(pos.high || pos.entry, cur);
     const gain = cur / pos.entry - 1, dd = (pos.high - cur) / pos.high, ageMin = (Date.now() - pos.t) / 60000;
@@ -154,9 +160,16 @@ async function manage() {
     else if (dd >= TRAIL_PCT) reason = `🔒 trail +${(gain * 100).toFixed(0)}%`;
     else if (ageMin >= MAX_HOLD_MIN) reason = `⌛ time ${(gain * 100).toFixed(0)}%`;
     if (!reason) continue;
-    delete S.positions[token]; save();
-    if (pos.paper || DRY_RUN) { await tg(`📝 ${reason} $${token.slice(0, 8)} — would exit`); continue; }
-    try { const h = await sell(token, pos.fee, pos.bal); await tg(`${reason.startsWith("✅") ? "💰" : "🛑"} *EXIT* $${token.slice(0, 8)} ${reason}\n[tx](https://robinhoodchain.blockscout.com/tx/${h})`); } catch (e) { await tg(`❌ sell failed $${token.slice(0, 8)}: ${(e.shortMessage || e.message || "").slice(0, 80)}`); }
+    if (pos.paper || DRY_RUN) { delete S.positions[token]; save(); await tg(`📝 ${reason} $${token.slice(0, 8)} — would exit`); continue; }
+    try {
+      const h = await sell(token, pos.fee, pos.bal);   // F1: only forget the position AFTER the sell confirms
+      delete S.positions[token]; save();
+      await tg(`${reason.startsWith("✅") ? "💰" : "🛑"} *EXIT* $${token.slice(0, 8)} ${reason}\n[tx](https://robinhoodchain.blockscout.com/tx/${h})`);
+      await unwrapWeth();
+    } catch (e) {
+      pos.sellFails = (pos.sellFails || 0) + 1; save();   // keep the position, retry next loop
+      if (pos.sellFails >= 3) { pos.stuck = true; save(); await tg(`⚠️ $${token.slice(0, 8)} won't sell after 3 tries (likely honeypot) — marked stuck, ${pos.cost} ETH written off, exposure freed.`); }
+    }
   }
 }
 
@@ -175,5 +188,6 @@ async function loop() {
 }
 console.log(`trigger bot | ${DRY_RUN ? "PAPER" : "LIVE 💸"} | copy ${COPY_ETH} ETH | poll ${POLL_MS}ms`);
 if (account) console.log("burner:", account.address);
+if (account && !DRY_RUN) unwrapWeth();   // F4: reclaim any WETH left from a prior run
 tg(`🚀 trigger strategy ${DRY_RUN ? "*PAPER*" : "*LIVE*"} started · fresh-launch momentum · ${COPY_ETH} ETH/entry`);
 loop();

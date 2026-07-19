@@ -10,7 +10,8 @@
     "@neondatabase/serverless": "^0.10.4",
     "@solana/web3.js": "^1.95.3",
     "jpeg-js": "^0.4.4",
-    "pngjs": "^7.0.0"
+    "pngjs": "^7.0.0",
+    "viem": "^2.55.2"
   },
   "overrides": {
     "uuid": "9.0.1"
