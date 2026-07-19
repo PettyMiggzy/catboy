@@ -1,7 +1,7 @@
 name: scanner
 on:
-  schedule:
-    - cron: '*/30 * * * *'   # scan every 30 min
+  # schedule:  # SILENCED (cron off; manual dispatch still works)
+    # - cron: '*/30 * * * *'   # scan every 30 min
   workflow_dispatch: {}
 permissions:
   contents: read

@@ -1,7 +1,7 @@
 name: momentum
 on:
-  schedule:
-    - cron: '*/5 * * * *'   # every 5 min — track trend exits + hunt fresh momentum
+  # schedule:  # SILENCED (cron off; manual dispatch still works)
+    # - cron: '*/5 * * * *'   # every 5 min — track trend exits + hunt fresh momentum
   workflow_dispatch: {}
 permissions:
   contents: read

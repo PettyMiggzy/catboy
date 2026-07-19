@@ -1,7 +1,7 @@
 name: dex-paid
 on:
-  schedule:
-    - cron: '*/5 * * * *'   # every 5 min — catch paid/boost signals early
+  # schedule:  # SILENCED (cron off; manual dispatch still works)
+    # - cron: '*/5 * * * *'   # every 5 min — catch paid/boost signals early
   workflow_dispatch: {}
 permissions:
   contents: read

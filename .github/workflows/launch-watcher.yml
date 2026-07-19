@@ -4,8 +4,8 @@ name: Launch Watcher
 # Runs every 5 minutes (GitHub's minimum). Also runnable manually.
 
 on:
-  schedule:
-    - cron: "*/5 * * * *"
+  # schedule:  # SILENCED (cron off; manual dispatch still works)
+    # - cron: "*/5 * * * *"
   workflow_dispatch:
 
 concurrency:

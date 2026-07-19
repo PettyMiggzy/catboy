@@ -1,7 +1,7 @@
 name: copytrade
 on:
-  schedule:
-    - cron: '*/5 * * * *'   # every 5 min — catch alpha-wallet buys fast
+  # schedule:  # SILENCED (cron off; manual dispatch still works)
+    # - cron: '*/5 * * * *'   # every 5 min — catch alpha-wallet buys fast
   workflow_dispatch: {}
 permissions:
   contents: read

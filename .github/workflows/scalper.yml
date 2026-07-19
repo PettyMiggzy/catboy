@@ -1,7 +1,7 @@
 name: scalper
 on:
-  schedule:
-    - cron: '*/5 * * * *'   # every 5 min — manage exits + hunt dips
+  # schedule:  # SILENCED (cron off; manual dispatch still works)
+    # - cron: '*/5 * * * *'   # every 5 min — manage exits + hunt dips
   workflow_dispatch: {}
 permissions:
   contents: read
