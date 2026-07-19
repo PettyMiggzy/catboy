@@ -45,13 +45,21 @@ const MIN_BLOCKS = Number(process.env.MIN_BLOCKS || "4");                // buys
 // Backtested + out-of-sample proven (5 windows / 36h / ~1500 tokens, costs+rug-gap stressed):
 // enter when a token GROWS INTO the $8-20k market-cap band (survived launch + real demand),
 // exit TP+40% / stop-35%. ~70% win, +33% median. See scratchpad sims. "burst" = old buyer-burst play.
-const TRIGGER_MODE = (process.env.TRIGGER_MODE || "mc").toLowerCase();   // "mc" = proven MC-crossing | "burst" = legacy
+// modes: "netflow" = net buy-pressure (best: survives fill-delay, fires often, +16.7% median @2.5s lag)
+//        "mc" = grow-into-$8-20k band | "burst" = legacy buyer-burst
+const TRIGGER_MODE = (process.env.TRIGGER_MODE || "netflow").toLowerCase();
 const MC_LO = Number(process.env.MC_LO || "8000");                       // enter when MC first climbs to >= this (USD)
 const MC_HI = Number(process.env.MC_HI || "20000");                      // ...and still <= this (in the band)
 const MC_HI_HARD = Number(process.env.MC_HI_HARD || String(MC_HI * 1.5)); // if it already blew past this, we missed it — drop
 const MC_MAX_AGE_MIN = Number(process.env.MC_MAX_AGE_MIN || "60");       // watch a pool up to this long for the crossing
 const DEAD_MIN = Number(process.env.DEAD_MIN || "12");                   // prune a still-illiquid pool after this many min (slow-starters get a chance)
 const ETH_USD_FALLBACK = Number(process.env.ETH_USD || "1865");          // used if the live price fetch fails
+// NetFlow trigger: enter on sustained net buy-pressure (net WETH inflow over a rolling window) while
+// price is rising, inside a sane MC range. Exit TP+40%/stop-35%. Forum-validated + fill-delay-robust.
+const NF_MIN_ETH = Number(process.env.NF_MIN_ETH || "0.5");             // require >= this net WETH bought over the window
+const NF_WIN_BLK = Number(process.env.NF_WIN_BLK || "600");            // rolling window (~60s at 10 blk/s)
+const NF_MC_MIN = Number(process.env.NF_MC_MIN || "3000");             // sanity floor (skip dust)
+const NF_MC_MAX = Number(process.env.NF_MC_MAX || "60000");            // sanity ceiling (skip already-huge)
 
 // exits — defaults are the sim-validated TP+40% / stop-35% (trail is a loose backstop only)
 const TAKE_PROFIT = Number(process.env.TAKE_PROFIT || "40") / 100;       // proven: bank at +40%
@@ -246,6 +254,51 @@ async function evaluateMC(pool, tip) {
   try { const r = await buy(m.token, pool, m.fee, m.wethIsT0); S.positions[m.token] = { pool, fee: m.fee, cost: COPY_ETH, bal: r.bal, entry: r.entry, high: r.entry, t: Date.now(), mc }; await tg(`✅ *BOUGHT* $${m.token.slice(0, 8)}\n[tx](https://robinhoodchain.blockscout.com/tx/${r.hash})`); }
   catch (e) { await tg(`❌ buy failed $${m.token.slice(0, 8)}: ${(e.shortMessage || e.message || "").slice(0, 80)}`); }
 }
+// BEST STRATEGY (fill-delay-robust, high-frequency): enter on sustained NET BUY-PRESSURE — net WETH
+// inflow >= NF_MIN_ETH over the last NF_WIN_BLK blocks, price rising, MC in a sane range. Exit TP40/SL35.
+// Survived 2.5s fill-lag stress at +16.7% median / 56% win where the MC-band average went negative.
+async function evaluateNetFlow(pool, tip) {
+  const w = S.watch[pool];
+  const ageMin = (Date.now() - w.t) / 60000;
+  if (ageMin > MC_MAX_AGE_MIN) { dbump("aged"); delete S.watch[pool]; S.done[pool] = Date.now(); return; }
+  const lp = await lpEth(pool);
+  if (lp < 0) { dbump("lpErr"); return; }
+  w.lpMax = Math.max(w.lpMax || 0, lp);
+  if (lp < MIN_LP_ETH) { if (ageMin > DEAD_MIN) { dbump("deadLaunch"); delete S.watch[pool]; S.done[pool] = Date.now(); } else dbump("lpThin"); return; }
+  if (w.lpMax >= MIN_LP_ETH && lp < w.lpMax * LP_KEEP) { dbump("lpDrain"); delete S.watch[pool]; S.done[pool] = Date.now(); return; }
+  const m = await meta(pool); if (!m) { delete S.watch[pool]; return; }
+  // net WETH flow over the trailing window, and price direction, from swap logs
+  const fromBlk = Math.max(w.blk, tip - NF_WIN_BLK);
+  const sw = await rawGet("eth_getLogs", [{ address: pool, topics: [SWAP_TOPIC], fromBlock: "0x" + fromBlk.toString(16), toBlock: "0x" + tip.toString(16) }]) || [];
+  if (sw.length < 2) { dbump("noFlow"); return; }
+  let netWeth = 0; const prices = [];
+  for (const s of sw) {
+    const d = s.data.slice(2);
+    const a0 = s256(d.slice(0, 64)), a1 = s256(d.slice(64, 128));
+    const wethDelta = m.wethIsT0 ? a0 : a1;                 // +ve = WETH into pool = a buy
+    const buy = (m.wethIsT0 ? a1 : a0) < 0n;                // token leaving pool = a buy
+    netWeth += (buy ? 1 : -1) * Math.abs(Number(wethDelta)) / 1e18;
+    const sq = Number(BigInt("0x" + d.slice(128, 192))) / 2 ** 96;
+    prices.push(m.wethIsT0 ? 1 / (sq * sq) : sq * sq);
+  }
+  if (netWeth < NF_MIN_ETH) { dbump("weakFlow"); return; }                        // not enough net buying
+  if (prices[prices.length - 1] < prices[0]) { dbump("falling"); return; }        // require price rising over the window
+  const supply = await totalSupply(m.token); if (!supply) { dbump("noSupply"); return; }
+  const pe = await priceEth(pool, m.wethIsT0);
+  const mc = pe * supply * (await ethPrice());
+  if (mc < NF_MC_MIN || mc > NF_MC_MAX) { dbump("mcRange"); return; }              // sanity band
+  const activePos = Object.values(S.positions).filter((p) => !p.stuck);
+  if (activePos.length >= MAX_POS || activePos.reduce((a, p) => a + Number(p.cost || 0), 0) + Number(COPY_ETH) > MAX_TOTAL_ETH) { dbump("full"); return; }
+  if (costPct(Number(COPY_ETH), lp) > MAX_COST_PCT) { dbump("cost"); return; }
+  const top = await holderTopPct(m.token);
+  if (top > TOP_HOLDER_MAX) { dbump("whale"); delete S.watch[pool]; S.done[pool] = Date.now(); return; }
+  dbump("PASS");
+  delete S.watch[pool]; S.done[pool] = Date.now();
+  await tg(`⚡ *NETFLOW* $${m.token.slice(0, 8)} — *+${netWeth.toFixed(2)}Ξ* net buys/${(NF_WIN_BLK / 10).toFixed(0)}s · $${(mc / 1000).toFixed(1)}k MC · LP ${lp.toFixed(2)}Ξ · top ${top.toFixed(0)}%\n${DRY_RUN ? "📝 would buy" : "🟢 buying"} ${COPY_ETH} ETH · exit TP+${(TAKE_PROFIT * 100).toFixed(0)}%/stop-${(HARD_STOP * 100).toFixed(0)}%`);
+  if (DRY_RUN) { S.positions[m.token] = { pool, fee: m.fee, cost: COPY_ETH, entry: pe, high: 0, paper: true, t: Date.now(), mc }; return; }
+  try { const r = await buy(m.token, pool, m.fee, m.wethIsT0); S.positions[m.token] = { pool, fee: m.fee, cost: COPY_ETH, bal: r.bal, entry: r.entry, high: r.entry, t: Date.now(), mc }; await tg(`✅ *BOUGHT* $${m.token.slice(0, 8)}\n[tx](https://robinhoodchain.blockscout.com/tx/${r.hash})`); }
+  catch (e) { await tg(`❌ buy failed $${m.token.slice(0, 8)}: ${(e.shortMessage || e.message || "").slice(0, 80)}`); }
+}
 async function manage() {
   for (const token of Object.keys(S.positions)) {
     const pos = S.positions[token]; if (!pos.entry || pos.stuck) continue;   // F3: skip written-off bags
@@ -280,7 +333,7 @@ async function tick() {
     const tip = Number(await pub.getBlockNumber());
     if (!S.lastBlock) S.lastBlock = tip - WINDOW_BLOCKS;
     await scanNewPools(S.lastBlock + 1, tip); S.lastBlock = tip;
-    const evalFn = TRIGGER_MODE === "mc" ? evaluateMC : evaluate;
+    const evalFn = TRIGGER_MODE === "netflow" ? evaluateNetFlow : TRIGGER_MODE === "mc" ? evaluateMC : evaluate;
     for (const pool of Object.keys(S.watch)) await evalFn(pool, tip);
     await manage();
     for (const k in S.done) if (Date.now() - S.done[k] > 3600000) delete S.done[k];
@@ -288,7 +341,7 @@ async function tick() {
     // heartbeat: every ~30 min, DM what's in the funnel + why nothing passed, so we can tune the gates from data
     if (Date.now() - lastBeat > 1800000) {
       lastBeat = Date.now();
-      const order = ["PASS", "belowBand", "aboveBand", "ranPast", "deadLaunch", "lpThin", "lpErr", "lpDrain", "noSupply", "whale", "cost", "full", "aged", "seasoning", "fewBuys", "bundled", "botty", "noSocials"];
+      const order = ["PASS", "weakFlow", "falling", "mcRange", "noFlow", "belowBand", "aboveBand", "ranPast", "deadLaunch", "lpThin", "lpErr", "lpDrain", "noSupply", "whale", "cost", "full", "aged", "seasoning", "fewBuys", "bundled", "botty", "noSocials"];
       const line = order.filter((k) => diag[k]).map((k) => `${k} ${diag[k]}`).join(" · ") || "no candidates yet";
       await tg(`💓 *${TRIGGER_MODE}* · watch ${Object.keys(S.watch).length} · ETH $${ethUsd.toFixed(0)} · rejects(30m): ${line}`);
       for (const k in diag) delete diag[k];
@@ -304,7 +357,7 @@ const tradeCid = !DRY_RUN ? await pubT.getChainId().catch(() => 0) : chain.id;
 if (scanCid !== chain.id) { const msg = `❌ scan RPC is chain *${scanCid || "unreachable"}*, need *${chain.id}*. Not trading.`; console.error(msg); await tg(msg); process.exit(1); }
 if (tradeCid !== chain.id) { const msg = `❌ *trade RPC (Alchemy) is chain ${tradeCid || "unreachable"}*, need ${chain.id} (Robinhood Chain). Fix RPC_URL — NOT trading.`; console.error(msg); await tg(msg); process.exit(1); }
 
-const modeDesc = TRIGGER_MODE === "mc" ? `MC-trigger $${MC_LO / 1000}-${MC_HI / 1000}k → TP+${(TAKE_PROFIT * 100).toFixed(0)}%/stop-${(HARD_STOP * 100).toFixed(0)}%` : "buyer-burst (legacy)";
+const modeDesc = TRIGGER_MODE === "netflow" ? `NetFlow +${NF_MIN_ETH}Ξ/${(NF_WIN_BLK / 10).toFixed(0)}s → TP+${(TAKE_PROFIT * 100).toFixed(0)}%/stop-${(HARD_STOP * 100).toFixed(0)}%` : TRIGGER_MODE === "mc" ? `MC-trigger $${MC_LO / 1000}-${MC_HI / 1000}k → TP+${(TAKE_PROFIT * 100).toFixed(0)}%/stop-${(HARD_STOP * 100).toFixed(0)}%` : "buyer-burst (legacy)";
 console.log(`trigger bot | ${DRY_RUN ? "PAPER" : "LIVE 💸"} | ${modeDesc} | hybrid scan=public(${scanCid}) trade=alchemy(${tradeCid}) | ${COPY_ETH} ETH/entry`);
 if (account) console.log("burner:", account.address);
 if (account && !DRY_RUN) await unwrapWeth();   // F4: reclaim any WETH left from a prior run
