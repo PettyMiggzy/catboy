@@ -52,7 +52,9 @@ const MC_LO = Number(process.env.MC_LO || "8000");                       // ente
 const MC_HI = Number(process.env.MC_HI || "20000");                      // ...and still <= this (in the band)
 const MC_HI_HARD = Number(process.env.MC_HI_HARD || String(MC_HI * 1.5)); // if it already blew past this, we missed it — drop
 const MC_MAX_AGE_MIN = Number(process.env.MC_MAX_AGE_MIN || "60");       // watch a pool up to this long for the crossing
-const DEAD_MIN = Number(process.env.DEAD_MIN || "12");                   // prune a still-illiquid pool after this many min (slow-starters get a chance)
+const DEAD_MIN = Number(process.env.DEAD_MIN || "30");                   // on RHC liquidity develops LATE (12-20m+), so keep watching thin pools this long before giving up
+const ZOMBIE_LP = Number(process.env.ZOMBIE_LP || "0.05");               // ...but a pool still near-zero LP after ZOMBIE_MIN is dead on arrival — cut it early to keep the watch lean
+const ZOMBIE_MIN = Number(process.env.ZOMBIE_MIN || "8");
 const ETH_USD_FALLBACK = Number(process.env.ETH_USD || "1865");          // used if the live price fetch fails
 // NetFlow trigger: enter on sustained net buy-pressure (net WETH inflow over a rolling window) while
 // price is rising, inside a sane MC range. Exit TP+40%/stop-35%. Forum-validated + fill-delay-robust.
@@ -265,7 +267,11 @@ async function evaluateNetFlow(pool, tip) {
   const lp = await lpEth(pool);
   if (lp < 0) { dbump("lpErr"); return; }
   w.lpMax = Math.max(w.lpMax || 0, lp);
-  if (lp < MIN_LP_ETH) { if (ageMin > DEAD_MIN) { dbump("deadLaunch"); delete S.watch[pool]; S.done[pool] = Date.now(); } else dbump("lpThin"); return; }
+  if (lp < MIN_LP_ETH) {
+    const zombie = lp < ZOMBIE_LP && ageMin > ZOMBIE_MIN;   // near-zero LP for a while = dead on arrival
+    if (zombie || ageMin > DEAD_MIN) { dbump("deadLaunch"); delete S.watch[pool]; S.done[pool] = Date.now(); } else dbump("lpThin"); // else keep watching — RHC liquidity often shows up at 12-20m+
+    return;
+  }
   if (w.lpMax >= MIN_LP_ETH && lp < w.lpMax * LP_KEEP) { dbump("lpDrain"); delete S.watch[pool]; S.done[pool] = Date.now(); return; }
   const m = await meta(pool); if (!m) { delete S.watch[pool]; return; }
   // net WETH flow over the trailing window, and price direction, from swap logs
