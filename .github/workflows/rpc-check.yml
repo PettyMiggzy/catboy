@@ -1,0 +1,14 @@
+name: rpc-check
+on: { workflow_dispatch: {} }
+permissions: { contents: read }
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - env:
+          RPC_URL: ${{ secrets.RPC_URL }}
+          RPC_WSS: ${{ secrets.RPC_WSS }}
+        run: node autocopy/rpccheck.mjs
