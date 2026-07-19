@@ -355,7 +355,8 @@ async function tick() {
       const mins = Math.round((Date.now() - lastBeat) / 60000); lastBeat = Date.now();
       const order = ["PASS", "weakFlow", "falling", "mcRange", "noFlow", "belowBand", "aboveBand", "ranPast", "deadLaunch", "lpThin", "lpErr", "lpDrain", "noSupply", "whale", "cost", "full", "aged", "seasoning", "fewBuys", "bundled", "botty", "noSocials"];
       const line = order.filter((k) => diag[k]).map((k) => `${k} ${diag[k]}`).join(" · ") || "no candidates yet";
-      await tg(`💓 *${TRIGGER_MODE}* · watch ${Object.keys(S.watch).length} · ETH $${ethUsd.toFixed(0)} · maxLP ${diagMaxLp.toFixed(2)}Ξ · liq≥thr ${diagLiqSeen} · rejects(${mins}m): ${line}`);
+      const hb = `💓 *${TRIGGER_MODE}* · watch ${Object.keys(S.watch).length} · ETH $${ethUsd.toFixed(0)} · maxLP ${diagMaxLp.toFixed(2)}Ξ · liq≥thr ${diagLiqSeen} · rejects(${mins}m): ${line}`;
+      console.log(hb.replace(/\*/g, "")); await tg(hb);
       for (const k in diag) delete diag[k]; diagMaxLp = 0; diagLiqSeen = 0;
     }
   } catch (e) { console.error("tick err:", e.shortMessage || e.message); }
