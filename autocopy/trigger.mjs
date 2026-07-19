@@ -28,7 +28,7 @@ const SLIP = Number(process.env.SLIP || "12") / 100;                     // slip
 
 // entry trigger (the reverse-engineered play) — now with anti-rug survival gates
 const MIN_AGE_MIN = Number(process.env.MIN_AGE_MIN || "3");              // SURVIVED-LAUNCH: skip minute-1 (that's where instant -84% rugs live)
-const MAX_AGE_MIN = Number(process.env.MAX_AGE_MIN || "12");             // but still young enough to have room to run
+const MAX_AGE_MIN = Number(process.env.MAX_AGE_MIN || "45");             // wider window so socials have time to appear + survival is proven
 const MIN_UNIQ = Number(process.env.MIN_UNIQ || "15");                   // >=15 distinct real buyers
 const MIN_BUYS = Number(process.env.MIN_BUYS || "20");
 const BUY_RATIO = Number(process.env.BUY_RATIO || "2.5");                // buys >= 2.5x sells
@@ -130,6 +130,9 @@ try { S = existsSync(STATE) ? JSON.parse(readFileSync(STATE, "utf8")) : null; } 
 if (!S || typeof S !== "object") S = { lastBlock: 0, watch: {}, positions: {}, done: {} };
 S.watch = S.watch || {}; S.positions = S.positions || {}; S.done = S.done || {};
 const save = () => writeFileSync(STATE, JSON.stringify(S));
+// diagnostics: tally WHY pools get rejected so we can see which gate is too tight (DM'd on heartbeat)
+const diag = {}; const dbump = (k) => { diag[k] = (diag[k] || 0) + 1; };
+let lastBeat = 0;
 
 // ---------- detection ----------
 async function scanNewPools(fromBlk, toBlk) {
@@ -149,37 +152,38 @@ async function evaluate(pool, tip) {
   if (ageMin > MAX_AGE_MIN) { delete S.watch[pool]; S.done[pool] = Date.now(); return; }   // missed the window
   const lp = await lpEth(pool);
   w.lpMax = Math.max(w.lpMax || 0, lp);                                                     // track the peak liquidity we've seen
-  if (lp < MIN_LP_ETH) return;                                                              // not enough liquidity yet
+  if (lp < MIN_LP_ETH) { dbump("lpThin"); return; }                                         // not enough liquidity yet
   // RUG GUARD #1: liquidity draining off its peak = LP being pulled → rug in progress, abandon it
-  if (w.lpMax >= MIN_LP_ETH && lp < w.lpMax * LP_KEEP) { delete S.watch[pool]; S.done[pool] = Date.now(); return; }
+  if (w.lpMax >= MIN_LP_ETH && lp < w.lpMax * LP_KEEP) { dbump("lpDrain"); delete S.watch[pool]; S.done[pool] = Date.now(); return; }
   // SURVIVED-LAUNCH: don't touch minute-1 launches — that's where the instant -84% dumps happen. Wait it out.
-  if (ageMin < MIN_AGE_MIN) return;                                                         // seasoning; keep watching
+  if (ageMin < MIN_AGE_MIN) { dbump("seasoning"); return; }                                 // seasoning; keep watching
   const sw = await rawGet("eth_getLogs", [{ address: pool, topics: [SWAP_TOPIC], fromBlock: "0x" + w.blk.toString(16), toBlock: "0x" + tip.toString(16) }]) || [];
   const m = await meta(pool); if (!m) { delete S.watch[pool]; return; }
   let buys = 0, sells = 0; const buyTxs = [], buyBlocks = [];
   for (const s of sw) { const d = s.data.slice(2); const a0 = s256(d.slice(0, 64)), a1 = s256(d.slice(64, 128)); const tokDelta = m.wethIsT0 ? a1 : a0; if (tokDelta < 0n) { buys++; buyTxs.push(s.transactionHash); buyBlocks.push(parseInt(s.blockNumber, 16)); } else if (tokDelta > 0n) sells++; }
-  if (buys < MIN_BUYS || buys < sells * BUY_RATIO) return;
+  if (buys < MIN_BUYS || buys < sells * BUY_RATIO) { dbump("fewBuys"); return; }
   // RUG GUARD #2 (anti-bundle / same-block): real demand trickles in across many blocks. A coordinated rug
   // bundles its "buys" into one/few blocks to fake momentum. Reject if buys concentrate in a single block
   // or span too few blocks. Keep watching (return) — organic buys across more blocks can still qualify later.
   const blkCount = {}; for (const b of buyBlocks) blkCount[b] = (blkCount[b] || 0) + 1;
   const maxInBlock = Math.max(0, ...Object.values(blkCount)), distinctBlocks = Object.keys(blkCount).length;
-  if (maxInBlock > buys * SAME_BLOCK_MAX || distinctBlocks < MIN_BLOCKS) return;            // bundled = coordinated setup
+  if (maxInBlock > buys * SAME_BLOCK_MAX || distinctBlocks < MIN_BLOCKS) { dbump("bundled"); return; } // bundled = coordinated setup
   // anti-bot: sample distinct real senders
   const sample = buyTxs.slice(0, 30);
   const froms = await Promise.all(sample.map(async (h) => { const tx = await rawGet("eth_getTransactionByHash", [h]); return (tx && tx.from || "").toLowerCase(); }));
   const valid = froms.filter(Boolean); const uniq = new Set(valid).size;
-  if (uniq < MIN_UNIQ || uniq < valid.length * UNIQ_RATIO) return;                          // bot-inflated, skip
+  if (uniq < MIN_UNIQ || uniq < valid.length * UNIQ_RATIO) { dbump("botty"); return; }       // bot-inflated, skip
   // exposure + cost + holder gates
   const activePos = Object.values(S.positions).filter((p) => !p.stuck); // F3: stuck honeypots don't block new trades
   const openN = activePos.length, deployed = activePos.reduce((a, p) => a + Number(p.cost || 0), 0);
-  if (openN >= MAX_POS || deployed + Number(COPY_ETH) > MAX_TOTAL_ETH) return;
-  if (costPct(Number(COPY_ETH), lp) > MAX_COST_PCT) { delete S.watch[pool]; S.done[pool] = Date.now(); return; }
+  if (openN >= MAX_POS || deployed + Number(COPY_ETH) > MAX_TOTAL_ETH) { dbump("full"); return; }
+  if (costPct(Number(COPY_ETH), lp) > MAX_COST_PCT) { dbump("cost"); delete S.watch[pool]; S.done[pool] = Date.now(); return; }
   const top = await holderTopPct(m.token);
-  if (top > TOP_HOLDER_MAX) { delete S.watch[pool]; S.done[pool] = Date.now(); return; }
+  if (top > TOP_HOLDER_MAX) { dbump("whale"); delete S.watch[pool]; S.done[pool] = Date.now(); return; }
   // LEGITIMACY: require the team set a website/socials on DexScreener. Keep watching if not — socials can be
   // added within our window; don't burn the pool. Rug deployers almost never bother, so this filters them out.
-  if (REQUIRE_SOCIALS && !(await hasSocials(m.token))) return;
+  if (REQUIRE_SOCIALS && !(await hasSocials(m.token))) { dbump("noSocials"); return; }
+  dbump("PASS");
 
   delete S.watch[pool]; S.done[pool] = Date.now();
   await tg(`⚡ *TRIGGER* $${m.token.slice(0, 8)} — survived *${ageMin.toFixed(1)}m* · *${uniq} real buyers* / ${distinctBlocks} blocks · ${buys}b/${sells}s · LP ${lp.toFixed(2)}Ξ · ✓socials\n${DRY_RUN ? "📝 would buy" : "🟢 buying"} ${COPY_ETH} ETH`);
@@ -225,6 +229,14 @@ async function tick() {
     await manage();
     for (const k in S.done) if (Date.now() - S.done[k] > 3600000) delete S.done[k];
     save();
+    // heartbeat: every ~30 min, DM what's in the funnel + why nothing passed, so we can tune the gates from data
+    if (Date.now() - lastBeat > 1800000) {
+      lastBeat = Date.now();
+      const order = ["PASS", "seasoning", "lpThin", "lpDrain", "fewBuys", "bundled", "botty", "whale", "cost", "noSocials", "full"];
+      const line = order.filter((k) => diag[k]).map((k) => `${k} ${diag[k]}`).join(" · ") || "no candidates yet";
+      await tg(`💓 *watch ${Object.keys(S.watch).length}* · rejects(30m): ${line}`);
+      for (const k in diag) delete diag[k];
+    }
   } catch (e) { console.error("tick err:", e.shortMessage || e.message); }
   busy = false;
 }
