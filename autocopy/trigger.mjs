@@ -37,7 +37,8 @@ const HARD_STOP = Number(process.env.HARD_STOP || "35") / 100;
 const MAX_HOLD_MIN = Number(process.env.MAX_HOLD_MIN || "30");
 const MAX_COST_PCT = Number(process.env.MAX_COST_PCT || "4");            // reject if est round-trip cost too high
 
-const POLL_MS = Number(process.env.POLL_MS || "2000");
+const POLL_MS = Number(process.env.POLL_MS || "2500");
+const MIN_TICK_MS = Number(process.env.MIN_TICK_MS || "2500"); // coalesce block pushes — one scan per this window (protects your RPC quota)
 const WINDOW_BLOCKS = Number(process.env.WINDOW_BLOCKS || "3000");       // how far back to seed pools on start
 const DRY_RUN = (process.env.DRY_RUN ?? "1") !== "0";
 const BOT = (process.env.BOT_TOKEN || "").trim(), CHAT = (process.env.CHAT_ID || "6820752140").trim();
@@ -176,9 +177,10 @@ async function manage() {
 }
 
 // ---------- loop ----------
-let busy = false;   // prevent overlapping passes (WSS can fire faster than a pass completes)
+let busy = false, lastTick = 0;   // busy = no overlap; lastTick = rate-limit even under WSS block-push
 async function tick() {
-  if (busy) return; busy = true;
+  if (busy || Date.now() - lastTick < MIN_TICK_MS) return;   // coalesce ~10 blocks/sec into 1 scan / MIN_TICK_MS
+  lastTick = Date.now(); busy = true;
   try {
     const tip = Number(await pub.getBlockNumber());
     if (!S.lastBlock) S.lastBlock = tip - WINDOW_BLOCKS;
