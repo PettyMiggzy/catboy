@@ -62,6 +62,8 @@ const NF_MIN_ETH = Number(process.env.NF_MIN_ETH || "0.2");            // net WE
 const NF_WIN_BLK = Number(process.env.NF_WIN_BLK || "1800");           // rolling window ~3min — persists long enough for 2.5s polling to catch it live
 const NF_MC_MIN = Number(process.env.NF_MC_MIN || "3000");             // sanity floor (skip dust)
 const NF_MC_MAX = Number(process.env.NF_MC_MAX || "60000");            // sanity ceiling (skip already-huge)
+const MIN_SELLS = Number(process.env.MIN_SELLS || "2");                // honeypot screen: require >= this many real SELLS in the window (live proof selling works)
+const PANIC_KEEP = Number(process.env.PANIC_KEEP || "0.5");            // LP-drain panic: dump a held position if its pool LP falls below this fraction of its peak. 0.5 = half the liquidity yanked = rug (not normal selling, which craters price into the stop first)
 
 // exits — defaults are the sim-validated TP+40% / stop-35% (trail is a loose backstop only)
 const TAKE_PROFIT = Number(process.env.TAKE_PROFIT || "40") / 100;       // proven: bank at +40%
@@ -280,18 +282,20 @@ async function evaluateNetFlow(pool, tip) {
   const fromBlk = Math.max(w.blk, tip - NF_WIN_BLK);
   const sw = await rawGet("eth_getLogs", [{ address: pool, topics: [SWAP_TOPIC], fromBlock: "0x" + fromBlk.toString(16), toBlock: "0x" + tip.toString(16) }]) || [];
   if (sw.length < 2) { dbump("noFlow"); return; }
-  let netWeth = 0; const prices = [];
+  let netWeth = 0, sells = 0; const prices = [];
   for (const s of sw) {
     const d = s.data.slice(2);
     const a0 = s256(d.slice(0, 64)), a1 = s256(d.slice(64, 128));
     const wethDelta = m.wethIsT0 ? a0 : a1;                 // +ve = WETH into pool = a buy
     const buy = (m.wethIsT0 ? a1 : a0) < 0n;                // token leaving pool = a buy
+    if (!buy) sells++;
     netWeth += (buy ? 1 : -1) * Math.abs(Number(wethDelta)) / 1e18;
     const sq = Number(BigInt("0x" + d.slice(128, 192))) / 2 ** 96;
     prices.push(m.wethIsT0 ? 1 / (sq * sq) : sq * sq);
   }
   if (netWeth < NF_MIN_ETH) { dbump("weakFlow"); return; }                        // not enough net buying
   if (prices[prices.length - 1] < prices[0]) { dbump("falling"); return; }        // require price rising over the window
+  if (sells < MIN_SELLS) { dbump("noSells"); return; }                            // HONEYPOT SCREEN: others must be selling OK — buys with no sells = can't-sell trap
   const supply = await totalSupply(m.token); if (!supply) { dbump("noSupply"); return; }
   const pe = await priceEth(pool, m.wethIsT0);
   const mc = pe * supply * (await ethPrice());
@@ -304,21 +308,30 @@ async function evaluateNetFlow(pool, tip) {
   dbump("PASS");
   delete S.watch[pool]; S.done[pool] = Date.now();
   await tg(`⚡ *NETFLOW* $${m.token.slice(0, 8)} — *+${netWeth.toFixed(2)}Ξ* net buys/${(NF_WIN_BLK / 10).toFixed(0)}s · $${(mc / 1000).toFixed(1)}k MC · LP ${lp.toFixed(2)}Ξ · top ${top.toFixed(0)}%\n${DRY_RUN ? "📝 would buy" : "🟢 buying"} ${COPY_ETH} ETH · exit TP+${(TAKE_PROFIT * 100).toFixed(0)}%/stop-${(HARD_STOP * 100).toFixed(0)}%`);
-  if (DRY_RUN) { S.positions[m.token] = { pool, fee: m.fee, cost: COPY_ETH, entry: pe, high: 0, paper: true, t: Date.now(), mc }; return; }
-  try { const r = await buy(m.token, pool, m.fee, m.wethIsT0); S.positions[m.token] = { pool, fee: m.fee, cost: COPY_ETH, bal: r.bal, entry: r.entry, high: r.entry, t: Date.now(), mc }; await tg(`✅ *BOUGHT* $${m.token.slice(0, 8)}\n[tx](https://robinhoodchain.blockscout.com/tx/${r.hash})`); }
+  if (DRY_RUN) { S.positions[m.token] = { pool, fee: m.fee, cost: COPY_ETH, entry: pe, high: 0, paper: true, t: Date.now(), mc, wethIsT0: m.wethIsT0, lp0: lp }; return; }
+  try { const r = await buy(m.token, pool, m.fee, m.wethIsT0); S.positions[m.token] = { pool, fee: m.fee, cost: COPY_ETH, bal: r.bal, entry: r.entry, high: r.entry, t: Date.now(), mc, wethIsT0: m.wethIsT0, lp0: lp }; await tg(`✅ *BOUGHT* $${m.token.slice(0, 8)}\n[tx](https://robinhoodchain.blockscout.com/tx/${r.hash})`); }
   catch (e) { await tg(`❌ buy failed $${m.token.slice(0, 8)}: ${(e.shortMessage || e.message || "").slice(0, 80)}`); }
 }
 async function manage() {
   for (const token of Object.keys(S.positions)) {
     const pos = S.positions[token]; if (!pos.entry || pos.stuck) continue;   // F3: skip written-off bags
-    let cur; try { cur = await priceEth(pos.pool, metaCache[pos.pool]?.wethIsT0 ?? true); } catch { continue; }
+    // wethIsT0 from the position (survives redeploys); fall back to a fresh meta() read, not a blind default
+    let w0 = pos.wethIsT0;
+    if (w0 === undefined) { const mm = await meta(pos.pool); w0 = mm ? mm.wethIsT0 : true; }
+    let cur; try { cur = await priceEth(pos.pool, w0); } catch { continue; }
     pos.high = Math.max(pos.high || pos.entry, cur);
     const gain = cur / pos.entry - 1, dd = (pos.high - cur) / pos.high, ageMin = (Date.now() - pos.t) / 60000;
     let reason = null;
-    if (gain >= TAKE_PROFIT) reason = `✅ TP +${(gain * 100).toFixed(0)}%`;
-    else if (gain <= -HARD_STOP) reason = `🛑 stop ${(gain * 100).toFixed(0)}%`;
-    else if (dd >= TRAIL_PCT) reason = `🔒 trail +${(gain * 100).toFixed(0)}%`;
-    else if (ageMin >= MAX_HOLD_MIN) reason = `⌛ time ${(gain * 100).toFixed(0)}%`;
+    // LP-DRAIN PANIC takes priority: if the pool's liquidity is being pulled from under us, dump NOW
+    // (while there's still LP to sell into) instead of waiting for the price stop — that's how rugs escape us.
+    let curLp = -1; try { curLp = await lpEth(pos.pool); } catch {}
+    if (curLp >= 0) { pos.lpPeak = Math.max(pos.lpPeak || pos.lp0 || 0, curLp); if (pos.lpPeak >= MIN_LP_ETH && curLp < pos.lpPeak * PANIC_KEEP) reason = `🚨 LP-drain ${(gain * 100).toFixed(0)}%`; }
+    if (!reason) {
+      if (gain >= TAKE_PROFIT) reason = `✅ TP +${(gain * 100).toFixed(0)}%`;
+      else if (gain <= -HARD_STOP) reason = `🛑 stop ${(gain * 100).toFixed(0)}%`;
+      else if (dd >= TRAIL_PCT) reason = `🔒 trail +${(gain * 100).toFixed(0)}%`;
+      else if (ageMin >= MAX_HOLD_MIN) reason = `⌛ time ${(gain * 100).toFixed(0)}%`;
+    }
     if (!reason) continue;
     if (pos.paper || DRY_RUN) { delete S.positions[token]; save(); await tg(`📝 ${reason} $${token.slice(0, 8)} — would exit`); continue; }
     try {
@@ -353,7 +366,7 @@ async function tick() {
     // heartbeat: a frequent alive-pulse + funnel, so silence always means "hung" (never "just quiet")
     if (Date.now() - lastBeat > HEARTBEAT_MS) {
       const mins = Math.round((Date.now() - lastBeat) / 60000); lastBeat = Date.now();
-      const order = ["PASS", "weakFlow", "falling", "mcRange", "noFlow", "belowBand", "aboveBand", "ranPast", "deadLaunch", "lpThin", "lpErr", "lpDrain", "noSupply", "whale", "cost", "full", "aged", "seasoning", "fewBuys", "bundled", "botty", "noSocials"];
+      const order = ["PASS", "weakFlow", "falling", "noSells", "mcRange", "noFlow", "belowBand", "aboveBand", "ranPast", "deadLaunch", "lpThin", "lpErr", "lpDrain", "noSupply", "whale", "cost", "full", "aged", "seasoning", "fewBuys", "bundled", "botty", "noSocials"];
       const line = order.filter((k) => diag[k]).map((k) => `${k} ${diag[k]}`).join(" · ") || "no candidates yet";
       const hb = `💓 *${TRIGGER_MODE}* · watch ${Object.keys(S.watch).length} · ETH $${ethUsd.toFixed(0)} · maxLP ${diagMaxLp.toFixed(2)}Ξ · liq≥thr ${diagLiqSeen} · rejects(${mins}m): ${line}`;
       console.log(hb.replace(/\*/g, "")); await tg(hb);
