@@ -4,11 +4,12 @@
 // Reuses the executor proven by autocopy/swaptest.mjs (verified Uniswap V3 SwapRouter02).
 // DRY_RUN=1 => paper (detect + DM, no trades). Flip to 0 only after the audit + a watched test.
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
-import { createWalletClient, createPublicClient, http, parseEther, formatEther } from "viem";
+import { createWalletClient, createPublicClient, http, webSocket, parseEther, formatEther } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
 // ---------- config ----------
 const RPC = process.env.RPC_URL || "https://rpc.mainnet.chain.robinhood.com";
+const RPC_WSS = (process.env.RPC_WSS || "").trim();   // optional: Alchemy WSS for instant block push (faster)
 const ROUTER = "0xcaf681a66d020601342297493863e78c959e5cb2";              // verified SwapRouter02
 const WETH = "0x0bd7d308f8e1639fab988df18a8011f41eacad73".toLowerCase();
 const V3 = (process.env.V3_FACTORY || "0x1f7d7550b1b028f7571e69a784071f0205fd2efa").toLowerCase();
@@ -48,7 +49,8 @@ if (!DRY_RUN && !PK) { console.error("PRIVATE_KEY required for live"); process.e
 // ---------- clients ----------
 const chain = { id: 4663, name: "robinhood", nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 }, rpcUrls: { default: { http: [RPC] } } };
 const account = PK ? privateKeyToAccount(PK.startsWith("0x") ? PK : "0x" + PK) : null;
-const pub = createPublicClient({ chain, transport: http(RPC) });
+// reads/subscriptions over WSS when provided (instant block push); tx submission stays on HTTP (reliable)
+const pub = createPublicClient({ chain, transport: RPC_WSS ? webSocket(RPC_WSS) : http(RPC) });
 const wallet = account ? createWalletClient({ account, chain, transport: http(RPC) }) : null;
 
 const ERC20 = [{ name: "balanceOf", type: "function", stateMutability: "view", inputs: [{ type: "address" }], outputs: [{ type: "uint256" }] }, { name: "approve", type: "function", stateMutability: "nonpayable", inputs: [{ type: "address" }, { type: "uint256" }], outputs: [{ type: "bool" }] }, { name: "allowance", type: "function", stateMutability: "view", inputs: [{ type: "address" }, { type: "address" }], outputs: [{ type: "uint256" }] }];
@@ -174,7 +176,9 @@ async function manage() {
 }
 
 // ---------- loop ----------
-async function loop() {
+let busy = false;   // prevent overlapping passes (WSS can fire faster than a pass completes)
+async function tick() {
+  if (busy) return; busy = true;
   try {
     const tip = Number(await pub.getBlockNumber());
     if (!S.lastBlock) S.lastBlock = tip - WINDOW_BLOCKS;
@@ -183,11 +187,22 @@ async function loop() {
     await manage();
     for (const k in S.done) if (Date.now() - S.done[k] > 3600000) delete S.done[k];
     save();
-  } catch (e) { console.error("loop err:", e.shortMessage || e.message); }
-  setTimeout(loop, POLL_MS);
+  } catch (e) { console.error("tick err:", e.shortMessage || e.message); }
+  busy = false;
 }
-console.log(`trigger bot | ${DRY_RUN ? "PAPER" : "LIVE 💸"} | copy ${COPY_ETH} ETH | poll ${POLL_MS}ms`);
+
+// SAFETY: refuse to run on the wrong chain (e.g. an Alchemy app pointed at ETH/Base/Solana)
+const cid = await pub.getChainId().catch(() => 0);
+if (cid !== chain.id) { const msg = `❌ RPC is chain *${cid || "unreachable"}*, expected *${chain.id}* (Robinhood Chain). Fix RPC_URL — NOT trading.`; console.error(msg); await tg(msg); process.exit(1); }
+
+console.log(`trigger bot | ${DRY_RUN ? "PAPER" : "LIVE 💸"} | chain ${cid} | ${RPC_WSS ? "WSS push" : `poll ${POLL_MS}ms`} | copy ${COPY_ETH} ETH`);
 if (account) console.log("burner:", account.address);
-if (account && !DRY_RUN) unwrapWeth();   // F4: reclaim any WETH left from a prior run
-tg(`🚀 trigger strategy ${DRY_RUN ? "*PAPER*" : "*LIVE*"} started · fresh-launch momentum · ${COPY_ETH} ETH/entry`);
-loop();
+if (account && !DRY_RUN) await unwrapWeth();   // F4: reclaim any WETH left from a prior run
+await tg(`🚀 trigger strategy ${DRY_RUN ? "*PAPER*" : "*LIVE*"} started · chain ${cid} · ${RPC_WSS ? "WSS" : "poll"} · ${COPY_ETH} ETH/entry`);
+
+if (RPC_WSS) {
+  pub.watchBlockNumber({ emitOnBegin: true, onBlockNumber: () => tick(), onError: (e) => console.error("wss err:", e.message) }); // instant push
+  setInterval(tick, 8000);   // backup heartbeat in case the socket drops
+} else {
+  (async function poll() { await tick(); setTimeout(poll, POLL_MS); })();
+}
