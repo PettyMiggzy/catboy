@@ -2,9 +2,8 @@
 // Announces to Telegram, off the standard ERC-721/ERC-20 Transfer event (no ABI needed):
 //   - NFT MINT   : HoodedTwenty Transfer from 0x0
 //   - NFT BUY    : HoodedTwenty Transfer wallet -> wallet
-//   - NFT STAKE  : HoodedTwenty Transfer -> StagStaking  (and <- = unstake)
-//   - STAKE      : $STAG token Transfer -> StagStaking   (and <- = unstake)
-// Read-only. Fires nothing until mint/staking are actually live on-chain.
+// Staking is being migrated to the HoodX pad — stake/unstake are NOT announced here.
+// Read-only. Fires nothing until mint is actually live on-chain.
 import { neon } from "@neondatabase/serverless";
 
 const RPC = (process.env.RHC_RPC || "https://rpc.mainnet.chain.robinhood.com").trim();
@@ -18,8 +17,6 @@ const STAG = (process.env.STAG_TOKEN || "0xCDdB2d9838b7eDab2F04aF4943a6EFE42C2f9
 const EXPLORER = (process.env.RHC_EXPLORER || "https://robinhoodchain.blockscout.com").replace(/\/$/, "");
 const TRANSFER = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 const ZERO = "0x0000000000000000000000000000000000000000";
-const pad = (a) => "0x" + "0".repeat(24) + a.replace(/^0x/, "").toLowerCase();
-const STK_TOPIC = pad(STAKING);
 // Whale-buy alerts: watch the $STAG/WETH Uniswap V3 pool Swap events, alert big BUYS to the whale group.
 const WETH = (process.env.RHC_WETH || "0x0bd7d308f8e1639fab988df18a8011f41eacad73").toLowerCase();
 const POOL = (process.env.STAG_POOL || "0x8874bd3c8a9cb1baeee6014bd2d3598d4741e075").toLowerCase();
@@ -71,12 +68,11 @@ export default async function handler(req, res) {
   const range = { fromBlock: "0x" + from.toString(16), toBlock: "0x" + to.toString(16) };
 
   // collect events
-  // Only bullish signals: mints, buys, stakes. Unstakes are intentionally NOT queried/announced.
-  let nftLogs = [], stakeIn = [], swapLogs = [];
+  // Only NFT mints/moves and whale buys. Staking moved to the HoodX pad — stakes/unstakes are NOT announced.
+  let nftLogs = [], swapLogs = [];
   try {
-    [nftLogs, stakeIn, swapLogs] = await Promise.all([
+    [nftLogs, swapLogs] = await Promise.all([
       rpc("eth_getLogs", [{ address: NFT, topics: [TRANSFER], ...range }]),
-      rpc("eth_getLogs", [{ address: STAG, topics: [TRANSFER, null, STK_TOPIC], ...range }]), // $STAG -> staking
       (POOL && WHALE_CHAT) ? rpc("eth_getLogs", [{ address: POOL, topics: [SWAP], ...range }]) : Promise.resolve([]), // whale buys
     ]);
   } catch (e) { return res.status(200).json({ ok: false, error: String(e).slice(0, 150) }); }
@@ -84,13 +80,12 @@ export default async function handler(req, res) {
   const events = [];
   for (const lg of nftLogs) {
     const f = addr(lg.topics[1]), t = addr(lg.topics[2]), id = String(big(lg.topics[3] || "0x0"));
-    if (f.toLowerCase() === STAKING) continue;   // skip NFT unstakes (bearish)
+    // Don't announce anything touching the staking contract (stake or unstake).
+    if (f.toLowerCase() === STAKING || t.toLowerCase() === STAKING) continue;
     let kind = "nft_xfer";
     if (f.toLowerCase() === ZERO) kind = "nft_mint";
-    else if (t.toLowerCase() === STAKING) kind = "nft_stake";
     events.push({ kind, f, t, id, lg });
   }
-  for (const lg of stakeIn) events.push({ kind: "stake", f: addr(lg.topics[1]), amt: eth(big(lg.data)), lg });
 
   let posted = 0;
   for (const e of events) {
@@ -102,12 +97,8 @@ export default async function handler(req, res) {
     if (e.kind === "nft_mint") {
       let price = ""; try { const tx = await rpc("eth_getTransactionByHash", [e.lg.transactionHash]); const v = eth(big(tx.value)); if (v > 0) price = ` for *${v} ETH*`; } catch {}
       msg = `🦌🏹 *NEW $STAG NFT MINTED!*\nHooded Twenty *#${e.id}* minted by ${link(e.t)}${price}.\n[View](${EXPLORER}/token/${NFT}/instance/${e.id})  ·  Mint: /nft`;
-    } else if (e.kind === "nft_stake") {
-      msg = `🔒🦌 *NFT STAKED!*\n${link(e.f)} staked Hooded Twenty *#${e.id}* — earning $STAG. 🌿`;
     } else if (e.kind === "nft_xfer") {
       msg = `🛒🦌 *$STAG NFT moved*\nHooded Twenty *#${e.id}*: ${link(e.f)} → ${link(e.t)}.`;
-    } else if (e.kind === "stake") {
-      msg = `🔒💚 *$STAG STAKED!*\n${link(e.f)} staked *${fmt(e.amt)} $STAG*. Steal the pump, feed the holders. 🦌`;
     }
     // Send FIRST-effect: if the Telegram post fails, drop the "seen" row so the
     // event is retried next minute instead of being silently lost forever.
@@ -139,5 +130,5 @@ export default async function handler(req, res) {
   }
 
   await s`INSERT INTO stag_chain_state (k, v) VALUES ('last_block', ${to}) ON CONFLICT (k) DO UPDATE SET v=${to}`;
-  return res.status(200).json({ ok: true, from, to, tip, nft: nftLogs.length, stakeIn: stakeIn.length, swaps: swapLogs.length, whales, posted });
+  return res.status(200).json({ ok: true, from, to, tip, nft: nftLogs.length, swaps: swapLogs.length, whales, posted });
 }
