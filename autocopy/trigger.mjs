@@ -7,6 +7,9 @@ import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { createWalletClient, createPublicClient, http, webSocket, parseEther, formatEther } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
+// Droplet: load secrets from autocopy/deploy/.env into process.env (no dependency) before reading config.
+try { const ep = process.env.ENV_FILE || new URL("./deploy/.env", import.meta.url).pathname; if (existsSync(ep)) for (const ln of readFileSync(ep, "utf8").split("\n")) { const m = ln.match(/^\s*([A-Za-z0-9_]+)\s*=\s*(.*?)\s*$/); if (m && process.env[m[1]] === undefined) process.env[m[1]] = m[2].replace(/^["']|["']$/g, ""); } } catch {}
+
 // ---------- config ----------
 // HYBRID: scan on the FREE public RPC, trade on Alchemy. Alchemy is only hit when we buy/sell.
 const SCAN_RPC = process.env.SCAN_RPC || "https://rpc.mainnet.chain.robinhood.com"; // free public — all scanning/reads
