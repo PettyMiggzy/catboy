@@ -65,6 +65,9 @@ const NF_MC_MAX = Number(process.env.NF_MC_MAX || "60000");            // sanity
 // EMERGENCY BRAKE: default HALTED. While on, the bot detects + manages/sells existing positions but
 // opens NO new real buys. Flip HALT_BUYS=0 only after the anti-rug screen is verified working.
 const HALT_BUYS = (process.env.HALT_BUYS ?? "1") !== "0";
+// LIQUIDATION MODE: read the wallet's ACTUAL token holdings on-chain and sell every sellable bag to ETH,
+// independent of the (unreliable) position state. Default ON for the current emergency; revert after.
+const SWEEP = (process.env.SWEEP ?? "1") !== "0";
 const MIN_SELLS = Number(process.env.MIN_SELLS || "2");                // honeypot screen: require >= this many real SELLS in the window (live proof selling works)
 const PANIC_KEEP = Number(process.env.PANIC_KEEP || "0.5");            // LP-drain panic: dump a held position if its pool LP falls below this fraction of its peak. 0.5 = half the liquidity yanked = rug (not normal selling, which craters price into the stop first)
 
@@ -161,6 +164,34 @@ async function sell(token, fee, balStr) {
   const h = await wallet.writeContract({ address: ROUTER, abi: ROUTER_ABI, functionName: "exactInputSingle", args: [params] });
   await pubT.waitForTransactionReceipt({ hash: h });
   return h;
+}
+// LIQUIDATION: read the burner's ACTUAL token holdings on-chain and sell every one that has a WETH pool.
+// Independent of S.positions (which redeploys wipe). Rugs/honeypots simulate-revert and are skipped.
+const FACTORY_ABI = [{ name: "getPool", type: "function", stateMutability: "view", inputs: [{ type: "address" }, { type: "address" }, { type: "uint24" }], outputs: [{ type: "address" }] }];
+const ZERO = "0x0000000000000000000000000000000000000000";
+async function poolFee(token) { for (const f of [10000, 3000, 500, 100]) { try { const p = await pub.readContract({ address: V3, abi: FACTORY_ABI, functionName: "getPool", args: [token, WETH, f] }); if (p && p.toLowerCase() !== ZERO) return f; } catch {} } return null; }
+async function sweepAll() {
+  if (!account || DRY_RUN) { await tg("⚠️ SWEEP needs LIVE mode + key — can't liquidate in paper."); return; }
+  let items = [];
+  try { const r = await fetch(`https://robinhoodchain.blockscout.com/api/v2/addresses/${account.address}/token-balances`, { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(15000) }); items = await r.json(); } catch {}
+  if (!Array.isArray(items)) items = [];
+  const held = items.filter((it) => { const a = (it.token?.address || it.token?.address_hash || "").toLowerCase(); return a && a !== WETH && BigInt(it.value || "0") > 0n; });
+  if (!held.length) { await unwrapWeth(); return; }
+  let sold = 0, skipped = 0;
+  for (const it of held) {
+    const token = (it.token?.address || it.token?.address_hash || "").toLowerCase();
+    const sym = it.token?.symbol || token.slice(0, 6);
+    const fee = await poolFee(token);
+    if (fee === null) { skipped++; continue; }
+    try {
+      const bal = await pubT.readContract({ address: token, abi: ERC20, functionName: "balanceOf", args: [account.address] });
+      if (bal <= 0n) continue;
+      const h = await sell(token, fee, bal.toString());
+      sold++; await tg(`💰 *SWEEP sold* $${sym}\n[tx](https://robinhoodchain.blockscout.com/tx/${h})`);
+    } catch (e) { skipped++; await tg(`⏭ $${sym} unsellable (rug/honeypot) — leaving it`); }
+  }
+  await unwrapWeth();
+  if (sold || skipped) await tg(`✅ *SWEEP pass done* — sold ${sold}, skipped ${skipped} (rugs). ETH reclaimed.`);
 }
 
 // ---------- state ----------
@@ -393,7 +424,12 @@ console.log(`trigger bot | ${DRY_RUN ? "PAPER" : "LIVE 💸"} | ${modeDesc} | hy
 if (account) console.log("burner:", account.address);
 if (account && !DRY_RUN) await unwrapWeth();   // F4: reclaim any WETH left from a prior run
 if (TRIGGER_MODE === "mc") await ethPrice();    // warm the ETH price before the first scan
-await tg(`🚀 trigger ${DRY_RUN ? "*PAPER*" : "*LIVE*"} started · ${modeDesc} · ${COPY_ETH} ETH/entry`);
-
-// block detection on the free public RPC (scanning never touches Alchemy)
-(async function poll() { await tick(); setTimeout(poll, POLL_MS); })();
+// LIQUIDATION MODE: sell everything the wallet holds to ETH, then keep re-checking every 45s. No buying.
+if (SWEEP && !DRY_RUN) {
+  await tg(`🧯 *LIQUIDATION MODE* — selling ALL sellable bags to ETH (rugs get skipped). No buying.`);
+  (async function sweepLoop() { try { await sweepAll(); } catch (e) { console.error("sweep err:", e.shortMessage || e.message); } setTimeout(sweepLoop, 45000); })();
+} else {
+  await tg(`🚀 trigger ${DRY_RUN ? "*PAPER*" : "*LIVE*"} started · ${modeDesc}${HALT_BUYS && !DRY_RUN ? " · 🧯 BUYS HALTED" : ""} · ${COPY_ETH} ETH/entry`);
+  // block detection on the free public RPC (scanning never touches Alchemy)
+  (async function poll() { await tick(); setTimeout(poll, POLL_MS); })();
+}
