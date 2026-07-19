@@ -166,6 +166,7 @@ S.watch = S.watch || {}; S.positions = S.positions || {}; S.done = S.done || {};
 const save = () => writeFileSync(STATE, JSON.stringify(S));
 // diagnostics: tally WHY pools get rejected so we can see which gate is too tight (DM'd on heartbeat)
 const diag = {}; const dbump = (k) => { diag[k] = (diag[k] || 0) + 1; };
+let diagMaxLp = 0, diagLiqSeen = 0;   // max LP the bot actually observes + how many pools cross MIN_LP (heartbeat sanity)
 let lastBeat = Date.now();   // seed to boot time so the first heartbeat reports a sane window, not epoch
 
 // ---------- detection ----------
@@ -266,6 +267,7 @@ async function evaluateNetFlow(pool, tip) {
   if (ageMin > MC_MAX_AGE_MIN) { dbump("aged"); delete S.watch[pool]; S.done[pool] = Date.now(); return; }
   const lp = await lpEth(pool);
   if (lp < 0) { dbump("lpErr"); return; }
+  if (lp > diagMaxLp) diagMaxLp = lp; if (lp >= MIN_LP_ETH) diagLiqSeen++;   // sanity: is the bot seeing ANY liquidity?
   w.lpMax = Math.max(w.lpMax || 0, lp);
   if (lp < MIN_LP_ETH) {
     const zombie = lp < ZOMBIE_LP && ageMin > ZOMBIE_MIN;   // near-zero LP for a while = dead on arrival
@@ -353,8 +355,8 @@ async function tick() {
       const mins = Math.round((Date.now() - lastBeat) / 60000); lastBeat = Date.now();
       const order = ["PASS", "weakFlow", "falling", "mcRange", "noFlow", "belowBand", "aboveBand", "ranPast", "deadLaunch", "lpThin", "lpErr", "lpDrain", "noSupply", "whale", "cost", "full", "aged", "seasoning", "fewBuys", "bundled", "botty", "noSocials"];
       const line = order.filter((k) => diag[k]).map((k) => `${k} ${diag[k]}`).join(" · ") || "no candidates yet";
-      await tg(`💓 *${TRIGGER_MODE}* · watch ${Object.keys(S.watch).length} · ETH $${ethUsd.toFixed(0)} · rejects(${mins}m): ${line}`);
-      for (const k in diag) delete diag[k];
+      await tg(`💓 *${TRIGGER_MODE}* · watch ${Object.keys(S.watch).length} · ETH $${ethUsd.toFixed(0)} · maxLP ${diagMaxLp.toFixed(2)}Ξ · liq≥thr ${diagLiqSeen} · rejects(${mins}m): ${line}`);
+      for (const k in diag) delete diag[k]; diagMaxLp = 0; diagLiqSeen = 0;
     }
   } catch (e) { console.error("tick err:", e.shortMessage || e.message); }
   finally { busy = false; }   // always release, even if an await rejected — never leave the loop wedged
