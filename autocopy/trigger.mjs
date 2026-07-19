@@ -69,6 +69,7 @@ const MAX_HOLD_MIN = Number(process.env.MAX_HOLD_MIN || "60");           // ~for
 const MAX_COST_PCT = Number(process.env.MAX_COST_PCT || "4");            // reject if est round-trip cost too high
 
 const POLL_MS = Number(process.env.POLL_MS || "2500");
+const HEARTBEAT_MS = Number(process.env.HEARTBEAT_MIN || "8") * 60000;   // alive-pulse cadence; frequent so silence = hung, not just quiet
 const MIN_TICK_MS = Number(process.env.MIN_TICK_MS || "2500"); // coalesce block pushes — one scan per this window (protects your RPC quota)
 const WINDOW_BLOCKS = Number(process.env.WINDOW_BLOCKS || "3000");       // how far back to seed pools on start
 const DRY_RUN = (process.env.DRY_RUN ?? "1") !== "0";
@@ -341,12 +342,12 @@ async function tick() {
     await manage();
     for (const k in S.done) if (Date.now() - S.done[k] > 3600000) delete S.done[k];
     save();
-    // heartbeat: every ~30 min, DM what's in the funnel + why nothing passed, so we can tune the gates from data
-    if (Date.now() - lastBeat > 1800000) {
-      lastBeat = Date.now();
+    // heartbeat: a frequent alive-pulse + funnel, so silence always means "hung" (never "just quiet")
+    if (Date.now() - lastBeat > HEARTBEAT_MS) {
+      const mins = Math.round((Date.now() - lastBeat) / 60000); lastBeat = Date.now();
       const order = ["PASS", "weakFlow", "falling", "mcRange", "noFlow", "belowBand", "aboveBand", "ranPast", "deadLaunch", "lpThin", "lpErr", "lpDrain", "noSupply", "whale", "cost", "full", "aged", "seasoning", "fewBuys", "bundled", "botty", "noSocials"];
       const line = order.filter((k) => diag[k]).map((k) => `${k} ${diag[k]}`).join(" · ") || "no candidates yet";
-      await tg(`💓 *${TRIGGER_MODE}* · watch ${Object.keys(S.watch).length} · ETH $${ethUsd.toFixed(0)} · rejects(30m): ${line}`);
+      await tg(`💓 *${TRIGGER_MODE}* · watch ${Object.keys(S.watch).length} · ETH $${ethUsd.toFixed(0)} · rejects(${mins}m): ${line}`);
       for (const k in diag) delete diag[k];
     }
   } catch (e) { console.error("tick err:", e.shortMessage || e.message); }
