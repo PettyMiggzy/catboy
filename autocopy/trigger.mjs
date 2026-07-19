@@ -71,7 +71,7 @@ const MAX_COST_PCT = Number(process.env.MAX_COST_PCT || "4");            // reje
 const POLL_MS = Number(process.env.POLL_MS || "2500");
 const HEARTBEAT_MS = Number(process.env.HEARTBEAT_MIN || "8") * 60000;   // alive-pulse cadence; frequent so silence = hung, not just quiet
 const MIN_TICK_MS = Number(process.env.MIN_TICK_MS || "2500"); // coalesce block pushes — one scan per this window (protects your RPC quota)
-const WINDOW_BLOCKS = Number(process.env.WINDOW_BLOCKS || "3000");       // how far back to seed pools on start
+const WINDOW_BLOCKS = Number(process.env.WINDOW_BLOCKS || "9000");       // warm-start: seed ~15min of pools so a reboot immediately watches already-liquid ones (not just brand-new thin ones)
 const DRY_RUN = (process.env.DRY_RUN ?? "1") !== "0";
 const BOT = (process.env.BOT_TOKEN || "").trim(), CHAT = (process.env.CHAT_ID || "6820752140").trim();
 const STATE = process.env.STATE_FILE || "autocopy/.trigger.json";
@@ -164,7 +164,7 @@ S.watch = S.watch || {}; S.positions = S.positions || {}; S.done = S.done || {};
 const save = () => writeFileSync(STATE, JSON.stringify(S));
 // diagnostics: tally WHY pools get rejected so we can see which gate is too tight (DM'd on heartbeat)
 const diag = {}; const dbump = (k) => { diag[k] = (diag[k] || 0) + 1; };
-let lastBeat = 0;
+let lastBeat = Date.now();   // seed to boot time so the first heartbeat reports a sane window, not epoch
 
 // ---------- detection ----------
 async function scanNewPools(fromBlk, toBlk) {
