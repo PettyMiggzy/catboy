@@ -66,8 +66,8 @@ const NF_MC_MAX = Number(process.env.NF_MC_MAX || "60000");            // sanity
 // opens NO new real buys. Flip HALT_BUYS=0 only after the anti-rug screen is verified working.
 const HALT_BUYS = (process.env.HALT_BUYS ?? "1") !== "0";
 // LIQUIDATION MODE: read the wallet's ACTUAL token holdings on-chain and sell every sellable bag to ETH,
-// independent of the (unreliable) position state. Default ON for the current emergency; revert after.
-const SWEEP = (process.env.SWEEP ?? "1") !== "0";
+// independent of the (unreliable) position state. Set SWEEP=1 to liquidate; default off after the emergency.
+const SWEEP = (process.env.SWEEP ?? "0") !== "0";
 const MIN_SELLS = Number(process.env.MIN_SELLS || "2");                // honeypot screen: require >= this many real SELLS in the window (live proof selling works)
 const PANIC_KEEP = Number(process.env.PANIC_KEEP || "0.5");            // LP-drain panic: dump a held position if its pool LP falls below this fraction of its peak. 0.5 = half the liquidity yanked = rug (not normal selling, which craters price into the stop first)
 
