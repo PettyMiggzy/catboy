@@ -50,6 +50,7 @@ const MC_LO = Number(process.env.MC_LO || "8000");                       // ente
 const MC_HI = Number(process.env.MC_HI || "20000");                      // ...and still <= this (in the band)
 const MC_HI_HARD = Number(process.env.MC_HI_HARD || String(MC_HI * 1.5)); // if it already blew past this, we missed it — drop
 const MC_MAX_AGE_MIN = Number(process.env.MC_MAX_AGE_MIN || "60");       // watch a pool up to this long for the crossing
+const DEAD_MIN = Number(process.env.DEAD_MIN || "12");                   // prune a still-illiquid pool after this many min (slow-starters get a chance)
 const ETH_USD_FALLBACK = Number(process.env.ETH_USD || "1865");          // used if the live price fetch fails
 
 // exits — defaults are the sim-validated TP+40% / stop-35% (trail is a loose backstop only)
@@ -88,7 +89,7 @@ const s256 = (h) => { const v = BigInt("0x" + h); return v >= (1n << 255n) ? v -
 const metaCache = {};
 async function meta(pool) { if (metaCache[pool] !== undefined) return metaCache[pool]; try { const t0 = (await pub.readContract({ address: pool, abi: POOL_ABI, functionName: "token0" })).toLowerCase(); const fee = await pub.readContract({ address: pool, abi: POOL_ABI, functionName: "fee" }); const wethIsT0 = t0 === WETH; const other = wethIsT0 ? null : t0; return metaCache[pool] = other ? { token: other, wethIsT0, fee } : null; } catch { return metaCache[pool] = null; } }
 async function priceEth(pool, wethIsT0) { const [sq] = await pub.readContract({ address: pool, abi: POOL_ABI, functionName: "slot0" }); const P = (Number(sq) / 2 ** 96) ** 2; return wethIsT0 ? 1 / P : P; }
-async function lpEth(pool) { try { const b = await pub.readContract({ address: WETH, abi: ERC20, functionName: "balanceOf", args: [pool] }); return Number(b) / 1e18; } catch { return 0; } }
+async function lpEth(pool) { try { const b = await pub.readContract({ address: WETH, abi: ERC20, functionName: "balanceOf", args: [pool] }); return Number(b) / 1e18; } catch { return -1; } } // -1 = read failed (distinct from 0 = genuinely empty)
 async function holderTopPct(token) { try { const r = await fetch(`https://robinhoodchain.blockscout.com/api/v2/tokens/${token}/holders`, { headers: { "User-Agent": "Mozilla/5.0" } }); const m = await fetch(`https://robinhoodchain.blockscout.com/api/v2/tokens/${token}`, { headers: { "User-Agent": "Mozilla/5.0" } }); const h = await r.json(), meta = await m.json(); const dec = Number(meta.decimals || 18), supply = Number(meta.total_supply || "0") / 10 ** dec; if (!supply || !h.items) return 100; let top = 0; for (const it of h.items) { const a = it.address || {}; if (a.is_contract || /pool|pair|lp|dead|0x0000/i.test((a.name || "") + (a.hash || ""))) continue; const v = Number(it.value || "0") / 10 ** dec; if (v > top) top = v; } return top / supply * 100; } catch { return 100; } }
 const costPct = (sizeEth, lp) => (FEE_BPS / 10000) * 100 * 2 + Math.min(5, (sizeEth / Math.max(lp, 1e-9)) * 100) * 2 + (GAS_ETH / Math.max(sizeEth, 1e-9)) * 100 * 2;
 // live ETH price (10-min cache) so the $ market-cap band is accurate; falls back to ETH_USD_FALLBACK
@@ -220,18 +221,19 @@ async function evaluateMC(pool, tip) {
   const ageMin = (Date.now() - w.t) / 60000;
   if (ageMin > MC_MAX_AGE_MIN) { dbump("aged"); delete S.watch[pool]; S.done[pool] = Date.now(); return; }
   const lp = await lpEth(pool);
+  if (lp < 0) { dbump("lpErr"); return; }                                     // RPC read failed — retry next tick, don't miscount as thin
   w.lpMax = Math.max(w.lpMax || 0, lp);
-  if (lp < MIN_LP_ETH) { if (ageMin > 5) { dbump("deadLaunch"); delete S.watch[pool]; S.done[pool] = Date.now(); } else dbump("lpThin"); return; } // prune dead launches fast to keep the watch set small
+  if (lp < MIN_LP_ETH) { if (ageMin > DEAD_MIN) { dbump("deadLaunch"); delete S.watch[pool]; S.done[pool] = Date.now(); } else dbump("lpThin"); return; } // prune dead launches, but give slow-starters time
   if (w.lpMax >= MIN_LP_ETH && lp < w.lpMax * LP_KEEP) { dbump("lpDrain"); delete S.watch[pool]; S.done[pool] = Date.now(); return; } // LP being pulled = rug
   const m = await meta(pool); if (!m) { delete S.watch[pool]; return; }
   const supply = await totalSupply(m.token); if (!supply) { dbump("noSupply"); return; }
   const pe = await priceEth(pool, m.wethIsT0);
   const mc = pe * supply * (await ethPrice());
-  if (mc < MC_LO) { w.mcBelow = true; dbump("belowBand"); return; }           // still under the band — keep watching (this proves it GREW into it)
-  if (mc > MC_HI_HARD) { dbump("ranPast"); delete S.watch[pool]; S.done[pool] = Date.now(); return; } // already mooned past our band, missed
-  if (mc > MC_HI) { dbump("aboveBand"); return; }                             // between HI and hard cap — wait for a pullback into band
-  if (!w.mcBelow) { dbump("bornInBand"); return; }                            // must have grown in from below, not launched at this MC
-  // in-band + grew into it → ENTER. exposure/cost/whale gates first.
+  w.mcPeak = Math.max(w.mcPeak || 0, mc);                                     // highest MC we've seen for this pool
+  if (mc < MC_LO) { dbump("belowBand"); return; }                            // not there yet — keep watching (fresh pool climbs up into the band)
+  if (w.mcPeak > MC_HI_HARD) { dbump("ranPast"); delete S.watch[pool]; S.done[pool] = Date.now(); return; } // already mooned past the band; being here now = retrace/dump, skip
+  if (mc > MC_HI) { dbump("aboveBand"); return; }                             // above band but under hard cap — wait for it to settle into band
+  // in-band, first time up (a fresh pool that grew here from ~$0, never ran past) → ENTER. gates first.
   const activePos = Object.values(S.positions).filter((p) => !p.stuck);
   if (activePos.length >= MAX_POS || activePos.reduce((a, p) => a + Number(p.cost || 0), 0) + Number(COPY_ETH) > MAX_TOTAL_ETH) { dbump("full"); return; }
   if (costPct(Number(COPY_ETH), lp) > MAX_COST_PCT) { dbump("cost"); return; }
@@ -286,7 +288,7 @@ async function tick() {
     // heartbeat: every ~30 min, DM what's in the funnel + why nothing passed, so we can tune the gates from data
     if (Date.now() - lastBeat > 1800000) {
       lastBeat = Date.now();
-      const order = ["PASS", "belowBand", "aboveBand", "ranPast", "bornInBand", "deadLaunch", "lpThin", "lpDrain", "noSupply", "whale", "cost", "full", "aged", "seasoning", "fewBuys", "bundled", "botty", "noSocials"];
+      const order = ["PASS", "belowBand", "aboveBand", "ranPast", "deadLaunch", "lpThin", "lpErr", "lpDrain", "noSupply", "whale", "cost", "full", "aged", "seasoning", "fewBuys", "bundled", "botty", "noSocials"];
       const line = order.filter((k) => diag[k]).map((k) => `${k} ${diag[k]}`).join(" · ") || "no candidates yet";
       await tg(`💓 *${TRIGGER_MODE}* · watch ${Object.keys(S.watch).length} · ETH $${ethUsd.toFixed(0)} · rejects(30m): ${line}`);
       for (const k in diag) delete diag[k];
