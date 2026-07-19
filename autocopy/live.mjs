@@ -16,7 +16,8 @@ const COPY_ETH = process.env.COPY_ETH || "0.004";              // YOUR size per 
 const MAX_POS = Number(process.env.MAX_POS || "3");
 const MAX_TOTAL_ETH = Number(process.env.MAX_TOTAL_ETH || "0.012"); // hard cap on total deployed
 const SLIP = Number(process.env.SLIP || "10") / 100;
-const TRAIL_PCT = Number(process.env.TRAIL_PCT || "25") / 100;      // backup exit if they go quiet
+const TAKE_PROFIT = Number(process.env.TAKE_PROFIT || "45") / 100;  // bank the winner BEFORE he dumps (exit-before-him)
+const TRAIL_PCT = Number(process.env.TRAIL_PCT || "25") / 100;      // give back this much from the high
 const HARD_STOP = Number(process.env.HARD_STOP || "35") / 100;
 const POLL_MS = Number(process.env.POLL_MS || "2500");
 const DRY_RUN = (process.env.DRY_RUN ?? "1") !== "0";
@@ -42,6 +43,8 @@ async function priceEth(pool, wethIsT0) { const [sq] = await pub.readContract({ 
 const tokPerWeth = (pEth) => 1 / pEth;
 
 const S = existsSync(STATE) ? JSON.parse(readFileSync(STATE, "utf8")) : { lastBlock: 0, positions: {} };
+S.alpha = S.alpha || { spent: 0, recv: 0 };   // his running P&L (tracked free from the block scan)
+S.lastBeat = S.lastBeat || 0;
 const save = () => writeFileSync(STATE, JSON.stringify(S));
 
 async function buy(token, pool, fee, wethIsT0) {
@@ -81,6 +84,8 @@ async function handleBlock(bn) {
       const pool = lg.address.toLowerCase(); const m = await meta(pool); if (!m || !m.other) continue;
       const token = m.other; const d = lg.data.slice(2);
       const a0 = s256(d.slice(0, 64)), a1 = s256(d.slice(64, 128)); const tokDelta = m.wethIsT0 ? a1 : a0;
+      const wethDelta = m.wethIsT0 ? a0 : a1, weth = Number(wethDelta < 0n ? -wethDelta : wethDelta) / 1e18;
+      if (tokDelta < 0n) S.alpha.spent += weth; else if (tokDelta > 0n) S.alpha.recv += weth; // track HIS P&L
       const who = tx.from.toLowerCase().slice(0, 8);
       if (tokDelta < 0n) {   // alpha BOUGHT token
         if (S.positions[token]) continue;
@@ -106,11 +111,14 @@ async function manageStops() {   // backup exits if the alpha goes quiet
     let cur; try { cur = await priceEth(pos.pool, poolMeta[pos.pool]?.wethIsT0 ?? true); } catch { continue; }
     pos.high = Math.max(pos.high || pos.entry, cur);
     const gain = cur / pos.entry - 1, dd = (pos.high - cur) / pos.high;
-    if (gain <= -HARD_STOP || dd >= TRAIL_PCT) {
-      delete S.positions[token]; save();
-      if (pos.paper || DRY_RUN) { await tg(`📝 stop hit $${token.slice(0,8)} ${(gain*100).toFixed(0)}% — would exit`); continue; }
-      try { const h = await sell(token, pos.fee, pos.bal); await tg(`🛑 *STOPPED OUT* $${token.slice(0,8)} ${(gain*100).toFixed(0)}%\n[tx](https://robinhoodchain.blockscout.com/tx/${h})`); } catch {}
-    }
+    let reason = null;
+    if (gain >= TAKE_PROFIT) reason = `✅ TP +${(gain*100).toFixed(0)}% (banked before him)`;
+    else if (gain <= -HARD_STOP) reason = `🛑 stop ${(gain*100).toFixed(0)}%`;
+    else if (dd >= TRAIL_PCT) reason = `🔒 trail +${(gain*100).toFixed(0)}%`;
+    if (!reason) continue;
+    delete S.positions[token]; save();
+    if (pos.paper || DRY_RUN) { await tg(`📝 ${reason} $${token.slice(0,8)} — would exit`); continue; }
+    try { const h = await sell(token, pos.fee, pos.bal); await tg(`${reason.startsWith("✅") ? "💰" : "🛑"} *EXIT* $${token.slice(0,8)} ${reason}\n[tx](https://robinhoodchain.blockscout.com/tx/${h})`); } catch {}
   }
 }
 
@@ -119,7 +127,13 @@ async function loop() {
     const tip = Number(await pub.getBlockNumber());
     if (!S.lastBlock) S.lastBlock = tip - 1;
     for (let b = S.lastBlock + 1; b <= tip; b++) { await handleBlock(b); S.lastBlock = b; }
-    await manageStops(); save();
+    await manageStops();
+    const now = Date.now();
+    if (now - S.lastBeat > 3600000) {   // hourly: report HIS running P&L + our open copies
+      S.lastBeat = now; const net = S.alpha.recv - S.alpha.spent;
+      await tg(`📊 alpha \`${WALLETS[0].slice(0, 8)}\` since bot start: *${net >= 0 ? "+" : ""}${net.toFixed(4)} ETH*\nopen copies: ${Object.keys(S.positions).length}${net < -0.05 ? "\n⚠️ _wallet going cold — consider pausing_" : ""}`);
+    }
+    save();
   } catch (e) { console.error("loop err:", e.shortMessage || e.message); }
   setTimeout(loop, POLL_MS);
 }
