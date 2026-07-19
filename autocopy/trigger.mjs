@@ -56,8 +56,8 @@ const DEAD_MIN = Number(process.env.DEAD_MIN || "12");                   // prun
 const ETH_USD_FALLBACK = Number(process.env.ETH_USD || "1865");          // used if the live price fetch fails
 // NetFlow trigger: enter on sustained net buy-pressure (net WETH inflow over a rolling window) while
 // price is rising, inside a sane MC range. Exit TP+40%/stop-35%. Forum-validated + fill-delay-robust.
-const NF_MIN_ETH = Number(process.env.NF_MIN_ETH || "0.5");             // require >= this net WETH bought over the window
-const NF_WIN_BLK = Number(process.env.NF_WIN_BLK || "600");            // rolling window (~60s at 10 blk/s)
+const NF_MIN_ETH = Number(process.env.NF_MIN_ETH || "0.2");            // net WETH bought over the window — 0.2 is the tuned sweet spot (+10% avg/+16.7% med @2.5s lag; 0.5 went negative = blow-off tops, 0.1 = noise)
+const NF_WIN_BLK = Number(process.env.NF_WIN_BLK || "1800");           // rolling window ~3min — persists long enough for 2.5s polling to catch it live
 const NF_MC_MIN = Number(process.env.NF_MC_MIN || "3000");             // sanity floor (skip dust)
 const NF_MC_MAX = Number(process.env.NF_MC_MAX || "60000");            // sanity ceiling (skip already-huge)
 
