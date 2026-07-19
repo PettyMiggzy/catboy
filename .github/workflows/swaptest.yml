@@ -1,0 +1,19 @@
+name: swaptest
+on:
+  workflow_dispatch: {}          # manual only — this spends REAL money, never on a schedule
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: install viem
+        run: npm init -y >/dev/null 2>&1 && npm install viem@2 --no-audit --no-fund
+      - name: run one watched buy+sell round-trip
+        env:
+          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+          RPC_URL: https://rpc.mainnet.chain.robinhood.com
+        run: node autocopy/swaptest.mjs
