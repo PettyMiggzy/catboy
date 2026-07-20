@@ -13,3 +13,6 @@ bot-server/*.env
 bot-server/vercel.env
 .env.local
 autocopy/deploy/.env
+
+# throwaway session utilities (live watchers, ad-hoc checks)
+autocopy/_*.mjs
