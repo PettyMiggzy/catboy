@@ -151,7 +151,12 @@ async function tgTick() {
     offset = u.update_id + 1;
     const msg = u.message; if (!msg?.text) continue;
     const chatId = msg.chat.id; const parts = msg.text.trim().split(/\s+/);
-    const base = parts[0].split("@")[0].toLowerCase(); const arg = parts[1]; const rest = parts.slice(1).join(" ");
+    const ci = parts.findIndex(p => p.startsWith("/"));      // command can be anywhere (handles "@bot /cmd")
+    if (ci < 0) continue;
+    const base = parts[ci].split("@")[0].toLowerCase();
+    const after = parts.slice(ci + 1);
+    const arg = after[0]; const rest = after.join(" ");
+    console.log(`[cmd] ${base} from chat ${chatId} (${msg.chat.type})`);
     if (base === "/start") {
       await send(chatId, "👋 <b>HoodXChange Buy Bot</b>\nAdd me as admin, then:\n<code>/register &lt;CA&gt;</code> — watch your token\n<code>/setmedia &lt;url&gt;</code> — buy image/gif\n<code>/setlinks chart=.. buy=.. x=.. tg=..</code>\n<code>/test</code> — preview an alert");
     } else if (base === "/register") {
