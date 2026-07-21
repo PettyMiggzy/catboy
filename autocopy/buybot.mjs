@@ -171,6 +171,10 @@ let boosts = fs.existsSync(BOOSTF) ? JSON.parse(fs.readFileSync(BOOSTF, "utf8"))
 let trendMsgId = fs.existsSync(TRENDF) ? JSON.parse(fs.readFileSync(TRENDF, "utf8")).id : null;
 const saveBoosts = () => fs.writeFileSync(BOOSTF, JSON.stringify(boosts));
 const saveTrend = () => fs.writeFileSync(TRENDF, JSON.stringify({ id: trendMsgId }));
+const VOTEF = new URL("./votes.json", import.meta.url);
+let userVotes = fs.existsSync(VOTEF) ? JSON.parse(fs.readFileSync(VOTEF, "utf8")) : {}; // userId -> {ca, ts}
+const saveVotes = () => fs.writeFileSync(VOTEF, JSON.stringify(userVotes));
+function voteCounts() { const cut = Date.now() - 24 * 3600e3, c = {}; for (const v of Object.values(userVotes)) if (v.ts > cut) c[v.ca] = (c[v.ca] || 0) + 1; return c; }
 async function pairStats(ca) {
   try {
     const j = await fetch(`https://api.dexscreener.com/latest/dex/search?q=${ca}`).then(r => r.json());
@@ -182,22 +186,33 @@ async function pairStats(ca) {
   } catch { return null; }
 }
 const MEDAL = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"];
+function mapPair(p) {
+  const info = p.info || {}; const soc = {};
+  for (const s of (info.socials || [])) { if (s.type === "twitter") soc.x = s.url; if (s.type === "telegram") soc.tg = s.url; }
+  return { ca: p.baseToken.address.toLowerCase(), sym: ticker(p.baseToken.symbol || "?"), mc: p.marketCap || p.fdv || 0, vol: p.volume?.h24 || 0, change: p.priceChange?.h24 ?? 0, dexUrl: `https://dexscreener.com/${p.chainId}/${p.pairAddress}`, web: ((info.websites || [])[0] || {}).url, x: soc.x, tg: soc.tg };
+}
 async function topRhcPairs() {
   const j = await fetch(`https://api.dexscreener.com/latest/dex/search?q=${WETH}`).then(r => r.json()).catch(() => null);
   const ps = (j?.pairs || []).filter(p => p.chainId === "robinhood" && p.baseToken?.address);
   const byTok = {}; // dedupe per token, keep deepest-liquidity pair
   for (const p of ps) { const a = p.baseToken.address.toLowerCase(); if (!byTok[a] || (p.liquidity?.usd || 0) > (byTok[a].liquidity?.usd || 0)) byTok[a] = p; }
-  return Object.values(byTok);
+  return Object.values(byTok).map(mapPair);
+}
+async function pairRow(ca) { // fetch a single token's row (for a voted token not in the volume top list)
+  const j = await fetch(`https://api.dexscreener.com/latest/dex/search?q=${ca}`).then(r => r.json()).catch(() => null);
+  const p = (j?.pairs || []).filter(x => x.chainId === "robinhood" && x.baseToken?.address).sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
+  return p ? mapPair(p) : null;
 }
 async function buildTrending() {
   const now = Date.now();
-  const rows = (await topRhcPairs()).map(p => {
-    const info = p.info || {}; const soc = {};
-    for (const s of (info.socials || [])) { if (s.type === "twitter") soc.x = s.url; if (s.type === "telegram") soc.tg = s.url; }
-    return { ca: p.baseToken.address.toLowerCase(), sym: ticker(p.baseToken.symbol || "?"), mc: p.marketCap || p.fdv || 0, vol: p.volume?.h24 || 0, change: p.priceChange?.h24 ?? 0, dexUrl: `https://dexscreener.com/${p.chainId}/${p.pairAddress}`, web: ((info.websites || [])[0] || {}).url, x: soc.x, tg: soc.tg };
-  });
-  rows.forEach(r => r.boosted = boosts[r.ca] && boosts[r.ca] > now);
-  rows.sort((a, b) => (b.boosted ? 1 : 0) - (a.boosted ? 1 : 0) || b.vol - a.vol);
+  let rows = await topRhcPairs();
+  const vc = voteCounts();
+  const topVoted = Object.entries(vc).sort((a, b) => b[1] - a[1])[0]; // [ca, count]
+  if (topVoted && topVoted[1] > 0 && !rows.find(r => r.ca === topVoted[0])) { const x = await pairRow(topVoted[0]); if (x) rows.push(x); } // vote earns a slot
+  rows.forEach(r => { r.votes = vc[r.ca] || 0; r.boosted = boosts[r.ca] && boosts[r.ca] > now; });
+  const maxV = Math.max(0, ...rows.map(r => r.votes));
+  rows.forEach(r => r.topVoted = maxV > 0 && r.votes === maxV);
+  rows.sort((a, b) => (b.boosted ? 1 : 0) - (a.boosted ? 1 : 0) || (b.topVoted ? 1 : 0) - (a.topVoted ? 1 : 0) || b.vol - a.vol);
   return rows.slice(0, 10);
 }
 function fmtTrending(rows) {
@@ -207,13 +222,15 @@ function fmtTrending(rows) {
     if (r.web) links.push(`<a href="${r.web}">🌐</a>`);
     if (r.x) links.push(`<a href="${r.x}">𝕏</a>`);
     if (r.tg) links.push(`<a href="${r.tg}">💬</a>`);
-    return `${MEDAL[i] || (i + 1) + "."} <a href="${r.dexUrl}">${esc(r.sym)}</a>${r.boosted ? " 🔥" : ""} | ${a} ${r.change >= 0 ? "+" : ""}${r.change.toFixed(1)}%  ${links.join(" ")}\nMC $${Math.round(r.mc).toLocaleString()} | Vol24 $${Math.round(r.vol).toLocaleString()}`;
+    const badge = r.boosted ? " 🔥" : r.topVoted ? " 🗳️" : "";
+    const votes = r.votes > 0 ? ` · 🗳️${r.votes}` : "";
+    return `${MEDAL[i] || (i + 1) + "."} <a href="${r.dexUrl}">${esc(r.sym)}</a>${badge} | ${a} ${r.change >= 0 ? "+" : ""}${r.change.toFixed(1)}%  ${links.join(" ")}\nMC $${Math.round(r.mc).toLocaleString()} | Vol24 $${Math.round(r.vol).toLocaleString()}${votes}`;
   }).join("\n\n");
   const ts = new Date().toISOString().slice(11, 16);
-  return `🔥 <b>HoodX Trending — Robinhood Chain</b>\n\n${body || "No tokens yet — register with @hoodxchangebot"}\n\n🕐 <i>Last refreshed ${ts} UTC</i>`;
+  return `🔥 <b>HoodX Trending — Robinhood Chain</b>\n\n${body || "No tokens yet — register with @hoodxchangebot"}\n\n🗳️ <i>Vote your token up · 🔥 = boosted · 🗳️ = top voted</i>\n🕐 <i>Last refreshed ${ts} UTC</i>`;
 }
 const trendKb = () => ({ inline_keyboard: [
-  [{ text: "🔥 Get Trending", url: "https://t.me/hoodxchangebot?start=boost" }],
+  [{ text: "🗳️ Vote", url: "https://t.me/hoodxchangebot?start=vote" }, { text: "🔥 Get Trending", url: "https://t.me/hoodxchangebot?start=boost" }],
   [{ text: "➕ Add Buy Bot", url: "https://t.me/hoodxchangebot?startgroup=true" }],
 ] });
 const TREND_MEDIA = new URL("./trending_header.png", import.meta.url);
@@ -413,6 +430,20 @@ async function tgTick() {
       } else {
         await send(chatId, "⚡ <b>Boost to the top of HoodX Trending</b>\nYour token pinned #1 with 🔥 across the channel + buy-alert ad slots.\n\n<b>To boost:</b> <code>/boost &lt;CA&gt; &lt;hours&gt;</code>\n<i>(paid ETH boost coming next — this is the manual version)</i>");
       }
+    } else if (base === "/vote") {
+      const vca = after.find(p => /^0x[0-9a-fA-F]{40}$/.test(p));
+      if (!vca) { await send(chatId, "🗳️ <b>Vote a token onto Trending</b>\nUsage: <code>/vote &lt;CA&gt;</code>\n1 vote per person / 24h. Most-voted token gets pinned on the Trending channel."); continue; }
+      const uid = String(msg.from?.id || chatId);
+      userVotes[uid] = { ca: vca.toLowerCase(), ts: Date.now() }; saveVotes();
+      const n = voteCounts()[vca.toLowerCase()] || 1;
+      let sym = ""; try { sym = ticker(await pub.readContract({ address: vca.toLowerCase(), abi: ERC20, functionName: "symbol" })); } catch {}
+      await send(chatId, `🗳️ Vote counted for <b>${esc(sym || vca.slice(0, 8))}</b> — <b>${n}</b> vote${n > 1 ? "s" : ""} in 24h.\nMost votes gets pinned on HoodX Trending.`);
+    } else if (base === "/votes") {
+      const top = Object.entries(voteCounts()).sort((a, b) => b[1] - a[1]).slice(0, 10);
+      if (!top.length) { await send(chatId, "No votes yet — <code>/vote &lt;CA&gt;</code> to start."); continue; }
+      const lines = [];
+      for (const [ca, n] of top) { let sym = ca.slice(0, 8); try { sym = ticker(await pub.readContract({ address: ca, abi: ERC20, functionName: "symbol" })); } catch {} lines.push(`🗳️ ${esc(sym)} — <b>${n}</b>`); }
+      await send(chatId, `<b>🗳️ Vote Leaderboard (24h)</b>\n\n${lines.join("\n")}`);
     } else if (base === "/trending") {
       await postTrending(); await send(chatId, "📈 Trending refreshed.");
     } else if (base === "/test") {
