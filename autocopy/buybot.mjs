@@ -425,5 +425,4 @@ api("setMyCommands", { commands: [
 ] });
 (async () => { while (true) { await tgTick().catch(() => sleep(2000)); } })();
 connectWss();
-postTrending();                               // initial trending post
-setInterval(postTrending, 10 * 60 * 1000);    // refresh every 10 min
+if ((env.TRENDING_ON ?? "1") !== "0") { postTrending(); setInterval(postTrending, 10 * 60 * 1000); } // trending off until the animated header is ready
