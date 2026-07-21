@@ -79,6 +79,7 @@ const sendMedia = (chat_id, media, caption, extra = {}) => {
 // ---- registry ----
 const REGF = new URL("./registry.json", import.meta.url);
 let reg = fs.existsSync(REGF) ? JSON.parse(fs.readFileSync(REGF, "utf8")) : {};
+for (const k in reg) if (reg[k]?.sym) reg[k].sym = ticker(reg[k].sym); // clean stale double-$ symbols
 const saveReg = () => fs.writeFileSync(REGF, JSON.stringify(reg, null, 2));
 const awaiting = new Set(); // chatIds that ran /setmedia and should upload next
 function extractMedia(msg) {
@@ -171,10 +172,10 @@ function fmtAlert(c, ev) {
   if (c.links?.x) links.push(`<a href="${esc(c.links.x)}">X</a>`);
   if (c.links?.tg) links.push(`<a href="${esc(c.links.tg)}">TG</a>`);
   return [
-    `<b>${esc(c.sym)} Buy!</b>`,
+    `<b>${esc(ticker(c.sym))} Buy!</b>`,
     bar(ev.usd, c.emoji || "🟢", c.step || 10),
     `💰 <b>$${ev.usd.toFixed(0)}</b> (${ev.eth.toFixed(4)} ETH)`,
-    `🪙 ${ev.tokens.toLocaleString(undefined, { maximumFractionDigits: 0 })} ${esc(c.sym)}`,
+    `🪙 ${ev.tokens.toLocaleString(undefined, { maximumFractionDigits: 0 })} ${esc(ticker(c.sym))}`,
     `📊 MC $${ev.mc.toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
     `👤 <code>${ev.buyer.slice(0, 6)}…${ev.buyer.slice(-4)}</code>`,
     `\n${sponsorLine()}`,            // rotating sponsor/ads slot (network ad inventory)
@@ -275,7 +276,7 @@ async function tgTick() {
         const ts = await pub.readContract({ address: ca, abi: ERC20, functionName: "totalSupply" });
         supplyFactor = Number(ts) / 1e18; // MC = price_in_eth * ETHUSD * (totalSupply_raw/1e18), decimal-independent
       } catch { await send(chatId, "❌ Couldn't read token/pool. Is the CA correct?"); continue; }
-      reg[ca] = { chatId, ca, pool: rp.pool, fee: rp.fee, wethIsT0, sym, dec, supplyFactor, emoji: "🟢", step: 10, minBuy: 0, links: {}, ...(reg[ca] || {}), chatId };
+      reg[ca] = { emoji: "🟢", step: 10, minBuy: 0, links: {}, ...(reg[ca] || {}), chatId, ca, pool: rp.pool, fee: rp.fee, wethIsT0, sym, dec, supplyFactor }; // keep user settings, recompute token fields
       const dx = await dexInfo(ca);
       if (dx) {
         const c2 = reg[ca]; c2.links = c2.links || {};
