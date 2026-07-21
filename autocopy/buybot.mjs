@@ -138,6 +138,29 @@ async function activity(s) {
   for (const l of logs) { const d = l.data.slice(2); const wd = s.wethIsT0 ? s256(d.slice(0, 64)) : s256(d.slice(64, 128)); if (wd > 0n) buys++; else if (wd < 0n) sells++; }
   return { buys, sells };
 }
+// DexScreener: paid-profile status, boosts, and socials (also powers auto-setup)
+async function dexInfo(ca) {
+  try {
+    const [ord, srch] = await Promise.all([
+      fetch(`https://api.dexscreener.com/orders/v1/robinhood/${ca}`).then(r => r.json()).catch(() => null),
+      fetch(`https://api.dexscreener.com/latest/dex/search?q=${ca}`).then(r => r.json()).catch(() => null),
+    ]);
+    const paid = ((ord && ord.orders) || []).filter(o => o.status === "approved");
+    const pair = ((srch && srch.pairs) || [])[0];
+    const info = (pair && pair.info) || {};
+    const socials = {};
+    for (const s of (info.socials || [])) { if (s.type === "twitter") socials.x = s.url; if (s.type === "telegram") socials.tg = s.url; }
+    return {
+      paid: paid.length > 0,
+      paidTypes: [...new Set(paid.map(o => o.type))],
+      enhanced: !!(info.imageUrl || info.header),
+      boosts: (pair && pair.boosts && pair.boosts.active) || 0,
+      website: ((info.websites || [])[0] || {}).url,
+      x: socials.x, tg: socials.tg,
+      dexUrl: pair ? `https://dexscreener.com/${pair.chainId}/${pair.pairAddress}` : null,
+    };
+  } catch { return null; }
+}
 
 // ---- alert formatting ----
 function bar(usd, emoji, step) { const n = Math.max(1, Math.min(60, Math.floor(usd / step))); return emoji.repeat(n); }
@@ -236,8 +259,18 @@ async function tgTick() {
         supplyFactor = Number(ts) / 1e18; // MC = price_in_eth * ETHUSD * (totalSupply_raw/1e18), decimal-independent
       } catch { await send(chatId, "❌ Couldn't read token/pool. Is the CA correct?"); continue; }
       reg[ca] = { chatId, ca, pool: rp.pool, fee: rp.fee, wethIsT0, sym, dec, supplyFactor, emoji: "🟢", step: 10, minBuy: 0, links: {}, ...(reg[ca] || {}), chatId };
+      const dx = await dexInfo(ca);
+      if (dx) {
+        const c2 = reg[ca]; c2.links = c2.links || {};
+        if (!c2.links.chart && dx.dexUrl) c2.links.chart = dx.dexUrl;   // auto-setup: pull chart + socials
+        if (!c2.links.x && dx.x) c2.links.x = dx.x;
+        if (!c2.links.tg && dx.tg) c2.links.tg = dx.tg;
+        c2.dexPaid = dx.paid;
+      }
       saveReg();
-      await send(chatId, `✅ Watching <b>${esc(sym)}</b>\nPool <code>${rp.pool}</code>\nBuys will post here. Add art with <code>/setmedia</code>, links with <code>/setlinks</code>, preview with <code>/test</code>.`);
+      const dexStatus = dx ? (dx.paid ? `🔵 DexScreener: <b>Paid ✅</b>${dx.boosts ? ` · ⚡${dx.boosts} boosts` : ""}` : dx.enhanced ? "🔵 DexScreener: enhanced profile" : "🔵 DexScreener: not paid yet") : "";
+      const pulled = dx && (dx.x || dx.tg || dx.dexUrl) ? "\n🔗 Auto-pulled chart + socials from DexScreener." : "";
+      await send(chatId, `✅ Watching <b>${esc(sym)}</b>\nPool <code>${rp.pool}</code>\n${dexStatus}${pulled}\nAdd art with <code>/setmedia</code>, custom emoji <code>/setemoji</code>, preview <code>/test</code>.`);
     } else if (base === "/setmedia") {
       const c = Object.values(reg).find(x => x.chatId === chatId); if (!c) { await send(chatId, "Register first: <code>/register &lt;CA&gt;</code>"); continue; }
       if (/^https?:\/\//i.test(arg || "")) { c.media = arg; saveReg(); await send(chatId, "🖼️ Buy media set."); }
@@ -264,13 +297,15 @@ async function tgTick() {
       if (!ca) { await send(chatId, "Usage: <code>/scan &lt;CA&gt;</code>"); continue; }
       await send(chatId, "🔍 Scanning…");
       const s = await stats(ca); if (!s) { await send(chatId, "❌ No WETH pool found for that CA."); continue; }
-      const lp = await lpStatus(s.pool); const act = await activity(s);
+      const [lp, act, dx] = await Promise.all([lpStatus(s.pool), activity(s), dexInfo(ca)]);
       const lpLine = lp.locked === true ? `✅ LP locked (${esc(lp.how)})` : lp.locked === false ? "🚨 LP <b>NOT locked</b> — dev can pull it" : "❓ LP status unknown";
       const sellLine = act.sells > 0 ? `✅ Sells work (${act.sells} sells / ${act.buys} buys)` : act.buys > 0 ? "🚨 Buys but <b>ZERO sells</b> — possible honeypot" : "❓ No recent trades";
       const liqLine = s.liqUsd >= 3000 ? `✅ Liquidity $${s.liqUsd.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : `⚠️ Thin liquidity $${s.liqUsd.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+      const dexLine = !dx ? "❓ DexScreener: n/a" : dx.paid ? `🔵 DexScreener <b>Paid ✅</b>${dx.paidTypes.length ? ` (${dx.paidTypes.map(esc).join(", ")})` : ""}${dx.boosts ? ` · ⚡${dx.boosts} boosts` : ""}` : dx.enhanced ? "🔵 DexScreener: enhanced profile (unpaid)" : "⚪ DexScreener: not paid";
+      const socialLine = dx && (dx.x || dx.tg || dx.website) ? `🔗 Socials: ${[dx.website && "web", dx.x && "X", dx.tg && "TG"].filter(Boolean).join(" · ")}` : "⚠️ No socials on DexScreener";
       const flags = [lp.locked === false, act.sells === 0 && act.buys > 0, s.liqUsd < 3000].filter(Boolean).length;
       const verdict = flags === 0 ? "🟢 Looks clean" : flags === 1 ? "🟡 Caution" : "🔴 High risk";
-      await send(chatId, `<b>🛡️ HoodX Scan — ${esc(s.sym)}</b>\n${lpLine}\n${sellLine}\n${liqLine}\n📊 MC $${s.mc.toLocaleString(undefined, { maximumFractionDigits: 0 })}\n\n<b>${verdict}</b>\n<i>Heuristic — always DYOR.</i>`);
+      await send(chatId, `<b>🛡️ HoodX Scan — ${esc(s.sym)}</b>\n${lpLine}\n${sellLine}\n${liqLine}\n${dexLine}\n${socialLine}\n📊 MC $${s.mc.toLocaleString(undefined, { maximumFractionDigits: 0 })}\n\n<b>${verdict}</b>\n<i>Heuristic — always DYOR.</i>`);
     } else if (base === "/test") {
       const c = Object.values(reg).find(x => x.chatId === chatId); if (!c) { await send(chatId, "Register first: <code>/register &lt;CA&gt;</code>"); continue; }
       await postAlert(c, { eth: 0.45, usd: 842, tokens: 480000, mc: 46955, buyer: "0x3484f2b7b8c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4" });
