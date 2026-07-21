@@ -176,7 +176,9 @@ async function pairStats(ca) {
     const j = await fetch(`https://api.dexscreener.com/latest/dex/search?q=${ca}`).then(r => r.json());
     const p = (j.pairs || []).filter(x => x.chainId === "robinhood").sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
     if (!p) return null;
-    return { ca: ca.toLowerCase(), sym: ticker(p.baseToken?.symbol || "?"), mc: p.marketCap || p.fdv || 0, vol1h: p.volume?.h1 || 0, change1h: p.priceChange?.h1 ?? 0, dexUrl: `https://dexscreener.com/${p.chainId}/${p.pairAddress}` };
+    const info = p.info || {}; const soc = {};
+    for (const s of (info.socials || [])) { if (s.type === "twitter") soc.x = s.url; if (s.type === "telegram") soc.tg = s.url; }
+    return { ca: ca.toLowerCase(), sym: ticker(p.baseToken?.symbol || "?"), mc: p.marketCap || p.fdv || 0, vol1h: p.volume?.h1 || 0, change1h: p.priceChange?.h1 ?? 0, dexUrl: `https://dexscreener.com/${p.chainId}/${p.pairAddress}`, web: ((info.websites || [])[0] || {}).url, x: soc.x, tg: soc.tg };
   } catch { return null; }
 }
 const MEDAL = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"];
@@ -191,32 +193,41 @@ async function buildTrending() {
 function fmtTrending(rows) {
   const body = rows.map((r, i) => {
     const a = r.change1h >= 0 ? "🟢" : "🔴";
-    return `${MEDAL[i] || (i + 1) + "."} <a href="${r.dexUrl}">${esc(r.sym)}</a>${r.boosted ? " 🔥" : ""} | ${a} ${r.change1h >= 0 ? "+" : ""}${r.change1h.toFixed(2)}%\nMC $${Math.round(r.mc).toLocaleString()} | V/h $${Math.round(r.vol1h).toLocaleString()}`;
+    const links = [`<a href="${r.dexUrl}">📊</a>`];
+    if (r.web) links.push(`<a href="${r.web}">🌐</a>`);
+    if (r.x) links.push(`<a href="${r.x}">𝕏</a>`);
+    if (r.tg) links.push(`<a href="${r.tg}">💬</a>`);
+    return `${MEDAL[i] || (i + 1) + "."} <a href="${r.dexUrl}">${esc(r.sym)}</a>${r.boosted ? " 🔥" : ""} | ${a} ${r.change1h >= 0 ? "+" : ""}${r.change1h.toFixed(2)}%  ${links.join(" ")}\nMC $${Math.round(r.mc).toLocaleString()} | V/h $${Math.round(r.vol1h).toLocaleString()}`;
   }).join("\n\n");
-  return `🔥 <b>HoodX Trending — Robinhood Chain</b>\n\n${body || "No tokens yet — register with @hoodxchangebot"}\n\n⚡ <i>Boost to the top → DM @hoodxchangebot</i>`;
+  const ts = new Date().toISOString().slice(11, 16);
+  return `🔥 <b>HoodX Trending — Robinhood Chain</b>\n\n${body || "No tokens yet — register with @hoodxchangebot"}\n\n🕐 <i>Last refreshed ${ts} UTC</i>`;
 }
-const TREND_MEDIA = new URL("./trending_header.mp4", import.meta.url);
+const trendKb = () => ({ inline_keyboard: [
+  [{ text: "🔥 Get Trending", url: "https://t.me/hoodxchangebot?start=boost" }],
+  [{ text: "➕ Add Buy Bot", url: "https://t.me/hoodxchangebot?startgroup=true" }],
+] });
+const TREND_MEDIA = new URL("./trending_header.png", import.meta.url);
 const TRENDMCACHE = new URL("./trending_media_id.txt", import.meta.url);
 let trendFileId = fs.existsSync(TRENDMCACHE) ? fs.readFileSync(TRENDMCACHE, "utf8").trim() : null;
 async function sendTrendingMedia(chat_id, caption) {
-  if (trendFileId) return api("sendAnimation", { chat_id, animation: trendFileId, caption, parse_mode: "HTML" });
-  if (!fs.existsSync(TREND_MEDIA)) return send(chat_id, caption);
+  if (trendFileId) return api("sendPhoto", { chat_id, photo: trendFileId, caption, parse_mode: "HTML", reply_markup: trendKb() });
+  if (!fs.existsSync(TREND_MEDIA)) return send(chat_id, caption, { reply_markup: trendKb() });
   const form = new FormData();
-  form.append("chat_id", String(chat_id)); form.append("caption", caption); form.append("parse_mode", "HTML");
-  form.append("animation", new Blob([fs.readFileSync(TREND_MEDIA)], { type: "video/mp4" }), "trend.mp4");
-  const r = await fetch(`https://api.telegram.org/bot${BOT}/sendAnimation`, { method: "POST", body: form }).then(x => x.json()).catch(e => ({ ok: false, e: e.message }));
-  const a = r.result && (r.result.animation || r.result.video || r.result.document);
-  if (r.ok && a?.file_id) { trendFileId = a.file_id; try { fs.writeFileSync(TRENDMCACHE, trendFileId); } catch {} }
+  form.append("chat_id", String(chat_id)); form.append("caption", caption); form.append("parse_mode", "HTML"); form.append("reply_markup", JSON.stringify(trendKb()));
+  form.append("photo", new Blob([fs.readFileSync(TREND_MEDIA)], { type: "image/png" }), "trend.png");
+  const r = await fetch(`https://api.telegram.org/bot${BOT}/sendPhoto`, { method: "POST", body: form }).then(x => x.json()).catch(e => ({ ok: false, e: e.message }));
+  const ph = r.result && r.result.photo;
+  if (r.ok && ph?.length) { trendFileId = ph[ph.length - 1].file_id; try { fs.writeFileSync(TRENDMCACHE, trendFileId); } catch {} }
   return r;
 }
 async function postTrending() {
   try {
     const text = fmtTrending(await buildTrending());
     if (trendMsgId) {
-      const r = await api("editMessageCaption", { chat_id: TREND_CH, message_id: trendMsgId, caption: text, parse_mode: "HTML" });
+      const r = await api("editMessageCaption", { chat_id: TREND_CH, message_id: trendMsgId, caption: text, parse_mode: "HTML", reply_markup: trendKb() });
       if (r.ok || (r.description || "").includes("not modified")) return;
     }
-    const r = await sendTrendingMedia(TREND_CH, text);   // video header + list caption
+    const r = await sendTrendingMedia(TREND_CH, text);   // image header + list caption + buttons
     if (r.ok && r.result) { trendMsgId = r.result.message_id; saveTrend(); }
   } catch {}
 }
