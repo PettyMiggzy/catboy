@@ -16,3 +16,5 @@ autocopy/deploy/.env
 
 # throwaway session utilities (live watchers, ad-hoc checks)
 autocopy/_*.mjs
+*.env
+autocopy/registry.json
