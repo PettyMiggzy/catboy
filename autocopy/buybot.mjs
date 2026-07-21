@@ -64,15 +64,30 @@ const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(
 const api = (m, p) => fetch(`https://api.telegram.org/bot${BOT}/${m}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(p) }).then(r => r.json()).catch(e => ({ ok: false, e: e.message }));
 const send = (chat_id, text, extra = {}) => api("sendMessage", { chat_id, text, parse_mode: "HTML", disable_web_page_preview: true, ...extra });
 const sendMedia = (chat_id, media, caption, extra = {}) => {
-  const isVid = /\.(mp4|gif)$/i.test(media) || media.startsWith("vid:");
-  const m = media.replace(/^vid:/, "");
-  return api(isVid ? "sendAnimation" : "sendPhoto", { chat_id, [isVid ? "animation" : "photo"]: m, caption, parse_mode: "HTML", ...extra });
+  let method, key, val;
+  if (media && typeof media === "object" && media.id) {          // uploaded file (stored file_id)
+    ({ photo: ["sendPhoto", "photo"], animation: ["sendAnimation", "animation"], video: ["sendVideo", "video"] }[media.kind] || ["sendPhoto", "photo"]).forEach((x, i) => i === 0 ? method = x : key = x);
+    val = media.id;
+  } else {                                                        // url string
+    const isVid = /\.(mp4|gif)$/i.test(media) || String(media).startsWith("vid:");
+    method = isVid ? "sendAnimation" : "sendPhoto"; key = isVid ? "animation" : "photo"; val = String(media).replace(/^vid:/, "");
+  }
+  return api(method, { chat_id, [key]: val, caption, parse_mode: "HTML", ...extra });
 };
 
 // ---- registry ----
 const REGF = new URL("./registry.json", import.meta.url);
 let reg = fs.existsSync(REGF) ? JSON.parse(fs.readFileSync(REGF, "utf8")) : {};
 const saveReg = () => fs.writeFileSync(REGF, JSON.stringify(reg, null, 2));
+const awaiting = new Set(); // chatIds that ran /setmedia and should upload next
+function extractMedia(msg) {
+  if (msg.photo?.length) return { id: msg.photo[msg.photo.length - 1].file_id, kind: "photo" };
+  if (msg.animation) return { id: msg.animation.file_id, kind: "animation" };
+  if (msg.video) return { id: msg.video.file_id, kind: "video" };
+  const mt = msg.document?.mime_type || "";
+  if (msg.document && /image|gif|video/i.test(mt)) return { id: msg.document.file_id, kind: /video|gif/i.test(mt) ? "animation" : "photo" };
+  return null;
+}
 
 async function resolvePool(ca) {
   for (const f of [10000, 3000, 500, 100]) {
@@ -185,8 +200,20 @@ async function tgTick() {
   if (!r.ok) { await sleep(3000); return; } // backoff on error
   for (const u of r.result) {
     offset = u.update_id + 1;
-    const msg = u.message; if (!msg?.text) continue;
-    const chatId = msg.chat.id; const parts = msg.text.trim().split(/\s+/);
+    const msg = u.message; if (!msg) continue;
+    const chatId = msg.chat.id;
+    // uploaded media → save as this token's buy art (works in DM always; in groups when replying to the bot or with privacy off)
+    const up = extractMedia(msg);
+    if (up) {
+      const c = Object.values(reg).find(x => x.chatId === chatId);
+      if (c && (awaiting.has(chatId) || (msg.caption || "").toLowerCase().includes("/setmedia"))) {
+        c.media = up; saveReg(); awaiting.delete(chatId);
+        await send(chatId, "🖼️ Buy media saved — it'll show on every buy alert.");
+      }
+      continue;
+    }
+    if (!msg.text) continue;
+    const parts = msg.text.trim().split(/\s+/);
     const ci = parts.findIndex(p => p.startsWith("/"));      // command can be anywhere (handles "@bot /cmd")
     if (ci < 0) continue;
     const base = parts[ci].split("@")[0].toLowerCase();
@@ -212,8 +239,8 @@ async function tgTick() {
       await send(chatId, `✅ Watching <b>${esc(sym)}</b>\nPool <code>${rp.pool}</code>\nBuys will post here. Add art with <code>/setmedia</code>, links with <code>/setlinks</code>, preview with <code>/test</code>.`);
     } else if (base === "/setmedia") {
       const c = Object.values(reg).find(x => x.chatId === chatId); if (!c) { await send(chatId, "Register first: <code>/register &lt;CA&gt;</code>"); continue; }
-      if (!/^https?:\/\//i.test(arg || "")) { await send(chatId, "Usage: <code>/setmedia https://...image_or_gif</code>"); continue; }
-      c.media = arg; saveReg(); await send(chatId, "🖼️ Buy media set.");
+      if (/^https?:\/\//i.test(arg || "")) { c.media = arg; saveReg(); await send(chatId, "🖼️ Buy media set."); }
+      else { awaiting.add(chatId); await send(chatId, "📎 Send me the image / GIF / video now (just upload it here) and I'll use it on every buy alert."); }
     } else if (base === "/setlinks") {
       const c = Object.values(reg).find(x => x.chatId === chatId); if (!c) { await send(chatId, "Register first."); continue; }
       c.links = c.links || {};
