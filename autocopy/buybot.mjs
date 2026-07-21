@@ -181,10 +181,27 @@ function fmtAlert(c, ev) {
     links.length ? links.join("  •  ") : ""
   ].filter(Boolean).join("\n");
 }
+// default buy video (shipped) — uploaded once, Telegram file_id cached + reused
+const DEFAULT_MEDIA = new URL("./default_buy.mp4", import.meta.url);
+const DEFCACHE = new URL("./default_media_id.txt", import.meta.url);
+let defaultFileId = fs.existsSync(DEFCACHE) ? fs.readFileSync(DEFCACHE, "utf8").trim() : null;
+async function sendDefaultMedia(chat_id, caption, extra) {
+  if (defaultFileId) return sendMedia(chat_id, { id: defaultFileId, kind: "animation" }, caption, extra);
+  if (!fs.existsSync(DEFAULT_MEDIA)) return { ok: false };
+  const form = new FormData();
+  form.append("chat_id", String(chat_id)); form.append("caption", caption); form.append("parse_mode", "HTML");
+  if (extra.reply_markup) form.append("reply_markup", JSON.stringify(extra.reply_markup));
+  form.append("animation", new Blob([fs.readFileSync(DEFAULT_MEDIA)], { type: "video/mp4" }), "buy.mp4");
+  const r = await fetch(`https://api.telegram.org/bot${BOT}/sendAnimation`, { method: "POST", body: form }).then(x => x.json()).catch(e => ({ ok: false, e: e.message }));
+  const a = r.result && (r.result.animation || r.result.video || r.result.document);
+  if (r.ok && a?.file_id) { defaultFileId = a.file_id; try { fs.writeFileSync(DEFCACHE, defaultFileId); } catch {} }
+  return r;
+}
 async function postAlert(c, ev) {
   const text = fmtAlert(c, ev);
   const extra = { reply_markup: kb(c) };   // Chart/Buy + HoodBridge/Pad/Get-Trending buttons
-  if (c.media) { const r = await sendMedia(c.chatId, c.media, text, extra); if (r.ok) return; }
+  if (c.media) { const r = await sendMedia(c.chatId, c.media, text, extra); if (r.ok) return; } // project's own art
+  else { const r = await sendDefaultMedia(c.chatId, text, extra); if (r.ok) return; }              // shipped default video
   await send(c.chatId, text, extra);
 }
 
