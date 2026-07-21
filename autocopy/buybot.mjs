@@ -163,6 +163,50 @@ async function dexInfo(ca) {
   } catch { return null; }
 }
 
+// ---- trending channel ----
+const TREND_CH = env.TRENDING_CHANNEL || "-1004414481505";
+const BOOSTF = new URL("./boosts.json", import.meta.url);
+const TRENDF = new URL("./trend.json", import.meta.url);
+let boosts = fs.existsSync(BOOSTF) ? JSON.parse(fs.readFileSync(BOOSTF, "utf8")) : {}; // ca -> untilMs
+let trendMsgId = fs.existsSync(TRENDF) ? JSON.parse(fs.readFileSync(TRENDF, "utf8")).id : null;
+const saveBoosts = () => fs.writeFileSync(BOOSTF, JSON.stringify(boosts));
+const saveTrend = () => fs.writeFileSync(TRENDF, JSON.stringify({ id: trendMsgId }));
+async function pairStats(ca) {
+  try {
+    const j = await fetch(`https://api.dexscreener.com/latest/dex/search?q=${ca}`).then(r => r.json());
+    const p = (j.pairs || []).filter(x => x.chainId === "robinhood").sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
+    if (!p) return null;
+    return { ca: ca.toLowerCase(), sym: ticker(p.baseToken?.symbol || "?"), mc: p.marketCap || p.fdv || 0, vol1h: p.volume?.h1 || 0, change1h: p.priceChange?.h1 ?? 0, dexUrl: `https://dexscreener.com/${p.chainId}/${p.pairAddress}` };
+  } catch { return null; }
+}
+const MEDAL = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"];
+async function buildTrending() {
+  const cas = [...new Set([...Object.keys(reg), ...Object.keys(boosts)])];
+  const rows = (await Promise.all(cas.map(pairStats))).filter(Boolean);
+  const now = Date.now();
+  rows.forEach(r => r.boosted = boosts[r.ca] && boosts[r.ca] > now);
+  rows.sort((a, b) => (b.boosted ? 1 : 0) - (a.boosted ? 1 : 0) || b.vol1h - a.vol1h);
+  return rows.slice(0, 10);
+}
+function fmtTrending(rows) {
+  const body = rows.map((r, i) => {
+    const a = r.change1h >= 0 ? "🟢" : "🔴";
+    return `${MEDAL[i] || (i + 1) + "."} <a href="${r.dexUrl}">${esc(r.sym)}</a>${r.boosted ? " 🔥" : ""} | ${a} ${r.change1h >= 0 ? "+" : ""}${r.change1h.toFixed(2)}%\nMC $${Math.round(r.mc).toLocaleString()} | V/h $${Math.round(r.vol1h).toLocaleString()}`;
+  }).join("\n\n");
+  return `🔥 <b>HoodX Trending — Robinhood Chain</b>\n\n${body || "No tokens yet — register with @hoodxchangebot"}\n\n⚡ <i>Boost to the top → DM @hoodxchangebot</i>`;
+}
+async function postTrending() {
+  try {
+    const text = fmtTrending(await buildTrending());
+    if (trendMsgId) {
+      const r = await api("editMessageText", { chat_id: TREND_CH, message_id: trendMsgId, text, parse_mode: "HTML", disable_web_page_preview: true });
+      if (r.ok || (r.description || "").includes("not modified")) return;
+    }
+    const r = await send(TREND_CH, text);
+    if (r.ok) { trendMsgId = r.result.message_id; saveTrend(); }
+  } catch {}
+}
+
 // ---- alert formatting ----
 function bar(usd, emoji, step) { const n = Math.max(1, Math.min(60, Math.floor(usd / step))); return emoji.repeat(n); }
 function fmtAlert(c, ev) {
@@ -324,6 +368,18 @@ async function tgTick() {
       const flags = [lp.locked === false, act.sells === 0 && act.buys > 0, s.liqUsd < 3000].filter(Boolean).length;
       const verdict = flags === 0 ? "🟢 Looks clean" : flags === 1 ? "🟡 Caution" : "🔴 High risk";
       await send(chatId, `<b>🛡️ HoodX Scan — ${esc(s.sym)}</b>\n${lpLine}\n${sellLine}\n${liqLine}\n${dexLine}\n${socialLine}\n📊 MC $${s.mc.toLocaleString(undefined, { maximumFractionDigits: 0 })}\n\n<b>${verdict}</b>\n<i>Heuristic — always DYOR.</i>`);
+    } else if (base === "/boost") {
+      const bca = after.find(p => /^0x[0-9a-fA-F]{40}$/.test(p));
+      const hrs = Number(after.find(p => /^\d+$/.test(p)));
+      if (bca && hrs) {
+        boosts[bca.toLowerCase()] = Date.now() + hrs * 3600e3; saveBoosts();
+        await send(chatId, `🔥 Boosted <code>${bca}</code> for ${hrs}h — it'll top HoodX Trending.`);
+        postTrending();
+      } else {
+        await send(chatId, "⚡ <b>Boost to the top of HoodX Trending</b>\nYour token pinned #1 with 🔥 across the channel + buy-alert ad slots.\n\n<b>To boost:</b> <code>/boost &lt;CA&gt; &lt;hours&gt;</code>\n<i>(paid ETH boost coming next — this is the manual version)</i>");
+      }
+    } else if (base === "/trending") {
+      await postTrending(); await send(chatId, "📈 Trending refreshed.");
     } else if (base === "/test") {
       const c = Object.values(reg).find(x => x.chatId === chatId); if (!c) { await send(chatId, "Register first: <code>/register &lt;CA&gt;</code>"); continue; }
       await postAlert(c, { eth: 0.45, usd: 842, tokens: 480000, mc: 46955, buyer: "0x3484f2b7b8c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4" });
@@ -344,3 +400,5 @@ api("setMyCommands", { commands: [
 ] });
 (async () => { while (true) { await tgTick().catch(() => sleep(2000)); } })();
 connectWss();
+postTrending();                               // initial trending post
+setInterval(postTrending, 10 * 60 * 1000);    // refresh every 10 min

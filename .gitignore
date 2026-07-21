@@ -19,3 +19,5 @@ autocopy/_*.mjs
 *.env
 autocopy/registry.json
 autocopy/default_media_id.txt
+autocopy/boosts.json
+autocopy/trend.json
