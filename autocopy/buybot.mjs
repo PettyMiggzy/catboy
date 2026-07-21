@@ -59,6 +59,7 @@ const s256 = h => { let n = BigInt("0x" + h); if (n >= 2n ** 255n) n -= 2n ** 25
 const abs = n => n < 0n ? -n : n;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); // HTML-safe
+const ticker = s => "$" + String(s).replace(/^\$+/, "").trim();                                // exactly one leading $
 
 // ---- telegram helpers ----
 const api = (m, p) => fetch(`https://api.telegram.org/bot${BOT}/${m}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(p) }).then(r => r.json()).catch(e => ({ ok: false, e: e.message }));
@@ -111,7 +112,7 @@ async function stats(ca) {
   const [sq] = await pub.readContract({ address: rp.pool, abi: SLOT0, functionName: "slot0" });
   const P = (Number(sq) / 2 ** 96) ** 2; const priceEth = wethIsT0 ? 1 / P : P;
   let sym = "$TOKEN", ts = 0n;
-  try { sym = "$" + await pub.readContract({ address: ca, abi: ERC20, functionName: "symbol" }); } catch {}
+  try { sym = ticker(await pub.readContract({ address: ca, abi: ERC20, functionName: "symbol" })); } catch {}
   try { ts = await pub.readContract({ address: ca, abi: ERC20, functionName: "totalSupply" }); } catch {}
   const weth = await pub.readContract({ address: WETH, abi: BAL, functionName: "balanceOf", args: [rp.pool] });
   return { ca, sym, pool: rp.pool, fee: rp.fee, wethIsT0, priceUsd: priceEth * ETHUSD, mc: priceEth * ETHUSD * (Number(ts) / 1e18), liqUsd: Number(weth) / 1e18 * ETHUSD };
@@ -221,7 +222,7 @@ async function tgTick() {
     const arg = after[0]; const rest = after.join(" ");
     console.log(`[cmd] ${base} from chat ${chatId} (${msg.chat.type})`);
     if (base === "/start") {
-      await send(chatId, "👋 <b>HoodXChange Buy Bot</b>\nAdd me as admin, then:\n<code>/register &lt;CA&gt;</code> — watch your token\n<code>/setmedia &lt;url&gt;</code> — buy image/gif\n<code>/setlinks chart=.. buy=.. x=.. tg=..</code>\n<code>/scan &lt;CA&gt;</code> — 🛡️ safety check (LP lock, honeypot, liq)\n<code>/chart &lt;CA&gt;</code> — price / MC / liquidity\n<code>/test</code> — preview an alert");
+      await send(chatId, "👋 <b>HoodXChange Buy Bot</b>\nAdd me as admin, then:\n<code>/register &lt;CA&gt;</code> — watch your token\n<code>/setmedia</code> — then upload your buy image/gif/video\n<code>/setemoji 🔥</code> — custom buy emoji\n<code>/setlinks chart=.. buy=.. x=.. tg=..</code>\n<code>/scan &lt;CA&gt;</code> — 🛡️ safety check (LP lock, honeypot, liq)\n<code>/chart &lt;CA&gt;</code> — price / MC / liquidity\n<code>/test</code> — preview an alert");
     } else if (base === "/register") {
       if (!/^0x[0-9a-fA-F]{40}$/.test(arg || "")) { await send(chatId, "Usage: <code>/register 0xYourTokenCA</code>"); continue; }
       const ca = arg.toLowerCase();
@@ -229,7 +230,7 @@ async function tgTick() {
       let wethIsT0, sym = "$TOKEN", dec = 18, supplyFactor = 0;
       try {
         wethIsT0 = (await pub.readContract({ address: rp.pool, abi: POOLABI, functionName: "token0" })).toLowerCase() === WETH;
-        try { sym = "$" + await pub.readContract({ address: ca, abi: ERC20, functionName: "symbol" }); } catch {}
+        try { sym = ticker(await pub.readContract({ address: ca, abi: ERC20, functionName: "symbol" })); } catch {}
         try { dec = Number(await pub.readContract({ address: ca, abi: ERC20, functionName: "decimals" })); } catch {}
         const ts = await pub.readContract({ address: ca, abi: ERC20, functionName: "totalSupply" });
         supplyFactor = Number(ts) / 1e18; // MC = price_in_eth * ETHUSD * (totalSupply_raw/1e18), decimal-independent
@@ -246,6 +247,13 @@ async function tgTick() {
       c.links = c.links || {};
       for (const kv of rest.split(/\s+/)) { const [k, v] = kv.split("="); if (["chart", "buy", "x", "tg"].includes(k) && /^https?:\/\//i.test(v || "")) c.links[k] = v; }
       saveReg(); await send(chatId, "🔗 Links updated.");
+    } else if (base === "/setemoji") {
+      const c = Object.values(reg).find(x => x.chatId === chatId); if (!c) { await send(chatId, "Register first: <code>/register &lt;CA&gt;</code>"); continue; }
+      if (!arg) { await send(chatId, "Usage: <code>/setemoji 🔥</code>\nOptional $ per emoji: <code>/setemoji 🔥 20</code>"); continue; }
+      c.emoji = arg;
+      if (after[1] && !isNaN(Number(after[1]))) c.step = Math.max(1, Number(after[1]));
+      saveReg();
+      await send(chatId, `✅ Buy emoji set: ${esc(c.emoji)} (1 per $${c.step})\nPreview with <code>/test</code>.`);
     } else if (base === "/chart") {
       const ca = (arg && /^0x[0-9a-fA-F]{40}$/.test(arg)) ? arg.toLowerCase() : Object.values(reg).find(x => x.chatId === chatId)?.ca;
       if (!ca) { await send(chatId, "Usage: <code>/chart &lt;CA&gt;</code>"); continue; }
@@ -275,7 +283,8 @@ api("setMyCommands", { commands: [
   { command: "register", description: "Watch your token — add your CA" },
   { command: "scan", description: "🛡️ Safety check: LP lock, honeypot, liquidity" },
   { command: "chart", description: "Price / market cap / liquidity" },
-  { command: "setmedia", description: "Set your buy image or gif" },
+  { command: "setmedia", description: "Upload your buy image / gif / video" },
+  { command: "setemoji", description: "Set a custom buy emoji" },
   { command: "setlinks", description: "Set chart / buy / X / TG links" },
   { command: "test", description: "Preview a buy alert" },
   { command: "start", description: "Setup instructions" },
