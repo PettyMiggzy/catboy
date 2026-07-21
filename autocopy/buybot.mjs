@@ -36,6 +36,7 @@ function kb(c) {
   return { inline_keyboard: [
     row1,
     [{ text: "🌉 HoodBridge", url: HOODX.bridge }, { text: "🚀 HoodX Pad", url: HOODX.pad }],
+    [{ text: `🗳️ Vote ${ticker(c.sym)} Trending`, callback_data: `vote:${c.ca}` }],
     [{ text: "🔥 Get Trending", url: HOODX.trendingBuy }],
   ] };
 }
@@ -332,12 +333,34 @@ function connectWss() {
 }
 
 // ---- telegram command loop ----
+// one-tap vote button on buy alerts → no typing, no re-pasting CA
+async function handleCallback(cq) {
+  const data = cq.data || "";
+  if (data.startsWith("vote:")) {
+    const ca = data.slice(5).toLowerCase();
+    if (!/^0x[0-9a-fA-F]{40}$/.test(ca)) { await api("answerCallbackQuery", { callback_query_id: cq.id, text: "Invalid token." }); return; }
+    const uid = String(cq.from?.id);
+    const prev = userVotes[uid];
+    if (prev && prev.ca === ca && Date.now() - prev.ts < 24 * 3600e3) {
+      const n = voteCounts()[ca] || 1;
+      await api("answerCallbackQuery", { callback_query_id: cq.id, text: `Already voted 🗳️ (${n} in 24h)` });
+      return;
+    }
+    userVotes[uid] = { ca, ts: Date.now() }; saveVotes();
+    const n = voteCounts()[ca] || 1;
+    await api("answerCallbackQuery", { callback_query_id: cq.id, text: `🗳️ Voted! ${n} vote${n > 1 ? "s" : ""} in 24h — most votes gets pinned Trending.`, show_alert: false });
+    return;
+  }
+  await api("answerCallbackQuery", { callback_query_id: cq.id });
+}
+
 let offset = 0;
 async function tgTick() {
-  const r = await api("getUpdates", { offset, timeout: 25, allowed_updates: ["message"] });
+  const r = await api("getUpdates", { offset, timeout: 25, allowed_updates: ["message", "callback_query"] });
   if (!r.ok) { await sleep(3000); return; } // backoff on error
   for (const u of r.result) {
     offset = u.update_id + 1;
+    if (u.callback_query) { await handleCallback(u.callback_query).catch(() => {}); continue; }
     const msg = u.message; if (!msg) continue;
     const chatId = msg.chat.id;
     // uploaded media → save as this token's buy art (works in DM always; in groups when replying to the bot or with privacy off)
@@ -431,8 +454,9 @@ async function tgTick() {
         await send(chatId, "⚡ <b>Boost to the top of HoodX Trending</b>\nYour token pinned #1 with 🔥 across the channel + buy-alert ad slots.\n\n<b>To boost:</b> <code>/boost &lt;CA&gt; &lt;hours&gt;</code>\n<i>(paid ETH boost coming next — this is the manual version)</i>");
       }
     } else if (base === "/vote") {
-      const vca = after.find(p => /^0x[0-9a-fA-F]{40}$/.test(p));
-      if (!vca) { await send(chatId, "🗳️ <b>Vote a token onto Trending</b>\nUsage: <code>/vote &lt;CA&gt;</code>\n1 vote per person / 24h. Most-voted token gets pinned on the Trending channel."); continue; }
+      let vca = after.find(p => /^0x[0-9a-fA-F]{40}$/.test(p));
+      if (!vca) { const c = Object.values(reg).find(x => x.chatId === chatId); vca = c?.ca; } // in a token's group, vote for that token — no CA needed
+      if (!vca) { await send(chatId, "🗳️ <b>Vote a token onto Trending</b>\nIn a token's group just send <code>/vote</code>. Anywhere else: <code>/vote &lt;CA&gt;</code>.\n1 vote per person / 24h."); continue; }
       const uid = String(msg.from?.id || chatId);
       userVotes[uid] = { ca: vca.toLowerCase(), ts: Date.now() }; saveVotes();
       const n = voteCounts()[vca.toLowerCase()] || 1;
