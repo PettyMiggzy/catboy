@@ -244,5 +244,14 @@ async function tgTick() {
 }
 
 console.log("HoodXChange Buy Bot running (audited). Alchemy WSS + @hoodxchangebot.");
+api("setMyCommands", { commands: [
+  { command: "register", description: "Watch your token — add your CA" },
+  { command: "scan", description: "🛡️ Safety check: LP lock, honeypot, liquidity" },
+  { command: "chart", description: "Price / market cap / liquidity" },
+  { command: "setmedia", description: "Set your buy image or gif" },
+  { command: "setlinks", description: "Set chart / buy / X / TG links" },
+  { command: "test", description: "Preview a buy alert" },
+  { command: "start", description: "Setup instructions" },
+] });
 (async () => { while (true) { await tgTick().catch(() => sleep(2000)); } })();
 connectWss();
