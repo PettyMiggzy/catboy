@@ -43,7 +43,8 @@ function kb(c) {
 const WETH = "0x0bd7d308f8e1639fab988df18a8011f41eacad73".toLowerCase();
 const V3 = "0x1f7d7550b1b028f7571e69a784071f0205fd2efa";
 const chain = { id: 4663, name: "rh", nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 }, rpcUrls: { default: { http: [HTTP] } } };
-const pub = createPublicClient({ chain, transport: http(HTTP, { timeout: 15000, retryCount: 2 }) });
+const pub = createPublicClient({ chain, transport: http(HTTP, { timeout: 15000, retryCount: 2 }) });               // Alchemy: reads (fine on free tier)
+const scan = createPublicClient({ chain, transport: http("https://rpc.mainnet.chain.robinhood.com", { timeout: 20000, retryCount: 1 }) }); // public RPC: getLogs history (Alchemy free tier caps getLogs at 10 blocks)
 
 const FAC = [{ name: "getPool", type: "function", stateMutability: "view", inputs: [{ type: "address" }, { type: "address" }, { type: "uint24" }], outputs: [{ type: "address" }] }];
 const POOLABI = [{ name: "token0", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "address" }] }];
@@ -80,6 +81,48 @@ async function resolvePool(ca) {
   return null;
 }
 
+// ---- token stats + safety scan (reuses this session's anti-rug logic) ----
+const NPM = "0x73991a25c818bf1f1128deaab1492d45638de0d3";
+const SLOT0 = [{ name: "slot0", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint160" }, { type: "int24" }, { type: "uint16" }, { type: "uint16" }, { type: "uint16" }, { type: "uint8" }, { type: "bool" }] }];
+const BAL = [{ name: "balanceOf", type: "function", stateMutability: "view", inputs: [{ type: "address" }], outputs: [{ type: "uint256" }] }];
+const OWNEROF = [{ name: "ownerOf", type: "function", stateMutability: "view", inputs: [{ type: "uint256" }], outputs: [{ type: "address" }] }];
+const DEAD = "0x000000000000000000000000000000000000dead";
+const xferT = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+const mintT = keccak256(toHex("Mint(address,address,int24,int24,uint128,uint256,uint256)"));
+async function stats(ca) {
+  const rp = await resolvePool(ca); if (!rp) return null;
+  const t0 = (await pub.readContract({ address: rp.pool, abi: POOLABI, functionName: "token0" })).toLowerCase();
+  const wethIsT0 = t0 === WETH;
+  const [sq] = await pub.readContract({ address: rp.pool, abi: SLOT0, functionName: "slot0" });
+  const P = (Number(sq) / 2 ** 96) ** 2; const priceEth = wethIsT0 ? 1 / P : P;
+  let sym = "$TOKEN", ts = 0n;
+  try { sym = "$" + await pub.readContract({ address: ca, abi: ERC20, functionName: "symbol" }); } catch {}
+  try { ts = await pub.readContract({ address: ca, abi: ERC20, functionName: "totalSupply" }); } catch {}
+  const weth = await pub.readContract({ address: WETH, abi: BAL, functionName: "balanceOf", args: [rp.pool] });
+  return { ca, sym, pool: rp.pool, fee: rp.fee, wethIsT0, priceUsd: priceEth * ETHUSD, mc: priceEth * ETHUSD * (Number(ts) / 1e18), liqUsd: Number(weth) / 1e18 * ETHUSD };
+}
+async function lpStatus(pool) {
+  try {
+    const mints = await scan.request({ method: "eth_getLogs", params: [{ address: pool, topics: [mintT], fromBlock: "0x0", toBlock: "latest" }] });
+    if (!mints.length) return { locked: null };
+    const rcpt = await scan.request({ method: "eth_getTransactionReceipt", params: [mints[0].transactionHash] });
+    let tid = null;
+    for (const l of rcpt.logs) if (l.address.toLowerCase() === NPM && l.topics[0] === xferT && l.topics.length === 4 && /^0x0+$/.test("0x" + l.topics[1].slice(26))) tid = BigInt(l.topics[3]);
+    if (tid === null) return { locked: null };
+    const owner = (await pub.readContract({ address: NPM, abi: OWNEROF, functionName: "ownerOf", args: [tid] })).toLowerCase();
+    if (owner === DEAD) return { locked: true, how: "burned" };
+    const code = await pub.getBytecode({ address: owner }).catch(() => null);
+    return { locked: !!(code && code !== "0x"), how: code && code !== "0x" ? "locker contract" : "held by a wallet" };
+  } catch { return { locked: null }; }
+}
+async function activity(s) {
+  const latest = Number(await pub.getBlockNumber());
+  const logs = await scan.request({ method: "eth_getLogs", params: [{ address: s.pool, topics: [swapTopic], fromBlock: "0x" + Math.max(0, latest - 40000).toString(16), toBlock: "latest" }] });
+  let buys = 0, sells = 0;
+  for (const l of logs) { const d = l.data.slice(2); const wd = s.wethIsT0 ? s256(d.slice(0, 64)) : s256(d.slice(64, 128)); if (wd > 0n) buys++; else if (wd < 0n) sells++; }
+  return { buys, sells };
+}
+
 // ---- alert formatting ----
 function bar(usd, emoji, step) { const n = Math.max(1, Math.min(60, Math.floor(usd / step))); return emoji.repeat(n); }
 function fmtAlert(c, ev) {
@@ -106,40 +149,33 @@ async function postAlert(c, ev) {
   await send(c.chatId, text, extra);
 }
 
-// ---- chain watch (poll registered pools; guarded against overlap + dup posts) ----
-let lastBlock = 0, busy = false;
-async function watchTick() {
-  if (busy) return; busy = true;
-  try {
-    const latest = Number(await pub.getBlockNumber());
-    if (!lastBlock) { lastBlock = latest; return; }
-    if (latest <= lastBlock) return;
-    const entries = Object.values(reg);
-    if (!entries.length) { lastBlock = latest; return; }
-    const pools = entries.map(c => c.pool);
-    const from = lastBlock + 1;
-    const logs = await pub.request({ method: "eth_getLogs", params: [{ address: pools, topics: [swapTopic], fromBlock: "0x" + from.toString(16), toBlock: "0x" + latest.toString(16) }] });
-    lastBlock = latest; // advance BEFORE posting so a post failure can't cause re-scan/dupes
-    for (const l of logs) {
-      const c = entries.find(x => x.pool.toLowerCase() === l.address.toLowerCase());
-      if (!c) continue;
-      const d = l.data.slice(2);
-      const a0 = s256(d.slice(0, 64)), a1 = s256(d.slice(64, 128)), sq = BigInt("0x" + d.slice(128, 192));
-      const wethDelta = c.wethIsT0 ? a0 : a1, tokDelta = c.wethIsT0 ? a1 : a0;
-      if (wethDelta <= 0n) continue;                       // WETH into pool = buy; else skip
-      const eth = Number(abs(wethDelta)) / 1e18;           // WETH always 18 dec
-      const usd = eth * ETHUSD;
-      if (usd < (c.minBuy || 0)) continue;
-      const P = (Number(sq) / 2 ** 96) ** 2;
-      const mc = (c.wethIsT0 ? 1 / P : P) * ETHUSD * c.supplyFactor; // decimal-independent MC
-      const tokens = Number(abs(tokDelta)) / 10 ** c.dec;  // real token decimals
-      let buyer = "0x" + l.topics[2].slice(26);
-      try { const tx = await pub.request({ method: "eth_getTransactionByHash", params: [l.transactionHash] }); if (tx?.from) buyer = tx.from; } catch {} // real sender, not router
-      await postAlert(c, { eth, usd, tokens, mc, buyer });
-      await sleep(200); // gentle throttle to avoid Telegram 429 on bursts
-    }
-  } catch (e) { /* transient; retry next tick from same lastBlock+1 only if getLogs itself failed */ }
-  finally { busy = false; }
+// ---- chain watch: real-time via Alchemy WSS (eth_subscribe, no getLogs range limit) ----
+const seenTx = new Set(); // dedupe guard (one alert per swap log)
+async function handleSwapLog(log) {
+  const c = Object.values(reg).find(x => x.pool.toLowerCase() === (log.address || "").toLowerCase());
+  if (!c) return;
+  const key = log.transactionHash + ":" + log.logIndex;
+  if (seenTx.has(key)) return; seenTx.add(key); if (seenTx.size > 5000) seenTx.clear();
+  const d = log.data.slice(2);
+  const a0 = s256(d.slice(0, 64)), a1 = s256(d.slice(64, 128)), sq = BigInt("0x" + d.slice(128, 192));
+  const wethDelta = c.wethIsT0 ? a0 : a1, tokDelta = c.wethIsT0 ? a1 : a0;
+  if (wethDelta <= 0n) return;                             // WETH into pool = buy
+  const eth = Number(abs(wethDelta)) / 1e18, usd = eth * ETHUSD;
+  if (usd < (c.minBuy || 0)) return;
+  const P = (Number(sq) / 2 ** 96) ** 2;
+  const mc = (c.wethIsT0 ? 1 / P : P) * ETHUSD * c.supplyFactor;
+  const tokens = Number(abs(tokDelta)) / 10 ** c.dec;
+  let buyer = "0x" + log.topics[2].slice(26);
+  try { const tx = await pub.request({ method: "eth_getTransactionByHash", params: [log.transactionHash] }); if (tx?.from) buyer = tx.from; } catch {}
+  await postAlert(c, { eth, usd, tokens, mc, buyer });
+}
+function connectWss() {
+  let ws;
+  try { ws = new WebSocket(env.ALCHEMY_WSS); } catch (e) { console.log("WSS init failed, retry 3s"); return void setTimeout(connectWss, 3000); }
+  ws.onopen = () => { ws.send(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_subscribe", params: ["logs", { topics: [swapTopic] }] })); console.log("WSS subscribed to Swap logs (real-time)"); };
+  ws.onmessage = (ev) => { try { const m = JSON.parse(typeof ev.data === "string" ? ev.data : ev.data.toString()); if (m.method === "eth_subscription" && m.params?.result) handleSwapLog(m.params.result); } catch {} };
+  ws.onclose = () => { console.log("WSS closed — reconnecting in 3s"); setTimeout(connectWss, 3000); };
+  ws.onerror = () => { try { ws.close(); } catch {} };
 }
 
 // ---- telegram command loop ----
@@ -158,7 +194,7 @@ async function tgTick() {
     const arg = after[0]; const rest = after.join(" ");
     console.log(`[cmd] ${base} from chat ${chatId} (${msg.chat.type})`);
     if (base === "/start") {
-      await send(chatId, "👋 <b>HoodXChange Buy Bot</b>\nAdd me as admin, then:\n<code>/register &lt;CA&gt;</code> — watch your token\n<code>/setmedia &lt;url&gt;</code> — buy image/gif\n<code>/setlinks chart=.. buy=.. x=.. tg=..</code>\n<code>/test</code> — preview an alert");
+      await send(chatId, "👋 <b>HoodXChange Buy Bot</b>\nAdd me as admin, then:\n<code>/register &lt;CA&gt;</code> — watch your token\n<code>/setmedia &lt;url&gt;</code> — buy image/gif\n<code>/setlinks chart=.. buy=.. x=.. tg=..</code>\n<code>/scan &lt;CA&gt;</code> — 🛡️ safety check (LP lock, honeypot, liq)\n<code>/chart &lt;CA&gt;</code> — price / MC / liquidity\n<code>/test</code> — preview an alert");
     } else if (base === "/register") {
       if (!/^0x[0-9a-fA-F]{40}$/.test(arg || "")) { await send(chatId, "Usage: <code>/register 0xYourTokenCA</code>"); continue; }
       const ca = arg.toLowerCase();
@@ -183,6 +219,23 @@ async function tgTick() {
       c.links = c.links || {};
       for (const kv of rest.split(/\s+/)) { const [k, v] = kv.split("="); if (["chart", "buy", "x", "tg"].includes(k) && /^https?:\/\//i.test(v || "")) c.links[k] = v; }
       saveReg(); await send(chatId, "🔗 Links updated.");
+    } else if (base === "/chart") {
+      const ca = (arg && /^0x[0-9a-fA-F]{40}$/.test(arg)) ? arg.toLowerCase() : Object.values(reg).find(x => x.chatId === chatId)?.ca;
+      if (!ca) { await send(chatId, "Usage: <code>/chart &lt;CA&gt;</code>"); continue; }
+      const s = await stats(ca); if (!s) { await send(chatId, "❌ No WETH pool found for that CA."); continue; }
+      await send(chatId, `<b>${esc(s.sym)}</b>\n💵 Price $${s.priceUsd.toPrecision(3)}\n📊 MC $${s.mc.toLocaleString(undefined, { maximumFractionDigits: 0 })}\n💧 Liquidity $${s.liqUsd.toLocaleString(undefined, { maximumFractionDigits: 0 })}\n<code>${ca}</code>`);
+    } else if (base === "/scan") {
+      const ca = (arg && /^0x[0-9a-fA-F]{40}$/.test(arg)) ? arg.toLowerCase() : Object.values(reg).find(x => x.chatId === chatId)?.ca;
+      if (!ca) { await send(chatId, "Usage: <code>/scan &lt;CA&gt;</code>"); continue; }
+      await send(chatId, "🔍 Scanning…");
+      const s = await stats(ca); if (!s) { await send(chatId, "❌ No WETH pool found for that CA."); continue; }
+      const lp = await lpStatus(s.pool); const act = await activity(s);
+      const lpLine = lp.locked === true ? `✅ LP locked (${esc(lp.how)})` : lp.locked === false ? "🚨 LP <b>NOT locked</b> — dev can pull it" : "❓ LP status unknown";
+      const sellLine = act.sells > 0 ? `✅ Sells work (${act.sells} sells / ${act.buys} buys)` : act.buys > 0 ? "🚨 Buys but <b>ZERO sells</b> — possible honeypot" : "❓ No recent trades";
+      const liqLine = s.liqUsd >= 3000 ? `✅ Liquidity $${s.liqUsd.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : `⚠️ Thin liquidity $${s.liqUsd.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+      const flags = [lp.locked === false, act.sells === 0 && act.buys > 0, s.liqUsd < 3000].filter(Boolean).length;
+      const verdict = flags === 0 ? "🟢 Looks clean" : flags === 1 ? "🟡 Caution" : "🔴 High risk";
+      await send(chatId, `<b>🛡️ HoodX Scan — ${esc(s.sym)}</b>\n${lpLine}\n${sellLine}\n${liqLine}\n📊 MC $${s.mc.toLocaleString(undefined, { maximumFractionDigits: 0 })}\n\n<b>${verdict}</b>\n<i>Heuristic — always DYOR.</i>`);
     } else if (base === "/test") {
       const c = Object.values(reg).find(x => x.chatId === chatId); if (!c) { await send(chatId, "Register first: <code>/register &lt;CA&gt;</code>"); continue; }
       await postAlert(c, { eth: 0.45, usd: 842, tokens: 480000, mc: 46955, buyer: "0x3484f2b7b8c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4" });
@@ -190,6 +243,6 @@ async function tgTick() {
   }
 }
 
-console.log("HoodXChange Buy Bot running (audited). Alchemy + @hoodxchangebot.");
+console.log("HoodXChange Buy Bot running (audited). Alchemy WSS + @hoodxchangebot.");
 (async () => { while (true) { await tgTick().catch(() => sleep(2000)); } })();
-setInterval(watchTick, 4000);
+connectWss();
