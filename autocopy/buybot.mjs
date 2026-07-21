@@ -195,15 +195,29 @@ function fmtTrending(rows) {
   }).join("\n\n");
   return `🔥 <b>HoodX Trending — Robinhood Chain</b>\n\n${body || "No tokens yet — register with @hoodxchangebot"}\n\n⚡ <i>Boost to the top → DM @hoodxchangebot</i>`;
 }
+const TREND_MEDIA = new URL("./trending_header.mp4", import.meta.url);
+const TRENDMCACHE = new URL("./trending_media_id.txt", import.meta.url);
+let trendFileId = fs.existsSync(TRENDMCACHE) ? fs.readFileSync(TRENDMCACHE, "utf8").trim() : null;
+async function sendTrendingMedia(chat_id, caption) {
+  if (trendFileId) return api("sendAnimation", { chat_id, animation: trendFileId, caption, parse_mode: "HTML" });
+  if (!fs.existsSync(TREND_MEDIA)) return send(chat_id, caption);
+  const form = new FormData();
+  form.append("chat_id", String(chat_id)); form.append("caption", caption); form.append("parse_mode", "HTML");
+  form.append("animation", new Blob([fs.readFileSync(TREND_MEDIA)], { type: "video/mp4" }), "trend.mp4");
+  const r = await fetch(`https://api.telegram.org/bot${BOT}/sendAnimation`, { method: "POST", body: form }).then(x => x.json()).catch(e => ({ ok: false, e: e.message }));
+  const a = r.result && (r.result.animation || r.result.video || r.result.document);
+  if (r.ok && a?.file_id) { trendFileId = a.file_id; try { fs.writeFileSync(TRENDMCACHE, trendFileId); } catch {} }
+  return r;
+}
 async function postTrending() {
   try {
     const text = fmtTrending(await buildTrending());
     if (trendMsgId) {
-      const r = await api("editMessageText", { chat_id: TREND_CH, message_id: trendMsgId, text, parse_mode: "HTML", disable_web_page_preview: true });
+      const r = await api("editMessageCaption", { chat_id: TREND_CH, message_id: trendMsgId, caption: text, parse_mode: "HTML" });
       if (r.ok || (r.description || "").includes("not modified")) return;
     }
-    const r = await send(TREND_CH, text);
-    if (r.ok) { trendMsgId = r.result.message_id; saveTrend(); }
+    const r = await sendTrendingMedia(TREND_CH, text);   // video header + list caption
+    if (r.ok && r.result) { trendMsgId = r.result.message_id; saveTrend(); }
   } catch {}
 }
 
