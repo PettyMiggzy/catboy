@@ -182,22 +182,32 @@ async function pairStats(ca) {
   } catch { return null; }
 }
 const MEDAL = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"];
+async function topRhcPairs() {
+  const j = await fetch(`https://api.dexscreener.com/latest/dex/search?q=${WETH}`).then(r => r.json()).catch(() => null);
+  const ps = (j?.pairs || []).filter(p => p.chainId === "robinhood" && p.baseToken?.address);
+  const byTok = {}; // dedupe per token, keep deepest-liquidity pair
+  for (const p of ps) { const a = p.baseToken.address.toLowerCase(); if (!byTok[a] || (p.liquidity?.usd || 0) > (byTok[a].liquidity?.usd || 0)) byTok[a] = p; }
+  return Object.values(byTok);
+}
 async function buildTrending() {
-  const cas = [...new Set([...Object.keys(reg), ...Object.keys(boosts)])];
-  const rows = (await Promise.all(cas.map(pairStats))).filter(Boolean);
   const now = Date.now();
+  const rows = (await topRhcPairs()).map(p => {
+    const info = p.info || {}; const soc = {};
+    for (const s of (info.socials || [])) { if (s.type === "twitter") soc.x = s.url; if (s.type === "telegram") soc.tg = s.url; }
+    return { ca: p.baseToken.address.toLowerCase(), sym: ticker(p.baseToken.symbol || "?"), mc: p.marketCap || p.fdv || 0, vol: p.volume?.h24 || 0, change: p.priceChange?.h24 ?? 0, dexUrl: `https://dexscreener.com/${p.chainId}/${p.pairAddress}`, web: ((info.websites || [])[0] || {}).url, x: soc.x, tg: soc.tg };
+  });
   rows.forEach(r => r.boosted = boosts[r.ca] && boosts[r.ca] > now);
-  rows.sort((a, b) => (b.boosted ? 1 : 0) - (a.boosted ? 1 : 0) || b.vol1h - a.vol1h);
+  rows.sort((a, b) => (b.boosted ? 1 : 0) - (a.boosted ? 1 : 0) || b.vol - a.vol);
   return rows.slice(0, 10);
 }
 function fmtTrending(rows) {
   const body = rows.map((r, i) => {
-    const a = r.change1h >= 0 ? "🟢" : "🔴";
+    const a = r.change >= 0 ? "🟢" : "🔴";
     const links = [`<a href="${r.dexUrl}">📊</a>`];
     if (r.web) links.push(`<a href="${r.web}">🌐</a>`);
     if (r.x) links.push(`<a href="${r.x}">𝕏</a>`);
     if (r.tg) links.push(`<a href="${r.tg}">💬</a>`);
-    return `${MEDAL[i] || (i + 1) + "."} <a href="${r.dexUrl}">${esc(r.sym)}</a>${r.boosted ? " 🔥" : ""} | ${a} ${r.change1h >= 0 ? "+" : ""}${r.change1h.toFixed(2)}%  ${links.join(" ")}\nMC $${Math.round(r.mc).toLocaleString()} | V/h $${Math.round(r.vol1h).toLocaleString()}`;
+    return `${MEDAL[i] || (i + 1) + "."} <a href="${r.dexUrl}">${esc(r.sym)}</a>${r.boosted ? " 🔥" : ""} | ${a} ${r.change >= 0 ? "+" : ""}${r.change.toFixed(1)}%  ${links.join(" ")}\nMC $${Math.round(r.mc).toLocaleString()} | Vol24 $${Math.round(r.vol).toLocaleString()}`;
   }).join("\n\n");
   const ts = new Date().toISOString().slice(11, 16);
   return `🔥 <b>HoodX Trending — Robinhood Chain</b>\n\n${body || "No tokens yet — register with @hoodxchangebot"}\n\n🕐 <i>Last refreshed ${ts} UTC</i>`;
