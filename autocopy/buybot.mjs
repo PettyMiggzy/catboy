@@ -44,8 +44,9 @@ function kb(c) {
 const WETH = "0x0bd7d308f8e1639fab988df18a8011f41eacad73".toLowerCase();
 const V3 = "0x1f7d7550b1b028f7571e69a784071f0205fd2efa";
 const chain = { id: 4663, name: "rh", nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 }, rpcUrls: { default: { http: [HTTP] } } };
-const pub = createPublicClient({ chain, transport: http(HTTP, { timeout: 15000, retryCount: 2 }) });               // Alchemy: reads (fine on free tier)
-const scan = createPublicClient({ chain, transport: http("https://rpc.mainnet.chain.robinhood.com", { timeout: 20000, retryCount: 1 }) }); // public RPC: getLogs history (Alchemy free tier caps getLogs at 10 blocks)
+const PUBLIC_RPC = "https://rpc.mainnet.chain.robinhood.com";
+const pub = createPublicClient({ chain, transport: http(PUBLIC_RPC, { timeout: 15000, retryCount: 2 }) });         // public RPC: reads (Alchemy key hit monthly capacity cap → 429 on every eth_call)
+const scan = createPublicClient({ chain, transport: http(PUBLIC_RPC, { timeout: 20000, retryCount: 1 }) });        // public RPC: getLogs history + real-time swap polling (no capacity cap)
 
 const FAC = [{ name: "getPool", type: "function", stateMutability: "view", inputs: [{ type: "address" }, { type: "address" }, { type: "uint24" }], outputs: [{ type: "address" }] }];
 const POOLABI = [{ name: "token0", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "address" }] }];
@@ -234,18 +235,19 @@ const trendKb = () => ({ inline_keyboard: [
   [{ text: "🗳️ Vote", url: "https://t.me/hoodxchangebot?start=vote" }, { text: "🔥 Get Trending", url: "https://t.me/hoodxchangebot?start=boost" }],
   [{ text: "➕ Add Buy Bot", url: "https://t.me/hoodxchangebot?startgroup=true" }],
 ] });
-const TREND_MEDIA = new URL("./trending_header.png", import.meta.url);
+const TREND_MEDIA = new URL("./trending_header.mp4", import.meta.url);   // animated branded header (Veo)
 const TRENDMCACHE = new URL("./trending_media_id.txt", import.meta.url);
 let trendFileId = fs.existsSync(TRENDMCACHE) ? fs.readFileSync(TRENDMCACHE, "utf8").trim() : null;
 async function sendTrendingMedia(chat_id, caption) {
-  if (trendFileId) return api("sendPhoto", { chat_id, photo: trendFileId, caption, parse_mode: "HTML", reply_markup: trendKb() });
+  if (trendFileId) return api("sendVideo", { chat_id, video: trendFileId, caption, parse_mode: "HTML", reply_markup: trendKb() });
   if (!fs.existsSync(TREND_MEDIA)) return send(chat_id, caption, { reply_markup: trendKb() });
   const form = new FormData();
   form.append("chat_id", String(chat_id)); form.append("caption", caption); form.append("parse_mode", "HTML"); form.append("reply_markup", JSON.stringify(trendKb()));
-  form.append("photo", new Blob([fs.readFileSync(TREND_MEDIA)], { type: "image/png" }), "trend.png");
-  const r = await fetch(`https://api.telegram.org/bot${BOT}/sendPhoto`, { method: "POST", body: form }).then(x => x.json()).catch(e => ({ ok: false, e: e.message }));
-  const ph = r.result && r.result.photo;
-  if (r.ok && ph?.length) { trendFileId = ph[ph.length - 1].file_id; try { fs.writeFileSync(TRENDMCACHE, trendFileId); } catch {} }
+  form.append("supports_streaming", "true");
+  form.append("video", new Blob([fs.readFileSync(TREND_MEDIA)], { type: "video/mp4" }), "trend.mp4");
+  const r = await fetch(`https://api.telegram.org/bot${BOT}/sendVideo`, { method: "POST", body: form }).then(x => x.json()).catch(e => ({ ok: false, e: e.message }));
+  const v = r.result && (r.result.video || r.result.animation || r.result.document);
+  if (r.ok && v?.file_id) { trendFileId = v.file_id; try { fs.writeFileSync(TRENDMCACHE, trendFileId); } catch {} }
   return r;
 }
 async function postTrending() {
@@ -270,6 +272,7 @@ function fmtAlert(c, ev) {
   if (c.links?.tg) links.push(`<a href="${esc(c.links.tg)}">TG</a>`);
   return [
     `<b>${esc(ticker(c.sym))} Buy!</b>`,
+    c.dexPaid ? `🔵 <b>DEX PAID</b> ✅ — 🚀🚀 <b>BULLISH</b> 🚀🚀` : "",
     bar(ev.usd, c.emoji || "🟢", c.step || 10),
     `💰 <b>$${ev.usd.toFixed(0)}</b> (${ev.eth.toFixed(4)} ETH)`,
     `🪙 ${ev.tokens.toLocaleString(undefined, { maximumFractionDigits: 0 })} ${esc(ticker(c.sym))}`,
@@ -296,6 +299,11 @@ async function sendDefaultMedia(chat_id, caption, extra) {
   return r;
 }
 async function postAlert(c, ev) {
+  // refresh DEX-paid status in the background (≤ once / 5 min) so the bullish banner stays current
+  if (Date.now() - (c.dexCheckedAt || 0) > 5 * 60e3) {
+    c.dexCheckedAt = Date.now();
+    dexInfo(c.ca).then(dx => { if (dx && dx.paid !== c.dexPaid) { c.dexPaid = dx.paid; saveReg(); } }).catch(() => {});
+  }
   const text = fmtAlert(c, ev);
   const extra = { reply_markup: kb(c) };   // Chart/Buy + HoodBridge/Pad/Get-Trending buttons
   if (c.media) { const r = await sendMedia(c.chatId, c.media, text, extra); if (r.ok) return; } // project's own art
@@ -323,13 +331,22 @@ async function handleSwapLog(log) {
   try { const tx = await pub.request({ method: "eth_getTransactionByHash", params: [log.transactionHash] }); if (tx?.from) buyer = tx.from; } catch {}
   await postAlert(c, { eth, usd, tokens, mc, buyer });
 }
-function connectWss() {
-  let ws;
-  try { ws = new WebSocket(env.ALCHEMY_WSS); } catch (e) { console.log("WSS init failed, retry 3s"); return void setTimeout(connectWss, 3000); }
-  ws.onopen = () => { ws.send(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_subscribe", params: ["logs", { topics: [swapTopic] }] })); console.log("WSS subscribed to Swap logs (real-time)"); };
-  ws.onmessage = (ev) => { try { const m = JSON.parse(typeof ev.data === "string" ? ev.data : ev.data.toString()); if (m.method === "eth_subscription" && m.params?.result) handleSwapLog(m.params.result); } catch {} };
-  ws.onclose = () => { console.log("WSS closed — reconnecting in 3s"); setTimeout(connectWss, 3000); };
-  ws.onerror = () => { try { ws.close(); } catch {} };
+// real-time buy watch via public-RPC polling (Alchemy WSS unusable — account hit its monthly capacity cap)
+let lastWatch = 0;
+async function watchSwaps() {
+  try {
+    const latest = Number(await scan.getBlockNumber());
+    if (!lastWatch) lastWatch = latest;                    // first run: start from "now", don't replay history
+    let from = lastWatch + 1;
+    if (latest - from > 3000) from = latest - 3000;        // cap catch-up after downtime
+    const pools = [...new Set(Object.values(reg).map(x => x.pool))];
+    if (pools.length && latest >= from) {
+      const logs = await scan.request({ method: "eth_getLogs", params: [{ address: pools, topics: [swapTopic], fromBlock: "0x" + from.toString(16), toBlock: "0x" + latest.toString(16) }] });
+      for (const log of logs) await handleSwapLog(log).catch(() => {});
+    }
+    lastWatch = latest;
+  } catch { /* transient RPC hiccup — retry next tick */ }
+  setTimeout(watchSwaps, 4000);
 }
 
 // ---- telegram command loop ----
@@ -477,7 +494,7 @@ async function tgTick() {
   }
 }
 
-console.log("HoodXChange Buy Bot running (audited). Alchemy WSS + @hoodxchangebot.");
+console.log("HoodXChange Buy Bot running (audited). Public-RPC reads + swap polling + @hoodxchangebot.");
 api("setMyCommands", { commands: [
   { command: "register", description: "Watch your token — add your CA" },
   { command: "scan", description: "🛡️ Safety check: LP lock, honeypot, liquidity" },
@@ -489,5 +506,5 @@ api("setMyCommands", { commands: [
   { command: "start", description: "Setup instructions" },
 ] });
 (async () => { while (true) { await tgTick().catch(() => sleep(2000)); } })();
-connectWss();
+watchSwaps();
 if ((env.TRENDING_ON ?? "1") !== "0") { postTrending(); setInterval(postTrending, 10 * 60 * 1000); } // trending off until the animated header is ready
