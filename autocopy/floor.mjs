@@ -14,9 +14,13 @@ const E = process.env;
 const RPC = E.FLOOR_RPC || "https://rpc.mainnet.chain.robinhood.com";  // public RPC handles reads + tx (Alchemy key is capped)
 const ROUTER = "0xcaf681a66d020601342297493863e78c959e5cb2";           // SwapRouter02 (verified)
 const WETH = "0x0bd7d308f8e1639fab988df18a8011f41eacad73".toLowerCase();
-const TOKEN = (E.FLOOR_TOKEN || "0xcddb2d9838b7edab2f04af4943a6efe42c2f9f49").toLowerCase();
-const POOL = (E.FLOOR_POOL || "0x8874bd3c8a9cb1baeee6014bd2d3598d4741e075").toLowerCase();
-const FEE = Number(E.FLOOR_FEE || 10000);
+const TOKEN = (process.argv[2] || E.FLOOR_TOKEN || "0xcddb2d9838b7edab2f04af4943a6efe42c2f9f49").toLowerCase();
+if (!/^0x[0-9a-f]{40}$/.test(TOKEN)) { console.error("usage: node floor.mjs <token CA on Robinhood Chain>"); process.exit(1); }
+const V3 = "0x1f7d7550b1b028f7571e69a784071f0205fd2efa";                // Uniswap V3 factory
+const ZERO = "0x0000000000000000000000000000000000000000";
+let POOL = (E.FLOOR_POOL || "").toLowerCase();                          // auto-resolved from TOKEN below when not pinned
+let FEE = Number(E.FLOOR_FEE || 0);
+let SYM = "$TOKEN";
 const DRY_RUN = (E.FLOOR_DRY ?? "1") !== "0";
 
 // strategy params (small pilot defaults; all env-tunable)
@@ -47,6 +51,9 @@ const ERC20 = [{ name: "balanceOf", type: "function", stateMutability: "view", i
 const WETH_ABI = [{ name: "withdraw", type: "function", stateMutability: "nonpayable", inputs: [{ type: "uint256" }], outputs: [] }, { name: "balanceOf", type: "function", stateMutability: "view", inputs: [{ type: "address" }], outputs: [{ type: "uint256" }] }];
 const POOL_ABI = [{ name: "slot0", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "uint160" }, { type: "int24" }, { type: "uint16" }, { type: "uint16" }, { type: "uint16" }, { type: "uint8" }, { type: "bool" }] }, { name: "token0", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "address" }] }];
 const ROUTER_ABI = [{ name: "exactInputSingle", type: "function", stateMutability: "payable", inputs: [{ type: "tuple", components: [{ name: "tokenIn", type: "address" }, { name: "tokenOut", type: "address" }, { name: "fee", type: "uint24" }, { name: "recipient", type: "address" }, { name: "amountIn", type: "uint256" }, { name: "amountOutMinimum", type: "uint256" }, { name: "sqrtPriceLimitX96", type: "uint160" }] }], outputs: [{ name: "amountOut", type: "uint256" }] }];
+const FACTORY_ABI = [{ name: "getPool", type: "function", stateMutability: "view", inputs: [{ type: "address" }, { type: "address" }, { type: "uint24" }], outputs: [{ type: "address" }] }];
+const SYMBOL_ABI = [{ name: "symbol", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "string" }] }];
+async function resolvePool() { for (const f of [10000, 3000, 500, 100]) { try { const p = await pub.readContract({ address: V3, abi: FACTORY_ABI, functionName: "getPool", args: [TOKEN, WETH, f] }); if (p && p.toLowerCase() !== ZERO) return { pool: p.toLowerCase(), fee: f }; } catch {} } return null; }
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const priceEth = async wethIsT0 => { const [sq] = await pub.readContract({ address: POOL, abi: POOL_ABI, functionName: "slot0" }); const P = (Number(sq) / 2 ** 96) ** 2; return wethIsT0 ? 1 / P : P; }; // ETH per token (raw ratio)
@@ -80,7 +87,7 @@ async function sellTokens(bal) {
 }
 
 // state
-const SF = new URL("./floor_state.json", import.meta.url);
+const SF = new URL(`./floor_state_${TOKEN.slice(2, 10)}.json`, import.meta.url);  // per-token state so multiple tokens don't clobber each other
 let S = existsSync(SF) ? JSON.parse(readFileSync(SF, "utf8")) : { ema: 0, deployedEth: 0, realizedEth: 0, paperTokens: 0, lastActionTs: 0, buys: 0, sells: 0, halted: false };
 const save = () => { try { const t = new URL(SF.href + ".tmp"); writeFileSync(t, JSON.stringify(S)); writeFileSync(SF, JSON.stringify(S)); } catch {} };
 
@@ -106,8 +113,8 @@ async function tick() {
       let size = Math.min(PER_BUY_ETH * band[1], MAX_DEPLOY_ETH - S.deployedEth);
       if (!DRY_RUN) size = Math.min(size, eth - MIN_ETH_RESERVE);
       if (size >= 0.0005) {
-        if (DRY_RUN) { const tok = size * (1 / pEth) * 1e18; S.paperTokens += tok; S.deployedEth += size; S.lastActionTs = Date.now(); S.buys++; save(); await tg(`🟢 <b>[DRY] Floor BUY</b> ${size.toFixed(4)}Ξ $STAG @ dip ${(dev * 100).toFixed(1)}% below anchor\nDeployed ${S.deployedEth.toFixed(4)}/${MAX_DEPLOY_ETH}Ξ · paper bag valued ${((S.paperTokens * pEth) / 1e18).toFixed(4)}Ξ`); }
-        else { try { const h = await buyEth(size, pEth); S.deployedEth += size; S.lastActionTs = Date.now(); S.buys++; save(); await tg(`🟢 <b>Floor BUY</b> ${size.toFixed(4)}Ξ $STAG (dip ${(dev * 100).toFixed(1)}%)\n<code>${h}</code>`); } catch (e) { await tg(`⚠️ Floor buy failed: ${(e.shortMessage || e.message || "").slice(0, 120)}`); } }
+        if (DRY_RUN) { const tok = size * (1 / pEth) * 1e18; S.paperTokens += tok; S.deployedEth += size; S.lastActionTs = Date.now(); S.buys++; save(); await tg(`🟢 <b>[DRY] Floor BUY</b> ${size.toFixed(4)}Ξ ${SYM} @ dip ${(dev * 100).toFixed(1)}% below anchor\nDeployed ${S.deployedEth.toFixed(4)}/${MAX_DEPLOY_ETH}Ξ · paper bag valued ${((S.paperTokens * pEth) / 1e18).toFixed(4)}Ξ`); }
+        else { try { const h = await buyEth(size, pEth); S.deployedEth += size; S.lastActionTs = Date.now(); S.buys++; save(); await tg(`🟢 <b>Floor BUY ${SYM}</b> ${size.toFixed(4)}Ξ (dip ${(dev * 100).toFixed(1)}%)\n<code>${h}</code>`); } catch (e) { await tg(`⚠️ Floor buy failed: ${(e.shortMessage || e.message || "").slice(0, 120)}`); } }
         return;
       }
     }
@@ -127,8 +134,11 @@ async function tick() {
 }
 
 (async () => {
+  if (!POOL) { const rp = await resolvePool(); if (!rp) { console.error(`No WETH pool found for ${TOKEN} on Robinhood Chain.`); await tg(`❌ Floor bot: no WETH pool found for <code>${TOKEN}</code> on Robinhood Chain.`); process.exit(1); } POOL = rp.pool; FEE = rp.fee; }
+  else if (!FEE) { const rp = await resolvePool(); FEE = rp?.fee || 10000; }
+  try { SYM = "$" + String(await pub.readContract({ address: TOKEN, abi: SYMBOL_ABI, functionName: "symbol" })).replace(/^\$+/, ""); } catch {}
   wethIsT0 = (await pub.readContract({ address: POOL, abi: POOL_ABI, functionName: "token0" })).toLowerCase() === WETH;
-  console.log(`HoodX Floor Bot — $STAG — ${DRY_RUN ? "DRY-RUN (paper)" : "LIVE " + account.address} — anchor EMA${EMA_N}, dips ${DIP_BANDS.map(b => (b[0] * 100) + "%").join("/")}, sell +${SELL_BAND * 100}%`);
-  await tg(`🏗️ <b>HoodX Floor Bot online</b> — $STAG ${DRY_RUN ? "(DRY-RUN — no real trades, proving the strategy)" : "<b>LIVE</b>"}\nBuys dips below anchor, scales out above, caps at ${MAX_DEPLOY_ETH}Ξ. I'll DM every move.`);
+  console.log(`HoodX Floor Bot — ${SYM} (${TOKEN}) pool ${POOL} fee ${FEE} — ${DRY_RUN ? "DRY-RUN (paper)" : "LIVE " + account.address} — anchor EMA${EMA_N}, dips ${DIP_BANDS.map(b => Math.round(b[0] * 100) + "%").join("/")}, sell +${Math.round(SELL_BAND * 100)}%`);
+  await tg(`🏗️ <b>HoodX Floor Bot online — ${SYM}</b> ${DRY_RUN ? "(DRY-RUN — no real trades, proving the strategy)" : "<b>LIVE</b>"}\n<code>${TOKEN}</code>\nBuys dips below anchor, scales out above, caps at ${MAX_DEPLOY_ETH}Ξ. I'll DM every move.`);
   while (true) { await tick(); await sleep(LOOP_S * 1000); }
 })();
