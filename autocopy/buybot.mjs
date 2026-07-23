@@ -169,10 +169,29 @@ async function dexInfo(ca) {
 const TREND_CH = env.TRENDING_CHANNEL || "-1004414481505";
 const BOOSTF = new URL("./boosts.json", import.meta.url);
 const TRENDF = new URL("./trend.json", import.meta.url);
-let boosts = fs.existsSync(BOOSTF) ? JSON.parse(fs.readFileSync(BOOSTF, "utf8")) : {}; // ca -> untilMs
-let trendMsgId = fs.existsSync(TRENDF) ? JSON.parse(fs.readFileSync(TRENDF, "utf8")).id : null;
+// boosts: key -> { until, tier, chain, sym, group } (key = evm ca lowercase, or solana mint). tier 1<3<10 (lower = higher slot)
+let boosts = fs.existsSync(BOOSTF) ? JSON.parse(fs.readFileSync(BOOSTF, "utf8")) : {};
+// migrate legacy numeric-until entries → object form
+for (const k of Object.keys(boosts)) if (typeof boosts[k] === "number") boosts[k] = { until: boosts[k], tier: 3, chain: "rhc" };
+let trendMsg = fs.existsSync(TRENDF) ? JSON.parse(fs.readFileSync(TRENDF, "utf8")) : {}; // { rhc: msgId, sol: msgId }
+if (typeof trendMsg.id === "number") trendMsg = { rhc: trendMsg.id };   // migrate old single-id shape
 const saveBoosts = () => fs.writeFileSync(BOOSTF, JSON.stringify(boosts));
-const saveTrend = () => fs.writeFileSync(TRENDF, JSON.stringify({ id: trendMsgId }));
+const saveTrend = () => fs.writeFileSync(TRENDF, JSON.stringify(trendMsg));
+const boostedNow = k => boosts[k] && boosts[k].until > Date.now();
+
+// ---- paid trending: treasury wallets + tier sheet (prices configurable via env) ----
+const TREND_EVM = (env.TREND_EVM_WALLET || "").toLowerCase();
+const TREND_SOL = env.TREND_SOL_WALLET || "";
+const SOL_RPC = env.SOL_RPC || "https://api.mainnet-beta.solana.com";
+const TREND_HOURS = Number(env.TREND_HOURS || 24);                       // boost duration per purchase
+const TIERS = {                                                          // tier -> price in the chain's native coin
+  rhc: { 1: Number(env.RHC_T1 || 0.05), 3: Number(env.RHC_T3 || 0.03), 10: Number(env.RHC_T10 || 0.015) },
+  sol: { 1: Number(env.SOL_T1 || 1.0), 3: Number(env.SOL_T3 || 0.6), 10: Number(env.SOL_T10 || 0.3) },
+};
+const TIER_LABEL = { 1: "🥇 #1 Spot", 3: "🔥 Top 3", 10: "📈 Top 10" };
+const ORDERF = new URL("./trend_orders.json", import.meta.url);
+let orders = fs.existsSync(ORDERF) ? JSON.parse(fs.readFileSync(ORDERF, "utf8")) : { seq: 0, pending: {} }; // id -> order
+const saveOrders = () => fs.writeFileSync(ORDERF, JSON.stringify(orders));
 const VOTEF = new URL("./votes.json", import.meta.url);
 let userVotes = fs.existsSync(VOTEF) ? JSON.parse(fs.readFileSync(VOTEF, "utf8")) : {}; // userId -> {ca, ts}
 const saveVotes = () => fs.writeFileSync(VOTEF, JSON.stringify(userVotes));
@@ -211,13 +230,34 @@ async function buildTrending() {
   const vc = voteCounts();
   const topVoted = Object.entries(vc).sort((a, b) => b[1] - a[1])[0]; // [ca, count]
   if (topVoted && topVoted[1] > 0 && !rows.find(r => r.ca === topVoted[0])) { const x = await pairRow(topVoted[0]); if (x) rows.push(x); } // vote earns a slot
-  rows.forEach(r => { r.votes = vc[r.ca] || 0; r.boosted = boosts[r.ca] && boosts[r.ca] > now; });
+  rows.forEach(r => { r.votes = vc[r.ca] || 0; r.boosted = boostedNow(r.ca); r.tier = r.boosted ? boosts[r.ca].tier : 99; });
   const maxV = Math.max(0, ...rows.map(r => r.votes));
   rows.forEach(r => r.topVoted = maxV > 0 && r.votes === maxV);
-  rows.sort((a, b) => (b.boosted ? 1 : 0) - (a.boosted ? 1 : 0) || (b.topVoted ? 1 : 0) - (a.topVoted ? 1 : 0) || b.vol - a.vol);
+  rows.sort((a, b) => a.tier - b.tier || (b.topVoted ? 1 : 0) - (a.topVoted ? 1 : 0) || b.vol - a.vol);   // paid tier first (1<3<10), then votes, then volume
   return rows.slice(0, 10);
 }
-function fmtTrending(rows) {
+// Solana board via GeckoTerminal trending pools (RHC isn't indexed there; SOL memecoins are)
+async function topSolPairs() {
+  try {
+    const j = await fetch("https://api.geckoterminal.com/api/v2/networks/solana/trending_pools?page=1", { headers: { accept: "application/json" } }).then(r => r.json());
+    const rows = (j.data || []).map(p => {
+      const a = p.attributes || {};
+      const mint = (p.relationships?.base_token?.data?.id || "").replace("solana_", "");
+      return {
+        ca: mint, sym: ticker((a.name || "?").split(" / ")[0]),
+        mc: Number(a.market_cap_usd || a.fdv_usd || 0), vol: Number(a.volume_usd?.h24 || 0),
+        change: Number(a.price_change_percentage?.h24 || 0),
+        dexUrl: `https://dexscreener.com/solana/${a.address}`, gt: `https://www.geckoterminal.com/solana/pools/${a.address}`,
+      };
+    }).filter(r => r.ca);
+    const now = Date.now();
+    rows.forEach(r => { r.votes = 0; r.boosted = boostedNow(r.ca); r.tier = r.boosted ? boosts[r.ca].tier : 99; });
+    rows.sort((a, b) => a.tier - b.tier || b.vol - a.vol);
+    return rows.slice(0, 10);
+  } catch { return []; }
+}
+function fmtTrending(rows, chain = "rhc") {
+  const title = chain === "sol" ? "◎ <b>HoodX Trending — Solana</b>" : "🏹 <b>HoodX Trending — Robinhood Chain</b>";
   const body = rows.map((r, i) => {
     const a = r.change >= 0 ? "🟢" : "🔴";
     const links = [`<a href="${r.dexUrl}">📊</a>`];
@@ -229,7 +269,8 @@ function fmtTrending(rows) {
     return `${MEDAL[i] || (i + 1) + "."} <a href="${r.dexUrl}">${esc(r.sym)}</a>${badge} | ${a} ${r.change >= 0 ? "+" : ""}${r.change.toFixed(1)}%  ${links.join(" ")}\nMC $${Math.round(r.mc).toLocaleString()} | Vol24 $${Math.round(r.vol).toLocaleString()}${votes}`;
   }).join("\n\n");
   const ts = new Date().toISOString().slice(11, 16);
-  return `🔥 <b>HoodX Trending — Robinhood Chain</b>\n\n${body || "No tokens yet — register with @hoodxchangebot"}\n\n🗳️ <i>Vote your token up · 🔥 = boosted · 🗳️ = top voted</i>\n🕐 <i>Last refreshed ${ts} UTC</i>`;
+  const empty = chain === "sol" ? "Loading Solana trending…" : "No tokens yet — register with @hoodxchangebot";
+  return `${title}\n\n${body || empty}\n\n🔥 <i>= paid boost · 🗳️ = top voted</i>\n🕐 <i>Refreshed ${ts} UTC</i>`;
 }
 const trendKb = () => ({ inline_keyboard: [
   [{ text: "🗳️ Vote", url: "https://t.me/hoodxchangebot?start=vote" }, { text: "🔥 Get Trending", url: "https://t.me/hoodxchangebot?start=boost" }],
@@ -250,16 +291,97 @@ async function sendTrendingMedia(chat_id, caption) {
   if (r.ok && v?.file_id) { trendFileId = v.file_id; try { fs.writeFileSync(TRENDMCACHE, trendFileId); } catch {} }
   return r;
 }
-async function postTrending() {
+async function postChainBoard(chain) {
   try {
-    const text = fmtTrending(await buildTrending());
-    if (trendMsgId) {
-      const r = await api("editMessageCaption", { chat_id: TREND_CH, message_id: trendMsgId, caption: text, parse_mode: "HTML", reply_markup: trendKb() });
+    const rows = chain === "sol" ? await topSolPairs() : await buildTrending();
+    const text = fmtTrending(rows, chain);
+    if (trendMsg[chain]) {
+      const r = await api("editMessageCaption", { chat_id: TREND_CH, message_id: trendMsg[chain], caption: text, parse_mode: "HTML", reply_markup: trendKb() });
       if (r.ok || (r.description || "").includes("not modified")) return;
     }
-    const r = await sendTrendingMedia(TREND_CH, text);   // image header + list caption + buttons
-    if (r.ok && r.result) { trendMsgId = r.result.message_id; saveTrend(); }
+    const r = await sendTrendingMedia(TREND_CH, text);   // animated header + list caption + buttons
+    if (r.ok && r.result) { trendMsg[chain] = r.result.message_id; saveTrend(); }
   } catch {}
+}
+async function postTrending() { await postChainBoard("rhc"); await postChainBoard("sol"); }
+
+// ================= PAID TRENDING (auto-verified on-chain) =================
+const isEvm = a => /^0x[0-9a-fA-F]{40}$/.test(a);
+const isSol = a => /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(a);
+async function trendSym(chain, ca) {
+  try {
+    if (chain === "sol") { const j = await fetch(`https://api.geckoterminal.com/api/v2/networks/solana/tokens/${ca}`, { headers: { accept: "application/json" } }).then(r => r.json()); return ticker(j.data?.attributes?.symbol || ca.slice(0, 5)); }
+    const j = await fetch(`https://api.dexscreener.com/latest/dex/search?q=${ca}`).then(r => r.json());
+    const p = (j.pairs || []).find(x => x.chainId === "robinhood"); return ticker(p?.baseToken?.symbol || ca.slice(0, 6));
+  } catch { return ticker(ca.slice(0, 6)); }
+}
+// create a pending order with a unique payable amount so the watcher can match the incoming tx
+function newOrder(chain, ca, tier, sym, chatId, group) {
+  const step = chain === "sol" ? 1e-4 : 1e-5;
+  const amount = +(TIERS[chain][tier] + (++orders.seq % 9000 + 1) * step).toFixed(chain === "sol" ? 6 : 8);
+  const id = `${chain}_${orders.seq}`;
+  orders.pending[id] = { id, chain, ca: chain === "sol" ? ca : ca.toLowerCase(), tier, sym, amount, coin: chain === "sol" ? "SOL" : "ETH", wallet: chain === "sol" ? TREND_SOL : TREND_EVM, chatId, group, createdAt: Date.now(), expires: Date.now() + 60 * 60e3 };
+  saveOrders();
+  return orders.pending[id];
+}
+function matchOrder(chain, value) { // value in native coin; find closest unexpired pending order within tolerance
+  const tol = chain === "sol" ? 5e-5 : 5e-6, now = Date.now();
+  let best = null, bd = tol;
+  for (const o of Object.values(orders.pending)) { if (o.chain !== chain || o.expires < now) continue; const d = Math.abs(value - o.amount); if (d <= bd) { bd = d; best = o; } }
+  return best;
+}
+async function activateBoost(o) {
+  boosts[o.ca] = { until: Date.now() + TREND_HOURS * 3600e3, tier: o.tier, chain: o.chain, sym: o.sym, group: o.group };
+  saveBoosts(); delete orders.pending[o.id]; saveOrders();
+  const chainName = o.chain === "sol" ? "Solana" : "Robinhood Chain";
+  const dexUrl = o.chain === "sol" ? `https://dexscreener.com/solana/${o.ca}` : `https://dexscreener.com/robinhood/${o.ca}`;
+  // 1) entry alert in the trending channel
+  await send(TREND_CH, `💎 <b>${esc(o.sym)}</b> is now <b>${TIER_LABEL[o.tier]}</b> on <b>HoodX Trending — ${chainName}</b>\n${o.group ? `Group: ${esc(o.group)}\n` : ""}<a href="${dexUrl}">📊 Chart</a> · <code>${esc(o.ca)}</code>`, { reply_markup: trendKb() });
+  // 2) badge in the project's own group (if we know it)
+  if (o.chatId && String(o.chatId) !== String(TREND_CH)) await send(o.chatId, `🔥🔥 <b>${esc(o.sym)} is now TRENDING</b> — ${TIER_LABEL[o.tier]} on HoodX for ${TREND_HOURS}h! 🚀`).catch(() => {});
+  // 3) refresh the board so they appear pinned immediately
+  postChainBoard(o.chain);
+}
+// EVM payment watcher — scan new blocks for native transfers into the treasury
+let lastEvmBlock = 0;
+async function watchEvmPayments() {
+  try {
+    if (!TREND_EVM) return;
+    const latest = Number(await scan.getBlockNumber());
+    if (!lastEvmBlock) lastEvmBlock = latest;
+    let from = lastEvmBlock + 1; if (latest - from > 500) from = latest - 500;
+    for (let bn = from; bn <= latest; bn++) {
+      const blk = await scan.request({ method: "eth_getBlockByNumber", params: ["0x" + bn.toString(16), true] }).catch(() => null);
+      for (const tx of (blk?.transactions || [])) {
+        if ((tx.to || "").toLowerCase() !== TREND_EVM || !tx.value || tx.value === "0x0") continue;
+        const eth = Number(BigInt(tx.value)) / 1e18;
+        const o = matchOrder("rhc", eth);
+        if (o) { console.log(`[trend] EVM payment ${eth} ETH → order ${o.id} (${o.sym})`); await activateBoost(o); }
+      }
+    }
+    lastEvmBlock = latest;
+  } catch {}
+  setTimeout(watchEvmPayments, 8000);
+}
+// Solana payment watcher — poll new signatures, credit lamports received by the treasury
+let lastSolSig = null;
+async function watchSolPayments() {
+  try {
+    if (!TREND_SOL) return;
+    const sigs = await fetch(SOL_RPC, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "getSignaturesForAddress", params: [TREND_SOL, { limit: 20, ...(lastSolSig ? { until: lastSolSig } : {}) }] }) }).then(r => r.json()).then(j => j.result || []).catch(() => []);
+    if (!sigs.length) { setTimeout(watchSolPayments, 8000); return; }
+    if (!lastSolSig) { lastSolSig = sigs[0].signature; setTimeout(watchSolPayments, 8000); return; } // first run: mark cursor, don't replay
+    for (const s of sigs.reverse()) {
+      const tx = await fetch(SOL_RPC, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "getTransaction", params: [s.signature, { maxSupportedTransactionVersion: 0, encoding: "jsonParsed" }] }) }).then(r => r.json()).then(j => j.result).catch(() => null);
+      if (!tx?.meta) continue;
+      const keys = tx.transaction.message.accountKeys.map(k => (typeof k === "string" ? k : k.pubkey));
+      const idx = keys.indexOf(TREND_SOL); if (idx < 0) continue;
+      const recv = (tx.meta.postBalances[idx] - tx.meta.preBalances[idx]) / 1e9;
+      if (recv > 0) { const o = matchOrder("sol", recv); if (o) { console.log(`[trend] SOL payment ${recv} → order ${o.id} (${o.sym})`); await activateBoost(o); } }
+    }
+    lastSolSig = sigs[sigs.length - 1].signature;
+  } catch {}
+  setTimeout(watchSolPayments, 8000);
 }
 
 // ---- alert formatting ----
@@ -368,6 +490,18 @@ async function handleCallback(cq) {
     await api("answerCallbackQuery", { callback_query_id: cq.id, text: `🗳️ Voted! ${n} vote${n > 1 ? "s" : ""} in 24h — most votes gets pinned Trending.`, show_alert: false });
     return;
   }
+  if (data.startsWith("trend:")) {                              // trend:<chain>:<tier>:<ca>
+    const [, chain, tierS, ca] = data.split(":");
+    const tier = Number(tierS);
+    if (!TIERS[chain] || !TIERS[chain][tier] || !ca) { await api("answerCallbackQuery", { callback_query_id: cq.id, text: "Invalid option." }); return; }
+    const chatId = cq.message?.chat?.id;
+    const sym = await trendSym(chain, ca);
+    const group = Object.values(reg).find(x => x.ca === ca.toLowerCase())?.links?.tg;
+    const o = newOrder(chain, ca, tier, sym, chatId, group);
+    await api("answerCallbackQuery", { callback_query_id: cq.id, text: "Payment address sent below 👇" });
+    await send(chatId, `🔥 <b>Trend ${esc(sym)} — ${TIER_LABEL[tier]}</b> (${TREND_HOURS}h)\n\nSend <b>exactly</b> this amount:\n💸 <code>${o.amount}</code> ${o.coin}\n📥 to: <code>${esc(o.wallet)}</code>\n\n⏱️ Auto-detected on-chain in ~1 min after it lands — you'll be pinned + announced automatically. Order expires in 60 min.\n<i>Send the exact amount so we can match your payment.</i>`);
+    return;
+  }
   await api("answerCallbackQuery", { callback_query_id: cq.id });
 }
 
@@ -460,15 +594,27 @@ async function tgTick() {
       const flags = [lp.locked === false, act.sells === 0 && act.buys > 0, s.liqUsd < 3000].filter(Boolean).length;
       const verdict = flags === 0 ? "🟢 Looks clean" : flags === 1 ? "🟡 Caution" : "🔴 High risk";
       await send(chatId, `<b>🛡️ HoodX Scan — ${esc(s.sym)}</b>\n${lpLine}\n${sellLine}\n${liqLine}\n${dexLine}\n${socialLine}\n📊 MC $${s.mc.toLocaleString(undefined, { maximumFractionDigits: 0 })}\n\n<b>${verdict}</b>\n<i>Heuristic — always DYOR.</i>`);
-    } else if (base === "/boost") {
-      const bca = after.find(p => /^0x[0-9a-fA-F]{40}$/.test(p));
+    } else if (base === "/trend") {
+      // paid trending: figure out chain + token, then show tier buttons (payment is auto-verified on-chain)
+      let tca = after.find(p => isEvm(p) || isSol(p));
+      let tchain = tca ? (isSol(tca) ? "sol" : "rhc") : null;
+      if (!tca) { const c = Object.values(reg).find(x => x.chatId === chatId); if (c) { tca = c.ca; tchain = "rhc"; } }
+      if (!tca) { await send(chatId, "🔥 <b>Get on HoodX Trending</b>\nIn your token's group: <code>/trend</code>\nAnywhere: <code>/trend &lt;CA or SOL mint&gt;</code>\n\nYou pay in the chain's coin, we pin you automatically once it lands."); continue; }
+      const tsym = await trendSym(tchain, tca);
+      const P = TIERS[tchain], coin = tchain === "sol" ? "SOL" : "ETH";
+      const btn = t => ({ text: `${TIER_LABEL[t]} · ${P[t]} ${coin}`, callback_data: `trend:${tchain}:${t}:${tca}` });
+      await send(chatId, `🔥 <b>Trend ${esc(tsym)}</b> on <b>HoodX — ${tchain === "sol" ? "Solana" : "Robinhood Chain"}</b>\nPick a slot (pinned ${TREND_HOURS}h + 💎 announced + 🔥 badge in your group):`, { reply_markup: { inline_keyboard: [[btn(1)], [btn(3)], [btn(10)]] } });
+    } else if (base === "/boost") {   // admin manual override (free pin) — paid flow is /trend
+      const bca = after.find(p => isEvm(p) || isSol(p));
       const hrs = Number(after.find(p => /^\d+$/.test(p)));
+      const tier = Number(after.find(p => p === "1" || p === "3" || p === "10")) || 1;
       if (bca && hrs) {
-        boosts[bca.toLowerCase()] = Date.now() + hrs * 3600e3; saveBoosts();
-        await send(chatId, `🔥 Boosted <code>${bca}</code> for ${hrs}h — it'll top HoodX Trending.`);
+        const key = isSol(bca) ? bca : bca.toLowerCase();
+        boosts[key] = { until: Date.now() + hrs * 3600e3, tier, chain: isSol(bca) ? "sol" : "rhc", sym: await trendSym(isSol(bca) ? "sol" : "rhc", bca) }; saveBoosts();
+        await send(chatId, `🔥 Boosted <code>${esc(bca)}</code> ${TIER_LABEL[tier]} for ${hrs}h.`);
         postTrending();
       } else {
-        await send(chatId, "⚡ <b>Boost to the top of HoodX Trending</b>\nYour token pinned #1 with 🔥 across the channel + buy-alert ad slots.\n\n<b>To boost:</b> <code>/boost &lt;CA&gt; &lt;hours&gt;</code>\n<i>(paid ETH boost coming next — this is the manual version)</i>");
+        await send(chatId, "⚡ <b>Boost (admin manual)</b>\n<code>/boost &lt;CA&gt; &lt;hours&gt; [1|3|10]</code>\n\nProjects: use <code>/trend</code> for the paid auto-verified boost.");
       }
     } else if (base === "/vote") {
       let vca = after.find(p => /^0x[0-9a-fA-F]{40}$/.test(p));
@@ -502,9 +648,12 @@ api("setMyCommands", { commands: [
   { command: "setmedia", description: "Upload your buy image / gif / video" },
   { command: "setemoji", description: "Set a custom buy emoji" },
   { command: "setlinks", description: "Set chart / buy / X / TG links" },
+  { command: "trend", description: "🔥 Get on HoodX Trending (paid, auto-verified)" },
   { command: "test", description: "Preview a buy alert" },
   { command: "start", description: "Setup instructions" },
 ] });
 (async () => { while (true) { await tgTick().catch(() => sleep(2000)); } })();
 watchSwaps();
-if ((env.TRENDING_ON ?? "1") !== "0") { postTrending(); setInterval(postTrending, 10 * 60 * 1000); } // trending off until the animated header is ready
+watchEvmPayments();   // auto-verify RHC trend payments
+watchSolPayments();   // auto-verify Solana trend payments
+if ((env.TRENDING_ON ?? "1") !== "0") { postTrending(); setInterval(postTrending, 10 * 60 * 1000); } // trending off until King flips it live
