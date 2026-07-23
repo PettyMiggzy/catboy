@@ -69,6 +69,9 @@ const loadJSON = (fileURL, fallback) => { try { return fs.existsSync(fileURL) ? 
 const EMOJI = loadJSON(new URL("./emoji_ids.json", import.meta.url), {});
 const ce = (name, fallback) => EMOJI[name] ? `<tg-emoji emoji-id="${EMOJI[name]}">${fallback}</tg-emoji>` : fallback;
 const vlen = s => s.replace(/<[^>]+>/g, "").length; // visible length (Telegram's 1024 cap ignores HTML/emoji tags)
+// buy-bar emoji: a project's choice is either a standard emoji (string) or a custom emoji ({ceid, fb}); default is the branded HoodX gem
+const BUY_DEFAULT = EMOJI.buy ? { ceid: EMOJI.buy, fb: "🟢" } : "🟢";
+const emojiUnit = e => (e && typeof e === "object" && e.ceid) ? `<tg-emoji emoji-id="${e.ceid}">${esc(e.fb || "🟢")}</tg-emoji>` : String(e || "🟢");
 const ticker = s => "$" + String(s).replace(/^\$+/, "").trim();                                // exactly one leading $
 
 // ---- telegram helpers ----
@@ -89,7 +92,7 @@ const sendMedia = (chat_id, media, caption, extra = {}) => {
 // ---- registry ----
 const REGF = new URL("./registry.json", import.meta.url);
 let reg = loadJSON(REGF, {});
-for (const k in reg) if (reg[k]?.sym) reg[k].sym = ticker(reg[k].sym); // clean stale double-$ symbols
+for (const k in reg) { if (reg[k]?.sym) reg[k].sym = ticker(reg[k].sym); if (reg[k]?.emoji === "🟢") reg[k].emoji = null; } // clean stale $; old hardcoded 🟢 default → HoodX default
 const saveReg = () => { const t = new URL(REGF.href + ".tmp"); fs.writeFileSync(t, JSON.stringify(reg, null, 2)); fs.renameSync(t, REGF); };
 const awaiting = new Set(); // chatIds that ran /setmedia and should upload next
 function extractMedia(msg) {
@@ -508,7 +511,7 @@ async function watchSolPayments() {
 }
 
 // ---- alert formatting ----
-function bar(usd, emoji, step) { const n = Math.max(1, Math.min(60, Math.floor(usd / step))); return emoji.repeat(n); }
+function bar(usd, e, step) { const custom = e && typeof e === "object" && e.ceid; const n = Math.max(1, Math.min(custom ? 12 : 60, Math.floor(usd / step))); return emojiUnit(e).repeat(n); } // custom emoji are heavier → capped repeat
 function fmtAlert(c, ev) {
   const links = [];
   if (c.links?.chart) links.push(`<a href="${esc(c.links.chart)}">Chart</a>`);
@@ -519,7 +522,7 @@ function fmtAlert(c, ev) {
     `<b>${esc(ticker(c.sym))} Buy!</b>`,
     verifiedNow(c.ca) ? `${ce("shield", "🛡️")} <b>HoodX Verified</b> — LP watched 24/7` : "",
     c.dexPaid ? `${ce("paid", "🔵")} <b>DEX PAID</b> — ${ce("rocket", "🚀")}${ce("rocket", "🚀")} <b>BULLISH</b> ${ce("rocket", "🚀")}${ce("rocket", "🚀")}` : "",
-    bar(ev.usd, c.emoji || "🟢", c.step || 10),
+    bar(ev.usd, c.emoji || BUY_DEFAULT, c.step || 10),
     `${ce("money", "💰")} <b>$${ev.usd.toFixed(0)}</b> (${ev.eth.toFixed(4)} ETH)`,
     `${ce("coin", "🪙")} ${ev.tokens.toLocaleString(undefined, { maximumFractionDigits: 0 })} ${esc(ticker(c.sym))}`,
     `${ce("chart", "📊")} MC $${ev.mc.toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
@@ -684,7 +687,7 @@ async function tgTick() {
         const ts = await pub.readContract({ address: ca, abi: ERC20, functionName: "totalSupply" });
         supplyFactor = Number(ts) / 1e18; // MC = price_in_eth * ETHUSD * (totalSupply_raw/1e18), decimal-independent
       } catch { await send(chatId, "❌ Couldn't read token/pool. Is the CA correct?"); continue; }
-      reg[ca] = { emoji: "🟢", step: 10, minBuy: 0, links: {}, ...(reg[ca] || {}), chatId, ca, pool: rp.pool, fee: rp.fee, wethIsT0, sym, dec, supplyFactor }; // keep user settings, recompute token fields
+      reg[ca] = { emoji: null, step: 10, minBuy: 0, links: {}, ...(reg[ca] || {}), chatId, ca, pool: rp.pool, fee: rp.fee, wethIsT0, sym, dec, supplyFactor }; // emoji null → branded HoodX default; keep user settings, recompute token fields
       const dx = await dexInfo(ca);
       if (dx) {
         const c2 = reg[ca]; c2.links = c2.links || {};
@@ -708,11 +711,19 @@ async function tgTick() {
       saveReg(); await send(chatId, "🔗 Links updated.");
     } else if (base === "/setemoji") {
       const c = Object.values(reg).find(x => x.chatId === chatId); if (!c) { await send(chatId, "Register first: <code>/register &lt;CA&gt;</code>"); continue; }
-      if (!arg) { await send(chatId, "Usage: <code>/setemoji 🔥</code>\nOptional $ per emoji: <code>/setemoji 🔥 20</code>"); continue; }
-      c.emoji = arg;
-      if (after[1] && !isNaN(Number(after[1]))) c.step = Math.max(1, Number(after[1]));
-      saveReg();
-      await send(chatId, `✅ Buy emoji set: ${esc(c.emoji)} (1 per $${c.step})\nPreview with <code>/test</code>.`);
+      const stepArg = after.find(p => /^\d+$/.test(p)); if (stepArg) c.step = Math.max(1, Number(stepArg));
+      const cent = (msg.entities || []).find(e => e.type === "custom_emoji");   // project sent their own custom emoji?
+      if (cent) {
+        const cand = { ceid: cent.custom_emoji_id, fb: msg.text.substring(cent.offset, cent.offset + cent.length) };
+        const test = await api("sendMessage", { chat_id: chatId, text: `Custom buy emoji → ${emojiUnit(cand)}`, parse_mode: "HTML" });  // validate the bot may re-send it
+        if (test.ok) { c.emoji = cand; saveReg(); await send(chatId, `✅ Your custom buy emoji is set (1 per $${c.step}). Preview: <code>/test</code>`); }
+        else { await send(chatId, "⚠️ Telegram won't let me re-send that particular custom emoji (bots can only reuse some). Try another, use a standard emoji, or <code>/setemoji default</code> for the HoodX one."); }
+        continue;
+      }
+      if (/^(default|reset|hoodx)$/i.test(arg || "")) { c.emoji = null; saveReg(); await send(chatId, `✅ Reset to the HoodX buy emoji ${emojiUnit(BUY_DEFAULT)} (1 per $${c.step}).`); continue; }
+      if (!arg || /^\d+$/.test(arg)) { await send(chatId, `Usage: <code>/setemoji 🔥</code> — send a standard OR custom emoji (right in the command).\n<code>/setemoji default</code> — HoodX default ${emojiUnit(BUY_DEFAULT)}\nOptional $ per emoji: <code>/setemoji 🔥 20</code>`); continue; }
+      c.emoji = arg; saveReg();
+      await send(chatId, `✅ Buy emoji set: ${esc(arg)} (1 per $${c.step}). Preview: <code>/test</code>`);
     } else if (base === "/chart") {
       const ca = (arg && /^0x[0-9a-fA-F]{40}$/.test(arg)) ? arg.toLowerCase() : Object.values(reg).find(x => x.chatId === chatId)?.ca;
       if (!ca) { await send(chatId, "Usage: <code>/chart &lt;CA&gt;</code>"); continue; }
