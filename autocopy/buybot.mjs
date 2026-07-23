@@ -192,6 +192,14 @@ const TIER_LABEL = { 1: "🥇 #1 Spot", 3: "🔥 Top 3", 10: "📈 Top 10" };
 const ORDERF = new URL("./trend_orders.json", import.meta.url);
 let orders = fs.existsSync(ORDERF) ? JSON.parse(fs.readFileSync(ORDERF, "utf8")) : { seq: 0, pending: {} }; // id -> order
 const saveOrders = () => fs.writeFileSync(ORDERF, JSON.stringify(orders));
+
+// ---- 🛡️ HoodX Verified: paid live rug-watch (monthly sub, auto-verified on-chain) ----
+const VERIFYF = new URL("./verified.json", import.meta.url);
+let verified = fs.existsSync(VERIFYF) ? JSON.parse(fs.readFileSync(VERIFYF, "utf8")) : {}; // key -> { until, chain, sym, group, chatId, pool, baseLiq, alerted }
+const saveVerified = () => fs.writeFileSync(VERIFYF, JSON.stringify(verified));
+const verifiedNow = k => verified[k] && verified[k].until > Date.now();
+const VERIFY_DAYS = Number(env.VERIFY_DAYS || 30);
+const VERIFY_PRICE = { rhc: Number(env.VERIFY_RHC || 0.1), sol: Number(env.VERIFY_SOL || 2) }; // per 30d
 const VOTEF = new URL("./votes.json", import.meta.url);
 let userVotes = fs.existsSync(VOTEF) ? JSON.parse(fs.readFileSync(VOTEF, "utf8")) : {}; // userId -> {ca, ts}
 const saveVotes = () => fs.writeFileSync(VOTEF, JSON.stringify(userVotes));
@@ -264,7 +272,7 @@ function fmtTrending(rows, chain = "rhc") {
     if (r.web) links.push(`<a href="${r.web}">🌐</a>`);
     if (r.x) links.push(`<a href="${r.x}">𝕏</a>`);
     if (r.tg) links.push(`<a href="${r.tg}">💬</a>`);
-    const badge = r.boosted ? " 🔥" : r.topVoted ? " 🗳️" : "";
+    const badge = (r.boosted ? " 🔥" : r.topVoted ? " 🗳️" : "") + (verifiedNow(r.ca) ? " 🛡️" : "");
     const votes = r.votes > 0 ? ` · 🗳️${r.votes}` : "";
     return `${MEDAL[i] || (i + 1) + "."} <a href="${r.dexUrl}">${esc(r.sym)}</a>${badge} | ${a} ${r.change >= 0 ? "+" : ""}${r.change.toFixed(1)}%  ${links.join(" ")}\nMC $${Math.round(r.mc).toLocaleString()} | Vol24 $${Math.round(r.vol).toLocaleString()}${votes}`;
   }).join("\n\n");
@@ -316,14 +324,15 @@ async function trendSym(chain, ca) {
   } catch { return ticker(ca.slice(0, 6)); }
 }
 // create a pending order with a unique payable amount so the watcher can match the incoming tx
-function newOrder(chain, ca, tier, sym, chatId, group) {
+function newOrder(kind, chain, ca, price, sym, chatId, group, tier = 0) {
   const step = chain === "sol" ? 1e-4 : 1e-5;
-  const amount = +(TIERS[chain][tier] + (++orders.seq % 9000 + 1) * step).toFixed(chain === "sol" ? 6 : 8);
+  const amount = +(price + (++orders.seq % 9000 + 1) * step).toFixed(chain === "sol" ? 6 : 8);
   const id = `${chain}_${orders.seq}`;
-  orders.pending[id] = { id, chain, ca: chain === "sol" ? ca : ca.toLowerCase(), tier, sym, amount, coin: chain === "sol" ? "SOL" : "ETH", wallet: chain === "sol" ? TREND_SOL : TREND_EVM, chatId, group, createdAt: Date.now(), expires: Date.now() + 60 * 60e3 };
+  orders.pending[id] = { id, kind, chain, ca: chain === "sol" ? ca : ca.toLowerCase(), tier, sym, amount, coin: chain === "sol" ? "SOL" : "ETH", wallet: chain === "sol" ? TREND_SOL : TREND_EVM, chatId, group, createdAt: Date.now(), expires: Date.now() + 60 * 60e3 };
   saveOrders();
   return orders.pending[id];
 }
+async function fulfillOrder(o) { return o.kind === "verify" ? activateVerify(o) : activateBoost(o); }
 function matchOrder(chain, value) { // value in native coin; find closest unexpired pending order within tolerance
   const tol = chain === "sol" ? 5e-5 : 5e-6, now = Date.now();
   let best = null, bd = tol;
@@ -342,6 +351,45 @@ async function activateBoost(o) {
   // 3) refresh the board so they appear pinned immediately
   postChainBoard(o.chain);
 }
+// current on-chain liquidity in USD (low-RPC: DexScreener for RHC, GeckoTerminal for SOL)
+async function liqOf(chain, ca) {
+  try {
+    if (chain === "sol") { const j = await fetch(`https://api.geckoterminal.com/api/v2/networks/solana/tokens/${ca}/pools?page=1`, { headers: { accept: "application/json" } }).then(r => r.json()); const p = (j.data || [])[0]; return Number(p?.attributes?.reserve_in_usd || 0); }
+    const j = await fetch(`https://api.dexscreener.com/latest/dex/search?q=${ca}`).then(r => r.json());
+    const p = (j.pairs || []).filter(x => x.chainId === "robinhood").sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
+    return Number(p?.liquidity?.usd || 0);
+  } catch { return -1; } // -1 = fetch failed, skip this cycle (don't false-alarm)
+}
+async function activateVerify(o) {
+  let pool = null;
+  if (o.chain === "rhc") { const c = Object.values(reg).find(x => x.ca === o.ca); pool = c?.pool || (await resolvePool(o.ca))?.pool || null; }
+  const baseLiq = Math.max(0, await liqOf(o.chain, o.ca));
+  verified[o.ca] = { until: Date.now() + VERIFY_DAYS * 86400e3, chain: o.chain, sym: o.sym, group: o.group, chatId: o.chatId, pool, baseLiq, alerted: false };
+  saveVerified(); delete orders.pending[o.id]; saveOrders();
+  await send(TREND_CH, `🛡️ <b>${esc(o.sym)}</b> is now <b>HoodX Verified</b> — watched 24/7 for LP pulls & rug patterns. Holders get an instant alert if anything moves.`, { reply_markup: trendKb() });
+  if (o.chatId && String(o.chatId) !== String(TREND_CH)) await send(o.chatId, `🛡️ <b>${esc(o.sym)} is now HoodX Verified</b> — your token is watched 24/7. Holders will be alerted the instant LP unlocks or liquidity drains. Trust badge is live on the board.`).catch(() => {});
+}
+// live rug-watch: every 5 min re-check each Verified token; alert group + channel on a bad transition
+async function watchVerified() {
+  try {
+    for (const [ca, v] of Object.entries(verified)) {
+      if (v.until < Date.now()) continue;
+      const cur = await liqOf(v.chain, ca);
+      if (cur < 0) continue;                                  // fetch failed — don't false-alarm
+      if (cur > (v.baseLiq || 0)) { v.baseLiq = cur; saveVerified(); }   // high-water baseline
+      let breach = null;
+      if (v.baseLiq > 500 && cur < v.baseLiq * 0.5) breach = `liquidity dropped ${Math.round((1 - cur / v.baseLiq) * 100)}% ($${Math.round(v.baseLiq).toLocaleString()} → $${Math.round(cur).toLocaleString()})`;
+      if (!breach && v.chain === "rhc" && v.pool) { const lp = await lpStatus(v.pool).catch(() => ({ locked: null })); if (lp.locked === false) breach = "LP is no longer locked"; }
+      if (breach && !v.alerted) {
+        v.alerted = true; saveVerified();
+        const msg = `🚨🛡️ <b>HoodX Verified ALERT — ${esc(v.sym)}</b>\n${breach}.\n<b>Be careful — this can signal a rug in progress.</b>`;
+        if (v.chatId) await send(v.chatId, msg).catch(() => {});
+        await send(TREND_CH, msg).catch(() => {});
+      } else if (!breach && v.alerted) { v.alerted = false; saveVerified(); } // recovered — re-arm
+    }
+  } catch {}
+  setTimeout(watchVerified, 5 * 60 * 1000);
+}
 // EVM payment watcher — scan new blocks for native transfers into the treasury
 let lastEvmBlock = 0;
 async function watchEvmPayments() {
@@ -356,7 +404,7 @@ async function watchEvmPayments() {
         if ((tx.to || "").toLowerCase() !== TREND_EVM || !tx.value || tx.value === "0x0") continue;
         const eth = Number(BigInt(tx.value)) / 1e18;
         const o = matchOrder("rhc", eth);
-        if (o) { console.log(`[trend] EVM payment ${eth} ETH → order ${o.id} (${o.sym})`); await activateBoost(o); }
+        if (o) { console.log(`[trend] EVM payment ${eth} ETH → order ${o.id} (${o.kind} ${o.sym})`); await fulfillOrder(o); }
       }
     }
     lastEvmBlock = latest;
@@ -377,7 +425,7 @@ async function watchSolPayments() {
       const keys = tx.transaction.message.accountKeys.map(k => (typeof k === "string" ? k : k.pubkey));
       const idx = keys.indexOf(TREND_SOL); if (idx < 0) continue;
       const recv = (tx.meta.postBalances[idx] - tx.meta.preBalances[idx]) / 1e9;
-      if (recv > 0) { const o = matchOrder("sol", recv); if (o) { console.log(`[trend] SOL payment ${recv} → order ${o.id} (${o.sym})`); await activateBoost(o); } }
+      if (recv > 0) { const o = matchOrder("sol", recv); if (o) { console.log(`[trend] SOL payment ${recv} → order ${o.id} (${o.kind} ${o.sym})`); await fulfillOrder(o); } }
     }
     lastSolSig = sigs[sigs.length - 1].signature;
   } catch {}
@@ -394,6 +442,7 @@ function fmtAlert(c, ev) {
   if (c.links?.tg) links.push(`<a href="${esc(c.links.tg)}">TG</a>`);
   return [
     `<b>${esc(ticker(c.sym))} Buy!</b>`,
+    verifiedNow(c.ca) ? `🛡️ <b>HoodX Verified</b> — LP watched 24/7` : "",
     c.dexPaid ? `🔵 <b>DEX PAID</b> ✅ — 🚀🚀 <b>BULLISH</b> 🚀🚀` : "",
     bar(ev.usd, c.emoji || "🟢", c.step || 10),
     `💰 <b>$${ev.usd.toFixed(0)}</b> (${ev.eth.toFixed(4)} ETH)`,
@@ -497,9 +546,20 @@ async function handleCallback(cq) {
     const chatId = cq.message?.chat?.id;
     const sym = await trendSym(chain, ca);
     const group = Object.values(reg).find(x => x.ca === ca.toLowerCase())?.links?.tg;
-    const o = newOrder(chain, ca, tier, sym, chatId, group);
+    const o = newOrder("boost", chain, ca, TIERS[chain][tier], sym, chatId, group, tier);
     await api("answerCallbackQuery", { callback_query_id: cq.id, text: "Payment address sent below 👇" });
     await send(chatId, `🔥 <b>Trend ${esc(sym)} — ${TIER_LABEL[tier]}</b> (${TREND_HOURS}h)\n\nSend <b>exactly</b> this amount:\n💸 <code>${o.amount}</code> ${o.coin}\n📥 to: <code>${esc(o.wallet)}</code>\n\n⏱️ Auto-detected on-chain in ~1 min after it lands — you'll be pinned + announced automatically. Order expires in 60 min.\n<i>Send the exact amount so we can match your payment.</i>`);
+    return;
+  }
+  if (data.startsWith("verify:")) {                            // verify:<chain>:<ca>
+    const [, chain, ca] = data.split(":");
+    if (!VERIFY_PRICE[chain] || !ca) { await api("answerCallbackQuery", { callback_query_id: cq.id, text: "Invalid option." }); return; }
+    const chatId = cq.message?.chat?.id;
+    const sym = await trendSym(chain, ca);
+    const group = Object.values(reg).find(x => x.ca === ca.toLowerCase())?.links?.tg;
+    const o = newOrder("verify", chain, ca, VERIFY_PRICE[chain], sym, chatId, group);
+    await api("answerCallbackQuery", { callback_query_id: cq.id, text: "Payment address sent below 👇" });
+    await send(chatId, `🛡️ <b>HoodX Verified — ${esc(sym)}</b> (${VERIFY_DAYS} days)\n\nSend <b>exactly</b>:\n💸 <code>${o.amount}</code> ${o.coin}\n📥 to: <code>${esc(o.wallet)}</code>\n\n⏱️ Auto-activates ~1 min after it lands. You get the 🛡️ badge + live 24/7 rug-watch with instant holder alerts. Expires in 60 min.`);
     return;
   }
   await api("answerCallbackQuery", { callback_query_id: cq.id });
@@ -604,6 +664,16 @@ async function tgTick() {
       const P = TIERS[tchain], coin = tchain === "sol" ? "SOL" : "ETH";
       const btn = t => ({ text: `${TIER_LABEL[t]} · ${P[t]} ${coin}`, callback_data: `trend:${tchain}:${t}:${tca}` });
       await send(chatId, `🔥 <b>Trend ${esc(tsym)}</b> on <b>HoodX — ${tchain === "sol" ? "Solana" : "Robinhood Chain"}</b>\nPick a slot (pinned ${TREND_HOURS}h + 💎 announced + 🔥 badge in your group):`, { reply_markup: { inline_keyboard: [[btn(1)], [btn(3)], [btn(10)]] } });
+    } else if (base === "/verify") {
+      // 🛡️ HoodX Verified — paid live rug-watch badge
+      let vca = after.find(p => isEvm(p) || isSol(p));
+      let vchain = vca ? (isSol(vca) ? "sol" : "rhc") : null;
+      if (!vca) { const c = Object.values(reg).find(x => x.chatId === chatId); if (c) { vca = c.ca; vchain = "rhc"; } }
+      if (!vca) { await send(chatId, "🛡️ <b>HoodX Verified — 24/7 rug-watch</b>\nIn your token's group: <code>/verify</code>\nAnywhere: <code>/verify &lt;CA or SOL mint&gt;</code>\n\nEarn the 🛡️ badge + we watch your LP live and alert holders instantly if it ever moves."); continue; }
+      if (verifiedNow(isSol(vca) ? vca : vca.toLowerCase())) { await send(chatId, "🛡️ Already HoodX Verified & being watched."); continue; }
+      const vsym = await trendSym(vchain, vca);
+      const coin = vchain === "sol" ? "SOL" : "ETH";
+      await send(chatId, `🛡️ <b>Get HoodX Verified — ${esc(vsym)}</b>\nLive 24/7 rug-watch + trust badge on the board & every buy alert. Holders alerted the instant LP unlocks or liquidity drains.\n\n<b>${VERIFY_PRICE[vchain]} ${coin}</b> / ${VERIFY_DAYS} days:`, { reply_markup: { inline_keyboard: [[{ text: `🛡️ Verify — ${VERIFY_PRICE[vchain]} ${coin}`, callback_data: `verify:${vchain}:${vca}` }]] } });
     } else if (base === "/boost") {   // admin manual override (free pin) — paid flow is /trend
       const bca = after.find(p => isEvm(p) || isSol(p));
       const hrs = Number(after.find(p => /^\d+$/.test(p)));
@@ -649,11 +719,13 @@ api("setMyCommands", { commands: [
   { command: "setemoji", description: "Set a custom buy emoji" },
   { command: "setlinks", description: "Set chart / buy / X / TG links" },
   { command: "trend", description: "🔥 Get on HoodX Trending (paid, auto-verified)" },
+  { command: "verify", description: "🛡️ HoodX Verified — live 24/7 rug-watch badge" },
   { command: "test", description: "Preview a buy alert" },
   { command: "start", description: "Setup instructions" },
 ] });
 (async () => { while (true) { await tgTick().catch(() => sleep(2000)); } })();
 watchSwaps();
-watchEvmPayments();   // auto-verify RHC trend payments
-watchSolPayments();   // auto-verify Solana trend payments
+watchEvmPayments();   // auto-verify RHC trend/verify payments
+watchSolPayments();   // auto-verify Solana trend/verify payments
+watchVerified();      // 🛡️ live rug-watch on Verified tokens
 if ((env.TRENDING_ON ?? "1") !== "0") { postTrending(); setInterval(postTrending, 10 * 60 * 1000); } // trending off until King flips it live
