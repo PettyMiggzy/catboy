@@ -60,7 +60,7 @@ const priceEth = async wethIsT0 => { const [sq] = await pub.readContract({ addre
 const lpEth = async () => { try { const b = await pub.readContract({ address: WETH, abi: ERC20, functionName: "balanceOf", args: [POOL] }); return Number(b) / 1e18; } catch { return -1; } };
 
 // telegram DM (King) — action alerts only, low frequency
-const BOT = (E.TG_BOT_TOKEN || E.BOT_TOKEN || "").trim(), CHAT = (E.FLOOR_CHAT || E.CHAT_ID || "6820752140").trim();
+const BOT = (E.FLOOR_BOT_TOKEN || E.TG_BOT_TOKEN || E.BOT_TOKEN || "").trim(), CHAT = (E.FLOOR_CHAT || E.CHAT_ID || "6820752140").trim();
 const tg = t => BOT ? fetch(`https://api.telegram.org/bot${BOT}/sendMessage`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chat_id: CHAT, text: t, parse_mode: "HTML", disable_web_page_preview: true }) }).catch(() => {}) : null;
 
 // live executors (variable amount)
