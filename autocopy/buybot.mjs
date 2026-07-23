@@ -65,6 +65,10 @@ const safeUrl = u => (typeof u === "string" && /^https?:\/\//i.test(u) && !/[\s"
 // atomic JSON write (tmp + rename) so a crash mid-write can't corrupt state; safe load tolerates a bad file
 const saveJSON = (fileURL, data) => { const tmp = new URL(fileURL.href + ".tmp"); fs.writeFileSync(tmp, JSON.stringify(data)); fs.renameSync(tmp, fileURL); };
 const loadJSON = (fileURL, fallback) => { try { return fs.existsSync(fileURL) ? JSON.parse(fs.readFileSync(fileURL, "utf8")) : fallback; } catch (e) { console.error("state load failed, using fallback:", fileURL.href, e.message); return fallback; } };
+// branded HoodX custom emoji (Venice-made, owned by the bot). ce() → <tg-emoji> with a standard-emoji fallback for old/non-premium clients
+const EMOJI = loadJSON(new URL("./emoji_ids.json", import.meta.url), {});
+const ce = (name, fallback) => EMOJI[name] ? `<tg-emoji emoji-id="${EMOJI[name]}">${fallback}</tg-emoji>` : fallback;
+const vlen = s => s.replace(/<[^>]+>/g, "").length; // visible length (Telegram's 1024 cap ignores HTML/emoji tags)
 const ticker = s => "$" + String(s).replace(/^\$+/, "").trim();                                // exactly one leading $
 
 // ---- telegram helpers ----
@@ -279,23 +283,23 @@ async function topSolPairs() {
 function fmtTrending(rows, chain = "rhc") {
   const title = chain === "sol" ? "◎ <b>HoodX Trending — Solana</b>" : "🏹 <b>HoodX Trending — Robinhood Chain</b>";
   const ts = new Date().toISOString().slice(11, 16);
-  const foot = `\n\n🔥 <i>= paid boost · 🗳️ = top voted</i>\n🕐 <i>Refreshed ${ts} UTC</i>`;
+  const foot = `\n\n${ce("flame", "🔥")} <i>= paid boost · ${ce("vote", "🗳️")} = top voted</i>\n🕐 <i>Refreshed ${ts} UTC</i>`;
   const rowStr = (r, i) => {
-    const a = r.change >= 0 ? "🟢" : "🔴";
+    const a = r.change >= 0 ? ce("up", "🟢") : ce("down", "🔴");
     const links = [];
-    if (safeUrl(r.dexUrl)) links.push(`<a href="${esc(r.dexUrl)}">📊</a>`);
-    if (safeUrl(r.web)) links.push(`<a href="${esc(r.web)}">🌐</a>`);
-    if (safeUrl(r.x)) links.push(`<a href="${esc(r.x)}">𝕏</a>`);
-    if (safeUrl(r.tg)) links.push(`<a href="${esc(r.tg)}">💬</a>`);
+    if (safeUrl(r.dexUrl)) links.push(`<a href="${esc(r.dexUrl)}">${ce("chart", "📊")}</a>`);
+    if (safeUrl(r.web)) links.push(`<a href="${esc(r.web)}">${ce("globe", "🌐")}</a>`);
+    if (safeUrl(r.x)) links.push(`<a href="${esc(r.x)}">${ce("x", "✖️")}</a>`);
+    if (safeUrl(r.tg)) links.push(`<a href="${esc(r.tg)}">${ce("tg", "💬")}</a>`);
     const name = safeUrl(r.dexUrl) ? `<a href="${esc(r.dexUrl)}">${esc(r.sym)}</a>` : `<b>${esc(r.sym)}</b>`;
-    const badge = (r.boosted ? " 🔥" : r.topVoted ? " 🗳️" : "") + (verifiedNow(r.ca) ? " 🛡️" : "");
-    const votes = r.votes > 0 ? ` · 🗳️${r.votes}` : "";
+    const badge = (r.boosted ? " " + ce("flame", "🔥") : r.topVoted ? " " + ce("vote", "🗳️") : "") + (verifiedNow(r.ca) ? " " + ce("shield", "🛡️") : "");
+    const votes = r.votes > 0 ? ` · ${ce("vote", "🗳️")}${r.votes}` : "";
     return `${MEDAL[i] || (i + 1) + "."} ${name}${badge} | ${a} ${r.change >= 0 ? "+" : ""}${r.change.toFixed(1)}%  ${links.join(" ")}\nMC $${Math.round(r.mc).toLocaleString()} | Vol24 $${Math.round(r.vol).toLocaleString()}${votes}`;
   };
   if (!rows.length) { const empty = chain === "sol" ? "Loading Solana trending…" : "No tokens yet — register with @hoodxchangebot"; return `${title}\n\n${empty}${foot}`; }
-  // enforce Telegram's 1024-char caption limit: add rows until we'd exceed a safe budget
-  const budget = 1000 - title.length - foot.length; let body = "", used = 0;
-  for (let i = 0; i < rows.length; i++) { const s = rowStr(rows[i], i); if (used + s.length + 2 > budget && i > 0) break; body += (body ? "\n\n" : "") + s; used = body.length; }
+  // enforce Telegram's 1024-char caption limit — measured on VISIBLE text (tags/emoji don't count)
+  const budget = 1000 - vlen(title) - vlen(foot); let body = "", used = 0;
+  for (let i = 0; i < rows.length; i++) { const s = rowStr(rows[i], i); const add = vlen(s) + 2; if (used + add > budget && i > 0) break; body += (body ? "\n\n" : "") + s; used += add; }
   return `${title}\n\n${body}${foot}`;
 }
 const trendKb = () => ({ inline_keyboard: [
@@ -476,7 +480,7 @@ function fmtAlert(c, ev) {
   if (c.links?.tg) links.push(`<a href="${esc(c.links.tg)}">TG</a>`);
   return [
     `<b>${esc(ticker(c.sym))} Buy!</b>`,
-    verifiedNow(c.ca) ? `🛡️ <b>HoodX Verified</b> — LP watched 24/7` : "",
+    verifiedNow(c.ca) ? `${ce("shield", "🛡️")} <b>HoodX Verified</b> — LP watched 24/7` : "",
     c.dexPaid ? `🔵 <b>DEX PAID</b> ✅ — 🚀🚀 <b>BULLISH</b> 🚀🚀` : "",
     bar(ev.usd, c.emoji || "🟢", c.step || 10),
     `💰 <b>$${ev.usd.toFixed(0)}</b> (${ev.eth.toFixed(4)} ETH)`,
