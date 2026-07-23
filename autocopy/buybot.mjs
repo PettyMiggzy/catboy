@@ -518,12 +518,12 @@ function fmtAlert(c, ev) {
   return [
     `<b>${esc(ticker(c.sym))} Buy!</b>`,
     verifiedNow(c.ca) ? `${ce("shield", "🛡️")} <b>HoodX Verified</b> — LP watched 24/7` : "",
-    c.dexPaid ? `🔵 <b>DEX PAID</b> ✅ — 🚀🚀 <b>BULLISH</b> 🚀🚀` : "",
+    c.dexPaid ? `${ce("paid", "🔵")} <b>DEX PAID</b> — ${ce("rocket", "🚀")}${ce("rocket", "🚀")} <b>BULLISH</b> ${ce("rocket", "🚀")}${ce("rocket", "🚀")}` : "",
     bar(ev.usd, c.emoji || "🟢", c.step || 10),
-    `💰 <b>$${ev.usd.toFixed(0)}</b> (${ev.eth.toFixed(4)} ETH)`,
-    `🪙 ${ev.tokens.toLocaleString(undefined, { maximumFractionDigits: 0 })} ${esc(ticker(c.sym))}`,
-    `📊 MC $${ev.mc.toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
-    `👤 <code>${ev.buyer.slice(0, 6)}…${ev.buyer.slice(-4)}</code>`,
+    `${ce("money", "💰")} <b>$${ev.usd.toFixed(0)}</b> (${ev.eth.toFixed(4)} ETH)`,
+    `${ce("coin", "🪙")} ${ev.tokens.toLocaleString(undefined, { maximumFractionDigits: 0 })} ${esc(ticker(c.sym))}`,
+    `${ce("chart", "📊")} MC $${ev.mc.toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
+    `${ce("buyer", "👤")} <code>${ev.buyer.slice(0, 6)}…${ev.buyer.slice(-4)}</code>`,
     `\n${sponsorLine()}`,            // rotating sponsor/ads slot (network ad inventory)
     links.length ? links.join("  •  ") : ""
   ].filter(Boolean).join("\n");
