@@ -26,3 +26,4 @@ autocopy/votes.json
 autocopy/buybot.log
 autocopy/trend_orders.json
 autocopy/verified.json
+autocopy/pay_cursor.json

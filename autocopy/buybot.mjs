@@ -60,7 +60,11 @@ const ZERO = "0x0000000000000000000000000000000000000000";
 const s256 = h => { let n = BigInt("0x" + h); if (n >= 2n ** 255n) n -= 2n ** 256n; return n; };
 const abs = n => n < 0n ? -n : n;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); // HTML-safe
+const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;"); // HTML-safe (attrs too)
+const safeUrl = u => (typeof u === "string" && /^https?:\/\//i.test(u) && !/[\s"'<>]/.test(u)) ? u : null; // only clean http(s) URLs into hrefs
+// atomic JSON write (tmp + rename) so a crash mid-write can't corrupt state; safe load tolerates a bad file
+const saveJSON = (fileURL, data) => { const tmp = new URL(fileURL.href + ".tmp"); fs.writeFileSync(tmp, JSON.stringify(data)); fs.renameSync(tmp, fileURL); };
+const loadJSON = (fileURL, fallback) => { try { return fs.existsSync(fileURL) ? JSON.parse(fs.readFileSync(fileURL, "utf8")) : fallback; } catch (e) { console.error("state load failed, using fallback:", fileURL.href, e.message); return fallback; } };
 const ticker = s => "$" + String(s).replace(/^\$+/, "").trim();                                // exactly one leading $
 
 // ---- telegram helpers ----
@@ -80,9 +84,9 @@ const sendMedia = (chat_id, media, caption, extra = {}) => {
 
 // ---- registry ----
 const REGF = new URL("./registry.json", import.meta.url);
-let reg = fs.existsSync(REGF) ? JSON.parse(fs.readFileSync(REGF, "utf8")) : {};
+let reg = loadJSON(REGF, {});
 for (const k in reg) if (reg[k]?.sym) reg[k].sym = ticker(reg[k].sym); // clean stale double-$ symbols
-const saveReg = () => fs.writeFileSync(REGF, JSON.stringify(reg, null, 2));
+const saveReg = () => { const t = new URL(REGF.href + ".tmp"); fs.writeFileSync(t, JSON.stringify(reg, null, 2)); fs.renameSync(t, REGF); };
 const awaiting = new Set(); // chatIds that ran /setmedia and should upload next
 function extractMedia(msg) {
   if (msg.photo?.length) return { id: msg.photo[msg.photo.length - 1].file_id, kind: "photo" };
@@ -170,19 +174,20 @@ const TREND_CH = env.TRENDING_CHANNEL || "-1004414481505";
 const BOOSTF = new URL("./boosts.json", import.meta.url);
 const TRENDF = new URL("./trend.json", import.meta.url);
 // boosts: key -> { until, tier, chain, sym, group } (key = evm ca lowercase, or solana mint). tier 1<3<10 (lower = higher slot)
-let boosts = fs.existsSync(BOOSTF) ? JSON.parse(fs.readFileSync(BOOSTF, "utf8")) : {};
+let boosts = loadJSON(BOOSTF, {});
 // migrate legacy numeric-until entries → object form
 for (const k of Object.keys(boosts)) if (typeof boosts[k] === "number") boosts[k] = { until: boosts[k], tier: 3, chain: "rhc" };
-let trendMsg = fs.existsSync(TRENDF) ? JSON.parse(fs.readFileSync(TRENDF, "utf8")) : {}; // { rhc: msgId, sol: msgId }
+let trendMsg = loadJSON(TRENDF, {}); // { rhc: msgId, sol: msgId }
 if (typeof trendMsg.id === "number") trendMsg = { rhc: trendMsg.id };   // migrate old single-id shape
-const saveBoosts = () => fs.writeFileSync(BOOSTF, JSON.stringify(boosts));
-const saveTrend = () => fs.writeFileSync(TRENDF, JSON.stringify(trendMsg));
+const saveBoosts = () => saveJSON(BOOSTF, boosts);
+const saveTrend = () => saveJSON(TRENDF, trendMsg);
 const boostedNow = k => boosts[k] && boosts[k].until > Date.now();
 
 // ---- paid trending: treasury wallets + tier sheet (prices configurable via env) ----
 const TREND_EVM = (env.TREND_EVM_WALLET || "").toLowerCase();
 const TREND_SOL = env.TREND_SOL_WALLET || "";
 const SOL_RPC = env.SOL_RPC || "https://api.mainnet-beta.solana.com";
+const ADMIN_IDS = new Set((env.ADMIN_IDS || "6820752140").split(",").map(s => s.trim()).filter(Boolean)); // /boost + operator commands
 const TREND_HOURS = Number(env.TREND_HOURS || 24);                       // boost duration per purchase
 const TIERS = {                                                          // tier -> price in the chain's native coin
   rhc: { 1: Number(env.RHC_T1 || 0.05), 3: Number(env.RHC_T3 || 0.03), 10: Number(env.RHC_T10 || 0.015) },
@@ -190,19 +195,23 @@ const TIERS = {                                                          // tier
 };
 const TIER_LABEL = { 1: "🥇 #1 Spot", 3: "🔥 Top 3", 10: "📈 Top 10" };
 const ORDERF = new URL("./trend_orders.json", import.meta.url);
-let orders = fs.existsSync(ORDERF) ? JSON.parse(fs.readFileSync(ORDERF, "utf8")) : { seq: 0, pending: {} }; // id -> order
-const saveOrders = () => fs.writeFileSync(ORDERF, JSON.stringify(orders));
+let orders = loadJSON(ORDERF, { seq: 0, pending: {} }); // id -> order
+const saveOrders = () => saveJSON(ORDERF, orders);
+// persisted payment cursors: treasury balances (cumulative → a payment during downtime shows as a delta on next poll)
+const PAYF = new URL("./pay_cursor.json", import.meta.url);
+let payState = loadJSON(PAYF, {}); // { evmBal: wei-string, solBal: lamports-number }
+const savePay = () => saveJSON(PAYF, payState);
 
 // ---- 🛡️ HoodX Verified: paid live rug-watch (monthly sub, auto-verified on-chain) ----
 const VERIFYF = new URL("./verified.json", import.meta.url);
-let verified = fs.existsSync(VERIFYF) ? JSON.parse(fs.readFileSync(VERIFYF, "utf8")) : {}; // key -> { until, chain, sym, group, chatId, pool, baseLiq, alerted }
-const saveVerified = () => fs.writeFileSync(VERIFYF, JSON.stringify(verified));
+let verified = loadJSON(VERIFYF, {}); // key -> { until, chain, sym, group, chatId, pool, baseLiq, alerted, lpLocked, lastAlertAt }
+const saveVerified = () => saveJSON(VERIFYF, verified);
 const verifiedNow = k => verified[k] && verified[k].until > Date.now();
 const VERIFY_DAYS = Number(env.VERIFY_DAYS || 30);
 const VERIFY_PRICE = { rhc: Number(env.VERIFY_RHC || 0.1), sol: Number(env.VERIFY_SOL || 2) }; // per 30d
 const VOTEF = new URL("./votes.json", import.meta.url);
-let userVotes = fs.existsSync(VOTEF) ? JSON.parse(fs.readFileSync(VOTEF, "utf8")) : {}; // userId -> {ca, ts}
-const saveVotes = () => fs.writeFileSync(VOTEF, JSON.stringify(userVotes));
+let userVotes = loadJSON(VOTEF, {}); // userId -> {ca, ts}
+const saveVotes = () => saveJSON(VOTEF, userVotes);
 function voteCounts() { const cut = Date.now() - 24 * 3600e3, c = {}; for (const v of Object.values(userVotes)) if (v.ts > cut) c[v.ca] = (c[v.ca] || 0) + 1; return c; }
 async function pairStats(ca) {
   try {
@@ -238,27 +247,30 @@ async function buildTrending() {
   const vc = voteCounts();
   const topVoted = Object.entries(vc).sort((a, b) => b[1] - a[1])[0]; // [ca, count]
   if (topVoted && topVoted[1] > 0 && !rows.find(r => r.ca === topVoted[0])) { const x = await pairRow(topVoted[0]); if (x) rows.push(x); } // vote earns a slot
+  for (const [k, b] of Object.entries(boosts)) if (b.until > now && b.chain === "rhc" && !rows.find(r => r.ca === k)) { const x = await pairRow(k); if (x) rows.push(x); } // paid boost always shows even if thin/unlisted
   rows.forEach(r => { r.votes = vc[r.ca] || 0; r.boosted = boostedNow(r.ca); r.tier = r.boosted ? boosts[r.ca].tier : 99; });
   const maxV = Math.max(0, ...rows.map(r => r.votes));
   rows.forEach(r => r.topVoted = maxV > 0 && r.votes === maxV);
   rows.sort((a, b) => a.tier - b.tier || (b.topVoted ? 1 : 0) - (a.topVoted ? 1 : 0) || b.vol - a.vol);   // paid tier first (1<3<10), then votes, then volume
   return rows.slice(0, 10);
 }
+function mapSolPool(p) {
+  const a = p.attributes || {};
+  const mint = (p.relationships?.base_token?.data?.id || "").replace("solana_", "");
+  return { ca: mint, sym: ticker((a.name || "?").split(" / ")[0]), mc: Number(a.market_cap_usd || a.fdv_usd || 0), vol: Number(a.volume_usd?.h24 || 0), change: Number(a.price_change_percentage?.h24 || 0), dexUrl: `https://dexscreener.com/solana/${a.address}` };
+}
+async function solRow(mint) { // single Solana token's row (for a paid boost not in the trending list)
+  try { const j = await fetch(`https://api.geckoterminal.com/api/v2/networks/solana/tokens/${mint}/pools?page=1`, { headers: { accept: "application/json" } }).then(r => r.json()); const p = (j.data || [])[0]; return p ? mapSolPool(p) : null; } catch { return null; }
+}
 // Solana board via GeckoTerminal trending pools (RHC isn't indexed there; SOL memecoins are)
 async function topSolPairs() {
   try {
     const j = await fetch("https://api.geckoterminal.com/api/v2/networks/solana/trending_pools?page=1", { headers: { accept: "application/json" } }).then(r => r.json());
-    const rows = (j.data || []).map(p => {
-      const a = p.attributes || {};
-      const mint = (p.relationships?.base_token?.data?.id || "").replace("solana_", "");
-      return {
-        ca: mint, sym: ticker((a.name || "?").split(" / ")[0]),
-        mc: Number(a.market_cap_usd || a.fdv_usd || 0), vol: Number(a.volume_usd?.h24 || 0),
-        change: Number(a.price_change_percentage?.h24 || 0),
-        dexUrl: `https://dexscreener.com/solana/${a.address}`, gt: `https://www.geckoterminal.com/solana/pools/${a.address}`,
-      };
-    }).filter(r => r.ca);
+    const byMint = {}; // dedupe: one row per mint, keep highest volume
+    for (const p of (j.data || [])) { const r = mapSolPool(p); if (r.ca && (!byMint[r.ca] || r.vol > byMint[r.ca].vol)) byMint[r.ca] = r; }
+    let rows = Object.values(byMint);
     const now = Date.now();
+    for (const [k, b] of Object.entries(boosts)) if (b.until > now && b.chain === "sol" && !rows.find(r => r.ca === k)) { const x = await solRow(k); if (x) rows.push(x); } // paid boost always shows
     rows.forEach(r => { r.votes = 0; r.boosted = boostedNow(r.ca); r.tier = r.boosted ? boosts[r.ca].tier : 99; });
     rows.sort((a, b) => a.tier - b.tier || b.vol - a.vol);
     return rows.slice(0, 10);
@@ -266,19 +278,25 @@ async function topSolPairs() {
 }
 function fmtTrending(rows, chain = "rhc") {
   const title = chain === "sol" ? "◎ <b>HoodX Trending — Solana</b>" : "🏹 <b>HoodX Trending — Robinhood Chain</b>";
-  const body = rows.map((r, i) => {
+  const ts = new Date().toISOString().slice(11, 16);
+  const foot = `\n\n🔥 <i>= paid boost · 🗳️ = top voted</i>\n🕐 <i>Refreshed ${ts} UTC</i>`;
+  const rowStr = (r, i) => {
     const a = r.change >= 0 ? "🟢" : "🔴";
-    const links = [`<a href="${r.dexUrl}">📊</a>`];
-    if (r.web) links.push(`<a href="${r.web}">🌐</a>`);
-    if (r.x) links.push(`<a href="${r.x}">𝕏</a>`);
-    if (r.tg) links.push(`<a href="${r.tg}">💬</a>`);
+    const links = [];
+    if (safeUrl(r.dexUrl)) links.push(`<a href="${esc(r.dexUrl)}">📊</a>`);
+    if (safeUrl(r.web)) links.push(`<a href="${esc(r.web)}">🌐</a>`);
+    if (safeUrl(r.x)) links.push(`<a href="${esc(r.x)}">𝕏</a>`);
+    if (safeUrl(r.tg)) links.push(`<a href="${esc(r.tg)}">💬</a>`);
+    const name = safeUrl(r.dexUrl) ? `<a href="${esc(r.dexUrl)}">${esc(r.sym)}</a>` : `<b>${esc(r.sym)}</b>`;
     const badge = (r.boosted ? " 🔥" : r.topVoted ? " 🗳️" : "") + (verifiedNow(r.ca) ? " 🛡️" : "");
     const votes = r.votes > 0 ? ` · 🗳️${r.votes}` : "";
-    return `${MEDAL[i] || (i + 1) + "."} <a href="${r.dexUrl}">${esc(r.sym)}</a>${badge} | ${a} ${r.change >= 0 ? "+" : ""}${r.change.toFixed(1)}%  ${links.join(" ")}\nMC $${Math.round(r.mc).toLocaleString()} | Vol24 $${Math.round(r.vol).toLocaleString()}${votes}`;
-  }).join("\n\n");
-  const ts = new Date().toISOString().slice(11, 16);
-  const empty = chain === "sol" ? "Loading Solana trending…" : "No tokens yet — register with @hoodxchangebot";
-  return `${title}\n\n${body || empty}\n\n🔥 <i>= paid boost · 🗳️ = top voted</i>\n🕐 <i>Refreshed ${ts} UTC</i>`;
+    return `${MEDAL[i] || (i + 1) + "."} ${name}${badge} | ${a} ${r.change >= 0 ? "+" : ""}${r.change.toFixed(1)}%  ${links.join(" ")}\nMC $${Math.round(r.mc).toLocaleString()} | Vol24 $${Math.round(r.vol).toLocaleString()}${votes}`;
+  };
+  if (!rows.length) { const empty = chain === "sol" ? "Loading Solana trending…" : "No tokens yet — register with @hoodxchangebot"; return `${title}\n\n${empty}${foot}`; }
+  // enforce Telegram's 1024-char caption limit: add rows until we'd exceed a safe budget
+  const budget = 1000 - title.length - foot.length; let body = "", used = 0;
+  for (let i = 0; i < rows.length; i++) { const s = rowStr(rows[i], i); if (used + s.length + 2 > budget && i > 0) break; body += (body ? "\n\n" : "") + s; used = body.length; }
+  return `${title}\n\n${body}${foot}`;
 }
 const trendKb = () => ({ inline_keyboard: [
   [{ text: "🗳️ Vote", url: "https://t.me/hoodxchangebot?start=vote" }, { text: "🔥 Get Trending", url: "https://t.me/hoodxchangebot?start=boost" }],
@@ -302,10 +320,13 @@ async function sendTrendingMedia(chat_id, caption) {
 async function postChainBoard(chain) {
   try {
     const rows = chain === "sol" ? await topSolPairs() : await buildTrending();
+    if (!rows.length && trendMsg[chain]) return;         // data hiccup — keep the good board, don't wipe it to a placeholder
     const text = fmtTrending(rows, chain);
     if (trendMsg[chain]) {
       const r = await api("editMessageCaption", { chat_id: TREND_CH, message_id: trendMsg[chain], caption: text, parse_mode: "HTML", reply_markup: trendKb() });
-      if (r.ok || (r.description || "").includes("not modified")) return;
+      if (r.ok || /not modified/i.test(r.description || "")) return;
+      // only re-post a fresh board if the old one is truly gone; on 429/network keep it and retry next cycle
+      if (!/not found|can't be edited|MESSAGE_ID_INVALID|to edit/i.test(r.description || "")) return;
     }
     const r = await sendTrendingMedia(TREND_CH, text);   // animated header + list caption + buttons
     if (r.ok && r.result) { trendMsg[chain] = r.result.message_id; saveTrend(); }
@@ -323,21 +344,29 @@ async function trendSym(chain, ca) {
     const p = (j.pairs || []).find(x => x.chainId === "robinhood"); return ticker(p?.baseToken?.symbol || ca.slice(0, 6));
   } catch { return ticker(ca.slice(0, 6)); }
 }
-// create a pending order with a unique payable amount so the watcher can match the incoming tx
+const AMT = { rhc: { step: 1e-5, tol: 4e-6, dp: 8 }, sol: { step: 1e-4, tol: 4e-5, dp: 6 } }; // grid spacing > 2*tol so live amounts never collide
+// create a pending order with a MINIMAL unique payable surcharge (a few cents), guaranteed distinct from every live order
 function newOrder(kind, chain, ca, price, sym, chatId, group, tier = 0) {
-  const step = chain === "sol" ? 1e-4 : 1e-5;
-  const amount = +(price + (++orders.seq % 9000 + 1) * step).toFixed(chain === "sol" ? 6 : 8);
-  const id = `${chain}_${orders.seq}`;
-  orders.pending[id] = { id, kind, chain, ca: chain === "sol" ? ca : ca.toLowerCase(), tier, sym, amount, coin: chain === "sol" ? "SOL" : "ETH", wallet: chain === "sol" ? TREND_SOL : TREND_EVM, chatId, group, createdAt: Date.now(), expires: Date.now() + 60 * 60e3 };
+  const { step, tol, dp } = AMT[chain]; const now = Date.now();
+  const collides = a => Object.values(orders.pending).some(o => o.chain === chain && o.expires > now && Math.abs(o.amount - a) <= 2 * tol);
+  let n = 0, amount; do { amount = +(price + (++n) * step).toFixed(dp); } while (n < 5000 && collides(amount)); // smallest free offset
+  const id = `${chain}_${++orders.seq}`;
+  orders.pending[id] = { id, kind, chain, ca: chain === "sol" ? ca : ca.toLowerCase(), tier, sym, amount, coin: chain === "sol" ? "SOL" : "ETH", wallet: chain === "sol" ? TREND_SOL : TREND_EVM, chatId, group, createdAt: now, expires: now + 60 * 60e3 };
   saveOrders();
   return orders.pending[id];
 }
 async function fulfillOrder(o) { return o.kind === "verify" ? activateVerify(o) : activateBoost(o); }
-function matchOrder(chain, value) { // value in native coin; find closest unexpired pending order within tolerance
-  const tol = chain === "sol" ? 5e-5 : 5e-6, now = Date.now();
+function matchOrder(chain, value) { // value in native coin; find the unique unexpired pending order within tolerance
+  const tol = AMT[chain].tol, now = Date.now();
   let best = null, bd = tol;
   for (const o of Object.values(orders.pending)) { if (o.chain !== chain || o.expires < now) continue; const d = Math.abs(value - o.amount); if (d <= bd) { bd = d; best = o; } }
   return best;
+}
+// periodic sweep: drop long-expired orders so pending stays small and match odds stay clean
+function sweepOrders() {
+  const cut = Date.now() - 30 * 60e3; let changed = false;
+  for (const [id, o] of Object.entries(orders.pending)) if (o.expires < cut) { delete orders.pending[id]; changed = true; }
+  if (changed) saveOrders();
 }
 async function activateBoost(o) {
   boosts[o.ca] = { until: Date.now() + TREND_HOURS * 3600e3, tier: o.tier, chain: o.chain, sym: o.sym, group: o.group };
@@ -345,7 +374,7 @@ async function activateBoost(o) {
   const chainName = o.chain === "sol" ? "Solana" : "Robinhood Chain";
   const dexUrl = o.chain === "sol" ? `https://dexscreener.com/solana/${o.ca}` : `https://dexscreener.com/robinhood/${o.ca}`;
   // 1) entry alert in the trending channel
-  await send(TREND_CH, `💎 <b>${esc(o.sym)}</b> is now <b>${TIER_LABEL[o.tier]}</b> on <b>HoodX Trending — ${chainName}</b>\n${o.group ? `Group: ${esc(o.group)}\n` : ""}<a href="${dexUrl}">📊 Chart</a> · <code>${esc(o.ca)}</code>`, { reply_markup: trendKb() });
+  await send(TREND_CH, `💎 <b>${esc(o.sym)}</b> is now <b>${TIER_LABEL[o.tier]}</b> on <b>HoodX Trending — ${chainName}</b>\n${o.group && safeUrl(o.group) ? `Group: ${esc(o.group)}\n` : ""}<a href="${esc(dexUrl)}">📊 Chart</a> · <code>${esc(o.ca)}</code>`, { reply_markup: trendKb() }).catch(() => {});
   // 2) badge in the project's own group (if we know it)
   if (o.chatId && String(o.chatId) !== String(TREND_CH)) await send(o.chatId, `🔥🔥 <b>${esc(o.sym)} is now TRENDING</b> — ${TIER_LABEL[o.tier]} on HoodX for ${TREND_HOURS}h! 🚀`).catch(() => {});
   // 3) refresh the board so they appear pinned immediately
@@ -354,82 +383,87 @@ async function activateBoost(o) {
 // current on-chain liquidity in USD (low-RPC: DexScreener for RHC, GeckoTerminal for SOL)
 async function liqOf(chain, ca) {
   try {
-    if (chain === "sol") { const j = await fetch(`https://api.geckoterminal.com/api/v2/networks/solana/tokens/${ca}/pools?page=1`, { headers: { accept: "application/json" } }).then(r => r.json()); const p = (j.data || [])[0]; return Number(p?.attributes?.reserve_in_usd || 0); }
+    if (chain === "sol") { const j = await fetch(`https://api.geckoterminal.com/api/v2/networks/solana/tokens/${ca}/pools?page=1`, { headers: { accept: "application/json" } }).then(r => r.json()); const p = (j.data || [])[0]; if (!p) return -1; return Number(p.attributes?.reserve_in_usd || 0); }
     const j = await fetch(`https://api.dexscreener.com/latest/dex/search?q=${ca}`).then(r => r.json());
     const p = (j.pairs || []).filter(x => x.chainId === "robinhood").sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
-    return Number(p?.liquidity?.usd || 0);
-  } catch { return -1; } // -1 = fetch failed, skip this cycle (don't false-alarm)
+    if (!p) return -1;                       // pair not indexed this cycle → unknown, NOT a drain
+    return Number(p.liquidity?.usd || 0);
+  } catch { return -1; } // -1 = fetch failed / no pair → skip this cycle (never false-alarm)
 }
 async function activateVerify(o) {
-  let pool = null;
-  if (o.chain === "rhc") { const c = Object.values(reg).find(x => x.ca === o.ca); pool = c?.pool || (await resolvePool(o.ca))?.pool || null; }
-  const baseLiq = Math.max(0, await liqOf(o.chain, o.ca));
-  verified[o.ca] = { until: Date.now() + VERIFY_DAYS * 86400e3, chain: o.chain, sym: o.sym, group: o.group, chatId: o.chatId, pool, baseLiq, alerted: false };
+  let pool = null, lpLocked = null;
+  if (o.chain === "rhc") { const c = Object.values(reg).find(x => x.ca === o.ca); pool = c?.pool || (await resolvePool(o.ca).catch(() => null))?.pool || null; if (pool) lpLocked = (await lpStatus(pool).catch(() => ({ locked: null }))).locked; }
+  const liq = await liqOf(o.chain, o.ca);
+  verified[o.ca] = { until: Date.now() + VERIFY_DAYS * 86400e3, chain: o.chain, sym: o.sym, group: o.group, chatId: o.chatId, pool, lpLocked, baseLiq: Math.max(0, liq), lastAlertAt: 0 };
   saveVerified(); delete orders.pending[o.id]; saveOrders();
-  await send(TREND_CH, `🛡️ <b>${esc(o.sym)}</b> is now <b>HoodX Verified</b> — watched 24/7 for LP pulls & rug patterns. Holders get an instant alert if anything moves.`, { reply_markup: trendKb() });
+  await send(TREND_CH, `🛡️ <b>${esc(o.sym)}</b> is now <b>HoodX Verified</b> — watched 24/7 for LP pulls & rug patterns. Holders get an instant alert if anything moves.`, { reply_markup: trendKb() }).catch(() => {});
   if (o.chatId && String(o.chatId) !== String(TREND_CH)) await send(o.chatId, `🛡️ <b>${esc(o.sym)} is now HoodX Verified</b> — your token is watched 24/7. Holders will be alerted the instant LP unlocks or liquidity drains. Trust badge is live on the board.`).catch(() => {});
 }
 // live rug-watch: every 5 min re-check each Verified token; alert group + channel on a bad transition
 async function watchVerified() {
   try {
     for (const [ca, v] of Object.entries(verified)) {
-      if (v.until < Date.now()) continue;
+      if (v.until < Date.now()) { delete verified[ca]; saveVerified(); continue; }  // reap expired subs
       const cur = await liqOf(v.chain, ca);
-      if (cur < 0) continue;                                  // fetch failed — don't false-alarm
-      if (cur > (v.baseLiq || 0)) { v.baseLiq = cur; saveVerified(); }   // high-water baseline
+      if (v.chain === "rhc" && !v.pool) { const p = (await resolvePool(ca).catch(() => null))?.pool; if (p) { v.pool = p; saveVerified(); } } // lazily resolve pool
+      if (cur < 0) continue;                                  // unknown/fetch-fail — never false-alarm
+      const base = Math.max(cur, (v.baseLiq || 0) * 0.97);    // decaying high-water: a legit settle-down drifts the baseline, only an ABRUPT drop trips
+      if (base !== v.baseLiq) { v.baseLiq = base; saveVerified(); }
       let breach = null;
-      if (v.baseLiq > 500 && cur < v.baseLiq * 0.5) breach = `liquidity dropped ${Math.round((1 - cur / v.baseLiq) * 100)}% ($${Math.round(v.baseLiq).toLocaleString()} → $${Math.round(cur).toLocaleString()})`;
-      if (!breach && v.chain === "rhc" && v.pool) { const lp = await lpStatus(v.pool).catch(() => ({ locked: null })); if (lp.locked === false) breach = "LP is no longer locked"; }
-      if (breach && !v.alerted) {
-        v.alerted = true; saveVerified();
-        const msg = `🚨🛡️ <b>HoodX Verified ALERT — ${esc(v.sym)}</b>\n${breach}.\n<b>Be careful — this can signal a rug in progress.</b>`;
-        if (v.chatId) await send(v.chatId, msg).catch(() => {});
-        await send(TREND_CH, msg).catch(() => {});
-      } else if (!breach && v.alerted) { v.alerted = false; saveVerified(); } // recovered — re-arm
+      if (v.baseLiq >= 100 && cur < v.baseLiq * 0.5) breach = `liquidity dropped ${Math.round((1 - cur / v.baseLiq) * 100)}% ($${Math.round(v.baseLiq).toLocaleString()} → $${Math.round(cur).toLocaleString()})`;
+      // LP-unlock only counts as a genuine true→false transition (never alarm a token that was never locked)
+      if (!breach && v.chain === "rhc" && v.pool && v.lpLocked === true) { const lp = await lpStatus(v.pool).catch(() => ({ locked: null })); if (lp.locked === false) breach = "LP is no longer locked"; }
+      if (breach && Date.now() - (v.lastAlertAt || 0) > 6 * 3600e3) {   // 6h cooldown kills flip-flop spam
+        v.lastAlertAt = Date.now(); saveVerified();
+        // alert HOLDERS in the token's own group only — never post an unproven "rug" accusation to the public board
+        if (v.chatId) await send(v.chatId, `🚨🛡️ <b>HoodX Verified ALERT — ${esc(v.sym)}</b>\n${breach}.\n<b>Be careful — this can signal a rug in progress.</b>`).catch(() => {});
+      }
     }
   } catch {}
   setTimeout(watchVerified, 5 * 60 * 1000);
 }
-// EVM payment watcher — scan new blocks for native transfers into the treasury
-let lastEvmBlock = 0;
+// Payment detection = persisted treasury BALANCE DELTA. The balance is cumulative, so a payment that lands
+// during downtime shows up as a positive delta on the next poll after restart — no lost payments, no block/sig
+// cursor gaps, and it also catches transfers routed through contracts/multisigs/exchanges. (Trade-off: two
+// payments inside one poll window sum into one delta and won't match — logged as an unmatched inflow.)
 async function watchEvmPayments() {
   try {
-    if (!TREND_EVM) return;
-    const latest = Number(await scan.getBlockNumber());
-    if (!lastEvmBlock) lastEvmBlock = latest;
-    let from = lastEvmBlock + 1; if (latest - from > 500) from = latest - 500;
-    for (let bn = from; bn <= latest; bn++) {
-      const blk = await scan.request({ method: "eth_getBlockByNumber", params: ["0x" + bn.toString(16), true] }).catch(() => null);
-      for (const tx of (blk?.transactions || [])) {
-        if ((tx.to || "").toLowerCase() !== TREND_EVM || !tx.value || tx.value === "0x0") continue;
-        const eth = Number(BigInt(tx.value)) / 1e18;
-        const o = matchOrder("rhc", eth);
-        if (o) { console.log(`[trend] EVM payment ${eth} ETH → order ${o.id} (${o.kind} ${o.sym})`); await fulfillOrder(o); }
+    if (TREND_EVM) {
+      const bal = BigInt(await scan.request({ method: "eth_getBalance", params: [TREND_EVM, "latest"] }));
+      if (payState.evmBal == null) { payState.evmBal = bal.toString(); savePay(); }
+      else {
+        const prev = BigInt(payState.evmBal);
+        if (bal > prev) {
+          const eth = Number(bal - prev) / 1e18;
+          const o = matchOrder("rhc", eth);
+          if (o) { console.log(`[trend] EVM credit ${eth} ETH → ${o.id} (${o.kind} ${o.sym})`); await fulfillOrder(o); }
+          else console.log(`[trend] EVM inflow ${eth} ETH matched no live order`);
+        }
+        if (bal !== prev) { payState.evmBal = bal.toString(); savePay(); } // advance on any change (incl. withdrawals)
       }
     }
-    lastEvmBlock = latest;
   } catch {}
-  setTimeout(watchEvmPayments, 8000);
+  setTimeout(watchEvmPayments, 12000);
 }
-// Solana payment watcher — poll new signatures, credit lamports received by the treasury
-let lastSolSig = null;
 async function watchSolPayments() {
   try {
-    if (!TREND_SOL) return;
-    const sigs = await fetch(SOL_RPC, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "getSignaturesForAddress", params: [TREND_SOL, { limit: 20, ...(lastSolSig ? { until: lastSolSig } : {}) }] }) }).then(r => r.json()).then(j => j.result || []).catch(() => []);
-    if (!sigs.length) { setTimeout(watchSolPayments, 8000); return; }
-    if (!lastSolSig) { lastSolSig = sigs[0].signature; setTimeout(watchSolPayments, 8000); return; } // first run: mark cursor, don't replay
-    for (const s of sigs.reverse()) {
-      const tx = await fetch(SOL_RPC, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "getTransaction", params: [s.signature, { maxSupportedTransactionVersion: 0, encoding: "jsonParsed" }] }) }).then(r => r.json()).then(j => j.result).catch(() => null);
-      if (!tx?.meta) continue;
-      const keys = tx.transaction.message.accountKeys.map(k => (typeof k === "string" ? k : k.pubkey));
-      const idx = keys.indexOf(TREND_SOL); if (idx < 0) continue;
-      const recv = (tx.meta.postBalances[idx] - tx.meta.preBalances[idx]) / 1e9;
-      if (recv > 0) { const o = matchOrder("sol", recv); if (o) { console.log(`[trend] SOL payment ${recv} → order ${o.id} (${o.kind} ${o.sym})`); await fulfillOrder(o); } }
+    if (TREND_SOL) {
+      const bal = await fetch(SOL_RPC, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "getBalance", params: [TREND_SOL] }) }).then(r => r.json()).then(j => j.result?.value).catch(() => null);
+      if (typeof bal === "number") {
+        if (payState.solBal == null) { payState.solBal = bal; savePay(); }
+        else {
+          if (bal > payState.solBal) {
+            const sol = (bal - payState.solBal) / 1e9;
+            const o = matchOrder("sol", sol);
+            if (o) { console.log(`[trend] SOL credit ${sol} → ${o.id} (${o.kind} ${o.sym})`); await fulfillOrder(o); }
+            else console.log(`[trend] SOL inflow ${sol} matched no live order`);
+          }
+          if (bal !== payState.solBal) { payState.solBal = bal; savePay(); }
+        }
+      }
     }
-    lastSolSig = sigs[sigs.length - 1].signature;
   } catch {}
-  setTimeout(watchSolPayments, 8000);
+  setTimeout(watchSolPayments, 12000);
 }
 
 // ---- alert formatting ----
@@ -542,8 +576,9 @@ async function handleCallback(cq) {
   if (data.startsWith("trend:")) {                              // trend:<chain>:<tier>:<ca>
     const [, chain, tierS, ca] = data.split(":");
     const tier = Number(tierS);
-    if (!TIERS[chain] || !TIERS[chain][tier] || !ca) { await api("answerCallbackQuery", { callback_query_id: cq.id, text: "Invalid option." }); return; }
+    if (!TIERS[chain] || !TIERS[chain][tier] || !ca || (chain === "sol" ? !isSol(ca) : !isEvm(ca))) { await api("answerCallbackQuery", { callback_query_id: cq.id, text: "Invalid option." }); return; }
     const chatId = cq.message?.chat?.id;
+    if (!chatId) { await api("answerCallbackQuery", { callback_query_id: cq.id, text: "Open @hoodxchangebot in DM and tap again." }); return; }
     const sym = await trendSym(chain, ca);
     const group = Object.values(reg).find(x => x.ca === ca.toLowerCase())?.links?.tg;
     const o = newOrder("boost", chain, ca, TIERS[chain][tier], sym, chatId, group, tier);
@@ -553,8 +588,9 @@ async function handleCallback(cq) {
   }
   if (data.startsWith("verify:")) {                            // verify:<chain>:<ca>
     const [, chain, ca] = data.split(":");
-    if (!VERIFY_PRICE[chain] || !ca) { await api("answerCallbackQuery", { callback_query_id: cq.id, text: "Invalid option." }); return; }
+    if (!VERIFY_PRICE[chain] || !ca || (chain === "sol" ? !isSol(ca) : !isEvm(ca))) { await api("answerCallbackQuery", { callback_query_id: cq.id, text: "Invalid option." }); return; }
     const chatId = cq.message?.chat?.id;
+    if (!chatId) { await api("answerCallbackQuery", { callback_query_id: cq.id, text: "Open @hoodxchangebot in DM and tap again." }); return; }
     const sym = await trendSym(chain, ca);
     const group = Object.values(reg).find(x => x.ca === ca.toLowerCase())?.links?.tg;
     const o = newOrder("verify", chain, ca, VERIFY_PRICE[chain], sym, chatId, group);
@@ -592,6 +628,7 @@ async function tgTick() {
     const after = parts.slice(ci + 1);
     const arg = after[0]; const rest = after.join(" ");
     console.log(`[cmd] ${base} from chat ${chatId} (${msg.chat.type})`);
+    try {
     if (base === "/start") {
       await send(chatId, "👋 <b>HoodXChange Buy Bot</b>\nAdd me as admin, then:\n<code>/register &lt;CA&gt;</code> — watch your token\n<code>/setmedia</code> — then upload your buy image/gif/video\n<code>/setemoji 🔥</code> — custom buy emoji\n<code>/setlinks chart=.. buy=.. x=.. tg=..</code>\n<code>/scan &lt;CA&gt;</code> — 🛡️ safety check (LP lock, honeypot, liq)\n<code>/chart &lt;CA&gt;</code> — price / MC / liquidity\n<code>/test</code> — preview an alert");
     } else if (base === "/register") {
@@ -675,6 +712,7 @@ async function tgTick() {
       const coin = vchain === "sol" ? "SOL" : "ETH";
       await send(chatId, `🛡️ <b>Get HoodX Verified — ${esc(vsym)}</b>\nLive 24/7 rug-watch + trust badge on the board & every buy alert. Holders alerted the instant LP unlocks or liquidity drains.\n\n<b>${VERIFY_PRICE[vchain]} ${coin}</b> / ${VERIFY_DAYS} days:`, { reply_markup: { inline_keyboard: [[{ text: `🛡️ Verify — ${VERIFY_PRICE[vchain]} ${coin}`, callback_data: `verify:${vchain}:${vca}` }]] } });
     } else if (base === "/boost") {   // admin manual override (free pin) — paid flow is /trend
+      if (!ADMIN_IDS.has(String(msg.from?.id))) { await send(chatId, "⛔ Admins only. Projects: use <code>/trend</code> for the paid boost."); continue; }
       const bca = after.find(p => isEvm(p) || isSol(p));
       const hrs = Number(after.find(p => /^\d+$/.test(p)));
       const tier = Number(after.find(p => p === "1" || p === "3" || p === "10")) || 1;
@@ -702,11 +740,13 @@ async function tgTick() {
       for (const [ca, n] of top) { let sym = ca.slice(0, 8); try { sym = ticker(await pub.readContract({ address: ca, abi: ERC20, functionName: "symbol" })); } catch {} lines.push(`🗳️ ${esc(sym)} — <b>${n}</b>`); }
       await send(chatId, `<b>🗳️ Vote Leaderboard (24h)</b>\n\n${lines.join("\n")}`);
     } else if (base === "/trending") {
+      if (!ADMIN_IDS.has(String(msg.from?.id))) continue;   // operator-only manual refresh
       await postTrending(); await send(chatId, "📈 Trending refreshed.");
     } else if (base === "/test") {
       const c = Object.values(reg).find(x => x.chatId === chatId); if (!c) { await send(chatId, "Register first: <code>/register &lt;CA&gt;</code>"); continue; }
       await postAlert(c, { eth: 0.45, usd: 842, tokens: 480000, mc: 46955, buyer: "0x3484f2b7b8c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4" });
     }
+    } catch (e) { console.error(`[cmd err] ${base}:`, e?.message); }   // one bad command never drops the rest of the update batch
   }
 }
 
@@ -725,7 +765,8 @@ api("setMyCommands", { commands: [
 ] });
 (async () => { while (true) { await tgTick().catch(() => sleep(2000)); } })();
 watchSwaps();
-watchEvmPayments();   // auto-verify RHC trend/verify payments
-watchSolPayments();   // auto-verify Solana trend/verify payments
+watchEvmPayments();   // auto-verify RHC trend/verify payments (persisted balance-delta)
+watchSolPayments();   // auto-verify Solana trend/verify payments (persisted balance-delta)
 watchVerified();      // 🛡️ live rug-watch on Verified tokens
+setInterval(sweepOrders, 15 * 60 * 1000);   // reap long-expired pending orders
 if ((env.TRENDING_ON ?? "1") !== "0") { postTrending(); setInterval(postTrending, 10 * 60 * 1000); } // trending off until King flips it live
