@@ -405,7 +405,8 @@ async function tick() {
       const order = ["PASS", "halted", "weakFlow", "falling", "noSells", "mcRange", "noFlow", "belowBand", "aboveBand", "ranPast", "deadLaunch", "lpThin", "lpErr", "lpDrain", "noSupply", "whale", "cost", "full", "aged", "seasoning", "fewBuys", "bundled", "botty", "noSocials"];
       const line = order.filter((k) => diag[k]).map((k) => `${k} ${diag[k]}`).join(" · ") || "no candidates yet";
       const hb = `💓 *${TRIGGER_MODE}* · watch ${Object.keys(S.watch).length} · ETH $${ethUsd.toFixed(0)} · maxLP ${diagMaxLp.toFixed(2)}Ξ · liq≥thr ${diagLiqSeen} · rejects(${mins}m): ${line}`;
-      console.log(hb.replace(/\*/g, "")); await tg(hb);
+      console.log(hb.replace(/\*/g, ""));                                   // always logged locally (pm2 logs)
+      if ((process.env.HEARTBEAT_DM ?? "0") !== "0") await tg(hb);          // DM off by default — set HEARTBEAT_DM=1 in deploy/.env to re-enable the Telegram pulse
       for (const k in diag) delete diag[k]; diagMaxLp = 0; diagLiqSeen = 0;
     }
   } catch (e) { console.error("tick err:", e.shortMessage || e.message); }
