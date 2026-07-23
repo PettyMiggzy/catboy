@@ -338,6 +338,43 @@ async function postChainBoard(chain) {
 }
 async function postTrending() { await postChainBoard("rhc"); await postChainBoard("sol"); }
 
+// ---- 🏆 hourly Top-Voted card: community picks, ranked by 24h votes cast from projects' own groups ----
+async function voteRows() {
+  const vc = voteCounts();
+  const top = Object.entries(vc).sort((a, b) => b[1] - a[1]).slice(0, 10);
+  const rows = [];
+  for (const [ca, n] of top) {
+    const r = Object.values(reg).find(x => x.ca === ca);   // registered project (voting happens in its group)
+    let sym = r?.sym; const group = r?.links?.tg;
+    if (!sym) { try { sym = await trendSym(isSol(ca) ? "sol" : "rhc", ca); } catch { sym = ca.slice(0, 6); } }
+    const dexUrl = isSol(ca) ? `https://dexscreener.com/solana/${ca}` : `https://dexscreener.com/robinhood/${ca}`;
+    rows.push({ ca, sym, votes: n, group, dexUrl });
+  }
+  return rows;
+}
+function fmtVoteCard(rows) {
+  const title = `🏆 <b>HoodX Top Voted — Community Picks</b>`;
+  const foot = `\n\n${ce("vote", "🗳️")} <i>Vote for your project from its own Telegram — just send</i> <code>/vote</code> <i>in the group, or tap</i> ${ce("vote", "🗳️")} <i>on any buy alert. 1 vote / person / 24h.</i>`;
+  if (!rows.length) return `${title}\n\nNo votes yet — send <code>/vote</code> in your project's group to get on the board.${foot}`;
+  const body = rows.map((r, i) => {
+    const name = safeUrl(r.dexUrl) ? `<a href="${esc(r.dexUrl)}">${esc(r.sym)}</a>` : `<b>${esc(r.sym)}</b>`;
+    const tg = r.group && safeUrl(r.group) ? ` · <a href="${esc(r.group)}">${ce("tg", "💬")}</a>` : "";
+    return `${MEDAL[i] || (i + 1) + "."} ${name} — ${ce("vote", "🗳️")} <b>${r.votes}</b> vote${r.votes > 1 ? "s" : ""}${tg}`;
+  }).join("\n");
+  return `${title}\n\n${body}${foot}`;
+}
+// re-surface a single fresh card each hour (delete the previous one so the channel stays clean)
+async function postVoteCard() {
+  try {
+    const rows = await voteRows();
+    if (!rows.length) return;
+    const text = fmtVoteCard(rows);
+    if (trendMsg.votes) await api("deleteMessage", { chat_id: TREND_CH, message_id: trendMsg.votes }).catch(() => {});
+    const r = await sendTrendingMedia(TREND_CH, text);
+    if (r.ok && r.result) { trendMsg.votes = r.result.message_id; saveTrend(); }
+  } catch {}
+}
+
 // ================= PAID TRENDING (auto-verified on-chain) =================
 const isEvm = a => /^0x[0-9a-fA-F]{40}$/.test(a);
 const isSol = a => /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(a);
@@ -729,14 +766,17 @@ async function tgTick() {
         await send(chatId, "⚡ <b>Boost (admin manual)</b>\n<code>/boost &lt;CA&gt; &lt;hours&gt; [1|3|10]</code>\n\nProjects: use <code>/trend</code> for the paid auto-verified boost.");
       }
     } else if (base === "/vote") {
-      let vca = after.find(p => /^0x[0-9a-fA-F]{40}$/.test(p));
-      if (!vca) { const c = Object.values(reg).find(x => x.chatId === chatId); vca = c?.ca; } // in a token's group, vote for that token — no CA needed
-      if (!vca) { await send(chatId, "🗳️ <b>Vote a token onto Trending</b>\nIn a token's group just send <code>/vote</code>. Anywhere else: <code>/vote &lt;CA&gt;</code>.\n1 vote per person / 24h."); continue; }
+      const c = Object.values(reg).find(x => x.chatId === chatId);      // in a project's group → the bot already knows the token
+      const argCa = after.find(p => isEvm(p) || isSol(p));
+      const vca = c?.ca || (argCa ? (isSol(argCa) ? argCa : argCa.toLowerCase()) : null);
+      if (!vca) { await send(chatId, `🗳️ <b>Vote your project onto HoodX Trending</b>\nAdd @hoodxchangebot to your project's group, then anyone just sends <code>/vote</code> there — the bot knows your token, no CA needed.\n🏆 Top-voted projects get their own card in Trending every hour. 1 vote / person / 24h.`); continue; }
       const uid = String(msg.from?.id || chatId);
-      userVotes[uid] = { ca: vca.toLowerCase(), ts: Date.now() }; saveVotes();
-      const n = voteCounts()[vca.toLowerCase()] || 1;
-      let sym = ""; try { sym = ticker(await pub.readContract({ address: vca.toLowerCase(), abi: ERC20, functionName: "symbol" })); } catch {}
-      await send(chatId, `🗳️ Vote counted for <b>${esc(sym || vca.slice(0, 8))}</b> — <b>${n}</b> vote${n > 1 ? "s" : ""} in 24h.\nMost votes gets pinned on HoodX Trending.`);
+      const prev = userVotes[uid];
+      let sym = c?.sym; if (!sym) { try { sym = await trendSym(isSol(vca) ? "sol" : "rhc", vca); } catch { sym = vca.slice(0, 8); } }
+      if (prev && prev.ca === vca && Date.now() - prev.ts < 24 * 3600e3) { await send(chatId, `🗳️ You already voted for <b>${esc(sym)}</b> — <b>${voteCounts()[vca] || 1}</b> votes in 24h.`); continue; }
+      userVotes[uid] = { ca: vca, ts: Date.now() }; saveVotes();
+      const n = voteCounts()[vca] || 1;
+      await send(chatId, `🗳️ Vote counted for <b>${esc(sym)}</b> — <b>${n}</b> vote${n > 1 ? "s" : ""} in 24h.\n🏆 Top-voted projects get their own card in HoodX Trending every hour.`);
     } else if (base === "/votes") {
       const top = Object.entries(voteCounts()).sort((a, b) => b[1] - a[1]).slice(0, 10);
       if (!top.length) { await send(chatId, "No votes yet — <code>/vote &lt;CA&gt;</code> to start."); continue; }
@@ -773,4 +813,7 @@ watchEvmPayments();   // auto-verify RHC trend/verify payments (persisted balanc
 watchSolPayments();   // auto-verify Solana trend/verify payments (persisted balance-delta)
 watchVerified();      // 🛡️ live rug-watch on Verified tokens
 setInterval(sweepOrders, 15 * 60 * 1000);   // reap long-expired pending orders
-if ((env.TRENDING_ON ?? "1") !== "0") { postTrending(); setInterval(postTrending, 10 * 60 * 1000); } // trending off until King flips it live
+if ((env.TRENDING_ON ?? "1") !== "0") {
+  postTrending(); setInterval(postTrending, 10 * 60 * 1000);      // volume/paid boards refresh every 10 min
+  setTimeout(postVoteCard, 30 * 1000); setInterval(postVoteCard, 60 * 60 * 1000);  // 🏆 top-voted card once an hour
+}
