@@ -28,3 +28,4 @@ autocopy/trend_orders.json
 autocopy/verified.json
 autocopy/pay_cursor.json
 autocopy/floor_state_*.json
+autocopy/robin.env
