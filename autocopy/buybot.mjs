@@ -56,11 +56,17 @@ function kb(c) {
 const WETH = "0x0bd7d308f8e1639fab988df18a8011f41eacad73".toLowerCase();
 const V3 = "0x1f7d7550b1b028f7571e69a784071f0205fd2efa";
 const PUBLIC_RPC = "https://rpc.mainnet.chain.robinhood.com";
-// RPC failover: free public RPC first, extra free backups next (env RPC_BACKUPS, comma-separated),
-// Alchemy LAST (it's the capacity-capped key → only used if every free endpoint is down).
+// All the free, no-API-key Robinhood Chain (id 4663) RPCs I could verify serve chainId 0x1237
+// and support eth_call/eth_getLogs/eth_blockNumber. Tried in order; add more via env RPC_BACKUPS.
+const FREE_RPCS = [
+  "https://rpc.mainnet.chain.robinhood.com", // official public
+  "https://rpc.arrowrpc.com",                // ArrowRPC — no key, 100 req/s free
+];
+// RPC failover: free endpoints first, extra free backups next (env RPC_BACKUPS, comma-separated),
+// Alchemy LAST (capacity-capped key → only used if every free endpoint is down).
 const RPC_LIST = [...new Set([
   (env.SCAN_RPC || "").trim(),
-  PUBLIC_RPC,
+  ...FREE_RPCS,
   ...String(env.RPC_BACKUPS || "").split(",").map(s => s.trim()),
   (HTTP || "").trim(),
 ].filter(u => /^https?:\/\//i.test(u)))];
