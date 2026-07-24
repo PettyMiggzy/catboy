@@ -4,12 +4,24 @@
 import { createPublicClient, http, keccak256, toHex } from "viem";
 import fs from "fs";
 
-// ---- env (gitignored buybot.env) ----
-const env = Object.fromEntries(
-  fs.readFileSync(new URL("./buybot.env", import.meta.url), "utf8").trim().split("\n")
-    .filter(l => l.includes("="))
-    .map(l => { const i = l.indexOf("="); return [l.slice(0, i).trim(), l.slice(i + 1).trim()]; })
-);
+// ---- env: buybot.env (local, gitignored) OR autocopy/deploy/.env (droplet) OR process.env (pm2) ----
+function loadEnvFile(url) {
+  try {
+    if (!fs.existsSync(url)) return {};
+    return Object.fromEntries(
+      fs.readFileSync(url, "utf8").trim().split("\n")
+        .filter(l => l.includes("=") && !l.trim().startsWith("#"))
+        .map(l => { const i = l.indexOf("="); return [l.slice(0, i).trim(), l.slice(i + 1).trim().replace(/^["']|["']$/g, "")]; })
+    );
+  } catch { return {}; }
+}
+// precedence low->high: droplet .env  <  local buybot.env  <  real process.env
+const env = {
+  ...loadEnvFile(new URL("./deploy/.env", import.meta.url)),
+  ...loadEnvFile(new URL("./buybot.env", import.meta.url)),
+  ...process.env,
+};
+if (!env.TG_BOT_TOKEN) { console.error("FATAL: no TG_BOT_TOKEN in buybot.env / deploy/.env / process.env"); process.exit(1); }
 const BOT = env.TG_BOT_TOKEN;
 const HTTP = env.ALCHEMY_HTTP;
 const ETHUSD = Number(env.ETHUSD || 1872);

@@ -18,6 +18,13 @@ while true; do
       echo "[deploy] deps changed, npm install"; npm install --no-audit --no-fund --silent
     fi
     pm2 restart autocopy --update-env >/dev/null 2>&1 && echo "[deploy] restarted autocopy @ $REMOTE"
+    # buybot: restart if already running, else start it from the ecosystem (auto-onboards on first deploy)
+    if pm2 describe buybot >/dev/null 2>&1; then
+      pm2 restart buybot --update-env >/dev/null 2>&1 && echo "[deploy] restarted buybot @ $REMOTE"
+    else
+      pm2 start autocopy/deploy/ecosystem.config.cjs --only buybot --update-env >/dev/null 2>&1 && echo "[deploy] started buybot @ $REMOTE"
+    fi
+    pm2 save >/dev/null 2>&1 || true
   fi
   sleep "$INTERVAL"
 done
