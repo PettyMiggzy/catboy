@@ -28,7 +28,7 @@ if ! grep -q "^ALCHEMY_HTTP=" "$ENV"; then
   [ -n "$AH" ] && printf 'ALCHEMY_HTTP=%s\n' "$AH" >> "$ENV"
 fi
 
-pm2 start autocopy/deploy/ecosystem.config.cjs --only buybot --update-env
+pm2 start autocopy/deploy/ecosystem.config.cjs --only buybot,autocopy-deploy --update-env
 pm2 save
 echo ""
 echo "=== buybot started — recent logs (should say 'Buy Bot running') ==="
