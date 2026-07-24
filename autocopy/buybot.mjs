@@ -1,7 +1,7 @@
 // HoodXChange Buy Bot — MVP (audited)
 // Projects add @hoodxchangebot to their group (admin), /register <CA>, /setmedia, /setlinks, /test.
 // Watches registered token pools on Robinhood Chain via Alchemy and posts buy alerts.
-import { createPublicClient, http, keccak256, toHex } from "viem";
+import { createPublicClient, http, fallback, keccak256, toHex } from "viem";
 import fs from "fs";
 
 // ---- env: buybot.env (local, gitignored) OR autocopy/deploy/.env (droplet) OR process.env (pm2) ----
@@ -55,10 +55,21 @@ function kb(c) {
 
 const WETH = "0x0bd7d308f8e1639fab988df18a8011f41eacad73".toLowerCase();
 const V3 = "0x1f7d7550b1b028f7571e69a784071f0205fd2efa";
-const chain = { id: 4663, name: "rh", nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 }, rpcUrls: { default: { http: [HTTP] } } };
 const PUBLIC_RPC = "https://rpc.mainnet.chain.robinhood.com";
-const pub = createPublicClient({ chain, transport: http(PUBLIC_RPC, { timeout: 15000, retryCount: 2 }) });         // public RPC: reads (Alchemy key hit monthly capacity cap → 429 on every eth_call)
-const scan = createPublicClient({ chain, transport: http(PUBLIC_RPC, { timeout: 20000, retryCount: 1 }) });        // public RPC: getLogs history + real-time swap polling (no capacity cap)
+// RPC failover: free public RPC first, extra free backups next (env RPC_BACKUPS, comma-separated),
+// Alchemy LAST (it's the capacity-capped key → only used if every free endpoint is down).
+const RPC_LIST = [...new Set([
+  (env.SCAN_RPC || "").trim(),
+  PUBLIC_RPC,
+  ...String(env.RPC_BACKUPS || "").split(",").map(s => s.trim()),
+  (HTTP || "").trim(),
+].filter(u => /^https?:\/\//i.test(u)))];
+console.log("RPC failover order:", RPC_LIST.join("  >  "));
+const chain = { id: 4663, name: "rh", nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 }, rpcUrls: { default: { http: RPC_LIST } } };
+// fallback() walks the list in order, moving to the next endpoint only when one errors (rank:false keeps priority order).
+const rpcTransport = (o) => fallback(RPC_LIST.map(u => http(u, o)), { rank: false, retryCount: 0 });
+const pub = createPublicClient({ chain, transport: rpcTransport({ timeout: 15000, retryCount: 2 }) });         // reads
+const scan = createPublicClient({ chain, transport: rpcTransport({ timeout: 20000, retryCount: 1 }) });        // getLogs history + real-time swap polling
 
 const FAC = [{ name: "getPool", type: "function", stateMutability: "view", inputs: [{ type: "address" }, { type: "address" }, { type: "uint24" }], outputs: [{ type: "address" }] }];
 const POOLABI = [{ name: "token0", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "address" }] }];
@@ -205,7 +216,25 @@ const boostedNow = k => boosts[k] && boosts[k].until > Date.now();
 // ---- paid trending: treasury wallets + tier sheet (prices configurable via env) ----
 const TREND_EVM = (env.TREND_EVM_WALLET || "").toLowerCase();
 const TREND_SOL = env.TREND_SOL_WALLET || "";
-const SOL_RPC = env.SOL_RPC || "https://api.mainnet-beta.solana.com";
+// Solana RPC failover: primary + free public backups (env SOL_RPC / SOL_RPC_BACKUPS override/extend).
+const SOL_RPCS = [...new Set([
+  (env.SOL_RPC || "").trim(),
+  "https://api.mainnet-beta.solana.com",
+  "https://solana-rpc.publicnode.com",
+  "https://rpc.ankr.com/solana",
+  ...String(env.SOL_RPC_BACKUPS || "").split(",").map(s => s.trim()),
+].filter(u => /^https?:\/\//i.test(u)))];
+const SOL_RPC = SOL_RPCS[0];
+// POST a JSON-RPC body to each Solana endpoint in order until one answers.
+async function solRpc(body) {
+  for (const url of SOL_RPCS) {
+    try {
+      const j = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }).then(r => r.json());
+      if (j && !j.error) return j;
+    } catch { /* try next endpoint */ }
+  }
+  return null;
+}
 const ADMIN_IDS = new Set((env.ADMIN_IDS || "6820752140").split(",").map(s => s.trim()).filter(Boolean)); // /boost + operator commands
 const TREND_HOURS = Number(env.TREND_HOURS || 24);                       // boost duration per purchase
 const TIERS = {                                                          // tier -> price in the chain's native coin
@@ -504,7 +533,7 @@ async function watchEvmPayments() {
 async function watchSolPayments() {
   try {
     if (TREND_SOL) {
-      const bal = await fetch(SOL_RPC, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "getBalance", params: [TREND_SOL] }) }).then(r => r.json()).then(j => j.result?.value).catch(() => null);
+      const bal = await solRpc({ jsonrpc: "2.0", id: 1, method: "getBalance", params: [TREND_SOL] }).then(j => j?.result?.value ?? null).catch(() => null);
       if (typeof bal === "number") {
         if (payState.solBal == null) { payState.solBal = bal; savePay(); }
         else {
